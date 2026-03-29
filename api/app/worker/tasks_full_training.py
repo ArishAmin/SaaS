@@ -9,6 +9,7 @@ from joblib import dump as joblib_dump
 
 from ..core.config import get_settings
 from ..worker.celery_app import celery_app
+from ..services.app_logs import log_to_supabase
 from ..services.supabase import rest_list, rest_patch, storage_download, storage_remove, storage_upload
 from ..routers import datasets as datasets_router
 
@@ -35,6 +36,15 @@ def train_full_dataset(self, run_id: str) -> dict:
     try:
         user_id = run["user_id"]
         dataset_id = run["dataset_id"]
+        _await_if_coroutine(
+            log_to_supabase(
+                level="info",
+                event="worker_full_training_started",
+                user_id=str(user_id),
+                message="Full training worker started",
+                metadata={"run_id": run_id, "dataset_id": str(dataset_id)},
+            )
+        )
         _set_run_status(run_uuid, "running")
 
         # Fetch dataset
@@ -275,10 +285,28 @@ def train_full_dataset(self, run_id: str) -> dict:
             if dataset.get("storage_path"):
                 _storage_remove_sync("datasets", dataset["storage_path"])
 
+        _await_if_coroutine(
+            log_to_supabase(
+                level="info",
+                event="worker_full_training_completed",
+                user_id=str(user_id),
+                message="Full training worker completed",
+                metadata={"run_id": run_id, "dataset_id": str(dataset_id), "best_model": best_model_name},
+            )
+        )
         return {"run_id": run_id, "status": "completed", "results": results}
 
     except Exception as e:
         logger.exception("Full training failed")
+        _await_if_coroutine(
+            log_to_supabase(
+                level="error",
+                event="worker_full_training_failed",
+                message=str(e),
+                metadata={"run_id": run_id},
+                error={"type": e.__class__.__name__},
+            )
+        )
         _set_run_status(run_uuid, "failed", error=str(e))
         return {"run_id": run_id, "status": "failed", "error": str(e)}
 

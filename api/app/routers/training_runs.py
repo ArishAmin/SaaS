@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from ..core.auth import get_current_user
 from ..core.config import get_settings
 from ..core.rate_limit import limiter
+from ..services.activity_logs import log_user_activity
 from ..services.supabase import rest_list, storage_download
 
 router = APIRouter(prefix="/training-runs", tags=["training-runs"])
@@ -100,7 +101,7 @@ async def download_model(
 ) -> Response:
     rows = await rest_list(
         "training_runs",
-        query=f"run_id=eq.{run_id}&select=run_id,user_id,results_json,status,error",
+        query=f"run_id=eq.{run_id}&select=run_id,user_id,dataset_id,results_json,status,error",
     )
     if not rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
@@ -118,6 +119,12 @@ async def download_model(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model file not available")
 
     model_bytes = await storage_download("datasets", model_storage_path)
+    await log_user_activity(
+        user_id=str(user["user_id"]),
+        action="model_downloaded",
+        dataset_id=str(run.get("dataset_id")) if run.get("dataset_id") else None,
+        metadata={"run_id": str(run_id)},
+    )
 
     return Response(
         content=model_bytes,

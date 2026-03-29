@@ -31,8 +31,12 @@ async def _get_jwks() -> dict[str, Any]:
     settings = get_settings()
     if not settings.supabase_url and not settings.supabase_jwks_url:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Supabase configuration missing (SUPABASE_URL / SUPABASE_JWKS_URL).",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "API is not configured for Supabase JWT verification. "
+                "Set SUPABASE_URL (and SUPABASE_SERVICE_ROLE_KEY) in the API `api/.env`, "
+                "then restart the server. JWKS defaults to YOUR_SUPABASE_URL/auth/v1/keys."
+            ),
         )
     jwks_url = settings.supabase_jwks_url or f"{settings.supabase_url.rstrip('/')}/auth/v1/keys"
 
@@ -72,6 +76,9 @@ async def verify_supabase_jwt(token: str) -> dict[str, Any]:
             options={"verify_aud": False},  # Supabase aud differs by token type
         )
         return decoded
+    except HTTPException:
+        # e.g. missing Supabase URL / JWKS misconfiguration — do not mask as bad JWT
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

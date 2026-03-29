@@ -51,16 +51,19 @@ for each row execute function public.set_updated_at();
 
 alter table public.datasets enable row level security;
 
+drop policy if exists "datasets_select_own" on public.datasets;
 create policy "datasets_select_own"
 on public.datasets
 for select
 using (auth.uid() = user_id);
 
+drop policy if exists "datasets_insert_own" on public.datasets;
 create policy "datasets_insert_own"
 on public.datasets
 for insert
 with check (auth.uid() = user_id);
 
+drop policy if exists "datasets_update_own" on public.datasets;
 create policy "datasets_update_own"
 on public.datasets
 for update
@@ -74,8 +77,11 @@ values ('datasets', 'datasets', false)
 on conflict (id) do nothing;
 
 -- Policies isolate objects by user_id folder: {user_id}/datasets/{dataset_id}/filename
-alter table storage.objects enable row level security;
+-- Do NOT run `alter table storage.objects enable row level security;`
+-- on hosted Supabase projects unless your role owns that table.
+-- Storage RLS is managed by Supabase; we only define policies below.
 
+drop policy if exists "datasets_objects_select_own" on storage.objects;
 create policy "datasets_objects_select_own"
 on storage.objects
 for select
@@ -84,6 +90,7 @@ using (
   and auth.uid()::text = split_part(name, '/', 1)
 );
 
+drop policy if exists "datasets_objects_insert_own" on storage.objects;
 create policy "datasets_objects_insert_own"
 on storage.objects
 for insert
@@ -92,6 +99,7 @@ with check (
   and auth.uid()::text = split_part(name, '/', 1)
 );
 
+drop policy if exists "datasets_objects_update_own" on storage.objects;
 create policy "datasets_objects_update_own"
 on storage.objects
 for update
@@ -104,6 +112,7 @@ with check (
   and auth.uid()::text = split_part(name, '/', 1)
 );
 
+drop policy if exists "datasets_objects_delete_own" on storage.objects;
 create policy "datasets_objects_delete_own"
 on storage.objects
 for delete
@@ -135,16 +144,19 @@ for each row execute function public.set_updated_at();
 
 alter table public.training_runs enable row level security;
 
+drop policy if exists "training_runs_select_own" on public.training_runs;
 create policy "training_runs_select_own"
 on public.training_runs
 for select
 using (auth.uid() = user_id);
 
+drop policy if exists "training_runs_insert_own" on public.training_runs;
 create policy "training_runs_insert_own"
 on public.training_runs
 for insert
 with check (auth.uid() = user_id);
 
+drop policy if exists "training_runs_update_own" on public.training_runs;
 create policy "training_runs_update_own"
 on public.training_runs
 for update
@@ -163,16 +175,48 @@ create table if not exists public.shared_reports (
 alter table public.shared_reports enable row level security;
 
 -- Users can create their own shares
+drop policy if exists "shared_reports_insert_own" on public.shared_reports;
 create policy "shared_reports_insert_own"
 on public.shared_reports
 for insert
 with check (auth.uid() = user_id);
 
 -- Users can view their own shares
+drop policy if exists "shared_reports_select_own" on public.shared_reports;
 create policy "shared_reports_select_own"
 on public.shared_reports
 for select
 using (auth.uid() = user_id);
 
 -- Public read access is served via backend token endpoint (no direct anon select needed).
+
+-- 5) Centralized application logs (ingested by backend via service role)
+create table if not exists public.app_logs (
+  log_id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  level text not null default 'info',
+  event text not null,
+  message text,
+  method text,
+  path text,
+  status_code integer,
+  duration_ms integer,
+  request_id text,
+  metadata jsonb,
+  error jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists app_logs_created_at_idx on public.app_logs (created_at desc);
+create index if not exists app_logs_event_idx on public.app_logs (event);
+create index if not exists app_logs_user_id_idx on public.app_logs (user_id);
+
+alter table public.app_logs enable row level security;
+
+-- End users can only read their own logs.
+drop policy if exists "app_logs_select_own" on public.app_logs;
+create policy "app_logs_select_own"
+on public.app_logs
+for select
+using (auth.uid() = user_id);
 

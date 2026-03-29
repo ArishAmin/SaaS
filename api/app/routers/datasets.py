@@ -7,6 +7,7 @@ from uuid import UUID
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -21,6 +22,8 @@ from sklearn.utils.validation import check_is_fitted
 from ..core.auth import get_current_user
 from ..core.config import get_settings
 from ..core.rate_limit import limiter
+from ..services.dataset_pdf_report import build_dataset_report_pdf
+from ..services.activity_logs import log_user_activity
 from ..services.supabase import (
     rest_insert,
     rest_list,
@@ -72,7 +75,7 @@ class TrainFullRequest(BaseModel):
 
 class FeatureEngineerRequest(BaseModel):
     """
-    MVP feature selection based on DecisionTree feature importances.
+    Feature selection based on decision tree importances.
     Works on the cleaned dataset stored in `cleaned_storage_path`.
     """
 
@@ -99,7 +102,7 @@ class RecommendResponse(BaseModel):
     target_unique_count: int
     target_missing_percent: float
     suggestions: list[ModelSuggestion]
-    mvp_notes: list[str] = []
+    notes: list[str] = []
 
 
 class ExportFormat(str):
@@ -215,7 +218,8 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
         "datasets",
         query=(
             f"dataset_id=eq.{dataset_id}"
-            f"&select=dataset_id,user_id,storage_path,original_extension,analysis_json,status,"
+            f"&select=dataset_id,user_id,storage_path,original_file_name,original_extension,mime_type,"
+            f"analysis_json,status,created_at,updated_at,analyzed_at,error,"
             f"cleaned_storage_path,cleaned_params,cleaned_target_column,cleaned_at,"
             f"engineered_storage_path,engineered_params,engineered_at,"
             f"quick_evaluation_json,quick_trained_at"
@@ -262,6 +266,12 @@ async def create_dataset(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to create dataset: {e}")
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="dataset_created",
+        dataset_id=str(payload.dataset_id),
+        metadata={"original_file_name": payload.original_file_name, "extension": payload.original_extension},
+    )
     return {"dataset_id": str(created.get("dataset_id", payload.dataset_id))}
 
 
@@ -352,6 +362,11 @@ async def delete_dataset(
     # Delete dataset row. FK cascades will remove training_runs/shared_reports.
     await rest_delete("datasets", where_query=f"dataset_id=eq.{dataset_id}")
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="dataset_deleted",
+        dataset_id=str(dataset_id),
+    )
     return {"dataset_id": str(dataset_id), "deleted": True}
 
 
@@ -398,6 +413,12 @@ async def analyze_dataset(
     if settings.auto_delete_after_analysis:
         await storage_remove("datasets", dataset["storage_path"])
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="dataset_analyzed",
+        dataset_id=str(dataset_id),
+        metadata={"mode": payload.mode},
+    )
     return {"dataset_id": str(dataset_id), "status": "completed", "analysis": analysis}
 
 
@@ -418,6 +439,11 @@ async def get_analysis(
     if not analysis_json:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not ready yet")
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="eda_generated",
+        dataset_id=str(dataset_id),
+    )
     return {
         "dataset_id": str(dataset_id),
         "columns": analysis_json,
@@ -432,7 +458,7 @@ async def get_eda_report(
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    Auto EDA report (MVP):
+    Auto EDA report:
     - Numeric distributions (histogram bins) for up to 4 numeric columns
     - Correlation matrix for up to N numeric columns (heatmap-ready)
     - Text insights for highly correlated pairs
@@ -473,7 +499,7 @@ async def get_eda_report(
             "numeric_columns": [],
             "distributions": [],
             "correlation": {"columns": [], "matrix": []},
-            "insights": ["No numeric columns detected for EDA in the MVP limits."],
+            "insights": ["No numeric columns detected for EDA within configured limits."],
         }
 
     numeric_df = pd.DataFrame({c: numeric_series[c] for c in numeric_cols})
@@ -512,12 +538,17 @@ async def get_eda_report(
         direction = "positive" if c >= 0 else "negative"
         insights.append(f"Column {a} has a strong {direction} correlation with {b} (corr={c:.2f}).")
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="quality_scored",
+        dataset_id=str(dataset_id),
+    )
     return {
         "dataset_id": str(dataset_id),
         "numeric_columns": numeric_cols,
         "distributions": distributions,
         "correlation": {"columns": numeric_cols[:15], "matrix": [row[:15] for row in corr_values[:15]]},
-        "insights": insights if insights else ["No strong correlations found at the MVP threshold (|corr| >= 0.7)."],
+        "insights": insights if insights else ["No strong correlations found at the default threshold (|corr| >= 0.7)."],
     }
 
 
@@ -529,7 +560,7 @@ async def get_dataset_quality(
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    MVP dataset quality score (0-100):
+    Dataset quality score (0–100):
     - Penalizes overall missingness
     - Penalizes duplicates ratio
     - Returns actionable improvements
@@ -555,7 +586,7 @@ async def get_dataset_quality(
         return {
             "dataset_id": str(dataset_id),
             "score": 0,
-            "improvements": ["Dataset appears empty within MVP limits."],
+            "improvements": ["Dataset appears empty within configured limits."],
             "notes": [],
         }
 
@@ -722,7 +753,7 @@ async def clean_dataset(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No features available")
 
     # Model training requires labels with no missing values.
-    # For MVP, we drop rows with missing targets across all strategies.
+    # Rows with missing target are dropped for all strategies.
     df = df.dropna(subset=[target_column])
 
     if payload.mode == "simple":
@@ -812,6 +843,18 @@ async def clean_dataset(
     if settings.auto_delete_after_cleaning:
         await storage_remove("datasets", dataset["storage_path"])
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="dataset_cleaned",
+        dataset_id=str(dataset_id),
+        metadata={
+            "mode": payload.mode,
+            "target_column": target_column,
+            "missing_strategy": missing_strategy,
+            "encoding": encoding,
+            "scaling": scaling,
+        },
+    )
     return {"dataset_id": str(dataset_id), "status": "cleaned", "cleaned_storage_path": cleaned_storage_path}
 
 
@@ -982,6 +1025,12 @@ async def train_quick(
         },
     )
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="quick_training_completed",
+        dataset_id=str(dataset_id),
+        metadata={"target_column": target_column, "task_type": results.get("task_type")},
+    )
     return {"dataset_id": str(dataset_id), "status": "completed", "quick_evaluation": results}
 
 
@@ -1001,6 +1050,44 @@ async def get_quick_evaluation(
     if not quick:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quick evaluation not found yet")
     return {"dataset_id": str(dataset_id), "quick_evaluation": quick}
+
+
+@router.get("/{dataset_id}/report/pdf")
+@limiter.limit(_rate)
+async def download_dataset_pdf_report(
+    request: Request,
+    dataset_id: UUID,
+    user=Depends(get_current_user),
+) -> Response:
+    """
+    Comprehensive PDF report for sharing: metadata, analysis summary table, cleaning/engineering
+    parameters, quick evaluation JSON, and async training run summaries.
+    """
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    runs = await rest_list(
+        "training_runs",
+        query=(
+            f"dataset_id=eq.{dataset_id}"
+            f"&select=run_id,status,created_at,error,results_json"
+            f"&order=created_at.desc&limit=25"
+        ),
+    )
+    pdf_bytes = build_dataset_report_pdf(dataset=dataset, training_runs=runs)
+    filename = f"datapilot-report-{dataset_id}.pdf"
+    await log_user_activity(
+        user_id=str(user_id),
+        action="pdf_report_downloaded",
+        dataset_id=str(dataset_id),
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{dataset_id}/export/cleaned")
@@ -1025,8 +1112,11 @@ async def export_cleaned(
     raw = await storage_download("datasets", cleaned_path)
 
     if format == "csv":
-        from fastapi.responses import Response
-
+        await log_user_activity(
+            user_id=str(user_id),
+            action="cleaned_csv_exported",
+            dataset_id=str(dataset_id),
+        )
         return Response(content=raw, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename=\"cleaned.csv\"'})
 
     if format == "python-code":
@@ -1056,7 +1146,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 # =========================
-# DataPilot AI export (MVP)
+# DataPilot AI export
 # =========================
 RAW_DATA_PATH = r\"your_raw_dataset.csv\"  # Update to your raw dataset path
 TARGET_COLUMN = {target!r}
@@ -1153,6 +1243,11 @@ print('Decision Tree:', metrics(y_test, dt_pred))
 """
         from fastapi.responses import PlainTextResponse
 
+        await log_user_activity(
+            user_id=str(user_id),
+            action="python_export_generated",
+            dataset_id=str(dataset_id),
+        )
         return PlainTextResponse(code, media_type="text/plain")
 
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown format")
@@ -1166,7 +1261,7 @@ async def get_feature_importance(
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    MVP feature importance:
+    Feature importance:
     Extracts Decision Tree top_features from `quick_evaluation_json`.
     """
     dataset = await _get_dataset(dataset_id)
@@ -1212,7 +1307,7 @@ async def feature_engineer(
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    MVP feature engineering: select top features using DecisionTree feature importances.
+    Feature engineering: select top features using decision tree importances.
     Operates on the cleaned dataset stored in `cleaned_storage_path`.
     """
     settings = get_settings()
@@ -1321,6 +1416,12 @@ async def feature_engineer(
     }
 
     if payload.dry_run:
+        await log_user_activity(
+            user_id=str(user_id),
+            action="feature_engineering_dry_run",
+            dataset_id=str(dataset_id),
+            metadata={"top_k": payload.top_k, "importance_threshold": payload.importance_threshold},
+        )
         return response
 
     engineered_storage_path = f"{user_id}/datasets/{dataset_id}/engineered.csv"
@@ -1357,6 +1458,12 @@ async def feature_engineer(
 
     response["applied"] = True
     response["engineered_storage_path"] = engineered_storage_path
+    await log_user_activity(
+        user_id=str(user_id),
+        action="feature_engineering_applied",
+        dataset_id=str(dataset_id),
+        metadata={"selected_features": len(keep_features), "dropped_features": len(dropped_features)},
+    )
     return response
 
 
@@ -1406,6 +1513,12 @@ async def train_full(
 
     train_full_dataset.delay(str(run_id))
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="full_training_queued",
+        dataset_id=str(dataset_id),
+        metadata={"run_id": str(run_id)},
+    )
     return {"run_id": str(run_id), "status": "queued"}
 
 
@@ -1418,7 +1531,7 @@ async def recommend_models(
     user=Depends(get_current_user),
 ) -> RecommendResponse:
     """
-    MVP model recommendation based on target column heuristics + dataset missingness.
+    Model recommendations from target-column heuristics and dataset missingness.
     """
     settings = get_settings()
     user_id = user["user_id"]
@@ -1502,10 +1615,10 @@ async def recommend_models(
                 )
             )
 
-        mvp_notes = []
+        extra_notes: list[str] = []
         if top_missing_features:
-            mvp_notes.append(f"High-missing features detected: {', '.join(top_missing_features)}")
-        mvp_notes.append("MVP quick/full training currently focuses on classification; regression will be added next.")
+            extra_notes.append(f"High-missing features detected: {', '.join(top_missing_features)}")
+        extra_notes.append("Quick training uses Logistic Regression and Decision Tree; full jobs add Random Forest and XGBoost when available.")
 
     else:
         suggestions.append(
@@ -1533,8 +1646,19 @@ async def recommend_models(
                     explanation="Your target has meaningful missingness; apply an imputation/drop strategy during cleaning.",
                 )
             )
-        mvp_notes = ["MVP training endpoints currently implement classification models; regression training will be added next."]
+        extra_notes = []
+        if top_missing_features:
+            extra_notes.append(f"High-missing features detected: {', '.join(top_missing_features)}")
+        extra_notes.append(
+            "Quick training uses Linear Regression and Decision Tree; full jobs add Random Forest and XGBoost regressors when available.",
+        )
 
+    await log_user_activity(
+        user_id=str(user_id),
+        action="model_recommendation_generated",
+        dataset_id=str(dataset_id),
+        metadata={"problem_type": problem_type, "target_column": target_column},
+    )
     return RecommendResponse(
         dataset_id=str(dataset_id),
         problem_type=problem_type,
@@ -1542,6 +1666,6 @@ async def recommend_models(
         target_unique_count=target_unique_count,
         target_missing_percent=round(target_missing_percent, 2),
         suggestions=suggestions,
-        mvp_notes=mvp_notes,
+        notes=extra_notes,
     )
 

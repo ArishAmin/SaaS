@@ -1,0 +1,3 @@
+# Core API (install into venv). Add fpdf2 for PDF reports.
+fpdf2>=2.7.9
+psycopg[binary]>=3.2.9

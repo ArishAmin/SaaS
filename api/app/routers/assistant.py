@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..core.auth import get_current_user
 from ..core.config import get_settings
 from ..core.rate_limit import limiter
+from ..services.activity_logs import log_user_activity
 from ..services.supabase import rest_list
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -106,6 +107,12 @@ async def chat(
             reply = (
                 ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
                 or "No reply generated."
+            )
+            await log_user_activity(
+                user_id=str(user_id),
+                action="assistant_chat_used",
+                dataset_id=str(payload.dataset_id) if payload.dataset_id else None,
+                metadata={"history_count": len(payload.history)},
             )
             return ChatResponse(reply=str(reply))
     except HTTPException:

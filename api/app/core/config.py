@@ -14,12 +14,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     rate_limit_per_minute: str = "30/minute"
 
-    # Instant analyzer limits (keep this bounded for MVP + DoS safety)
+    # Instant analyzer limits (DoS / resource safety)
     instant_max_rows: int = 10_000
     instant_max_columns: int = 200
     instant_max_bytes: int = 50 * 1024 * 1024
 
-    # Cleaning/training limits for MVP (quick mode)
+    # Cleaning / quick-training limits
     cleaning_max_rows: int = 10_000
     cleaning_max_columns: int = 200
     cleaned_max_bytes: int = 60 * 1024 * 1024
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     auto_delete_after_full_training: bool = True
 
     # Storage cleanup (configurable)
-    # For MVP we keep raw until cleaning/training is done.
+    # Optional: delete raw file from storage after analysis/cleaning.
     auto_delete_after_analysis: bool = False
     auto_delete_after_cleaning: bool = False
 
@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
+
+    # Centralized API logs to Supabase (table: public.app_logs)
+    supabase_log_enabled: bool = True
 
     class Config:
         env_file = ".env"

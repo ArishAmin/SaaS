@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from celery.utils.log import get_task_logger
 
 from ..core.config import get_settings
+from ..services.app_logs import log_to_supabase
 from ..services.supabase import rest_delete, rest_list, storage_list, storage_remove
 from ..worker.celery_app import celery_app
 
@@ -116,6 +117,20 @@ def cleanup_ttl(self) -> dict:
         _await(rest_delete("shared_reports", where_query=f"created_at=lt.{_iso(share_cutoff)}"))
     except Exception:
         pass
+
+    _await(
+        log_to_supabase(
+            level="info",
+            event="worker_ttl_cleanup_completed",
+            message="TTL cleanup cycle completed",
+            metadata={
+                "deleted_datasets": deleted_datasets,
+                "skipped_busy": skipped_busy,
+                "deleted_dataset_objects": deleted_objects,
+                "deleted_models": deleted_models,
+            },
+        )
+    )
 
     return {
         "ok": True,
