@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Cleaning / quick-training limits
     cleaning_max_rows: int = 10_000
     cleaning_max_columns: int = 200
+    cleaning_max_bytes: int = 50 * 1024 * 1024
     cleaned_max_bytes: int = 60 * 1024 * 1024
 
     # Full async training limits (guardrails)

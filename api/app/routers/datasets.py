@@ -6,7 +6,7 @@ from uuid import UUID
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sklearn.compose import ColumnTransformer
@@ -24,6 +24,7 @@ from ..core.config import get_settings
 from ..core.rate_limit import limiter
 from ..services.dataset_pdf_report import build_dataset_report_pdf
 from ..services.activity_logs import log_user_activity
+from ..services.feature_generator import generate_features, apply_features
 from ..services.supabase import (
     rest_insert,
     rest_list,
@@ -82,6 +83,10 @@ class FeatureEngineerRequest(BaseModel):
     top_k: int | None = 20
     importance_threshold: float | None = None
     dry_run: bool = False
+
+
+class FeatureGenerationApplyRequest(BaseModel):
+    features: list[dict[str, Any]]
 
 
 class RecommendRequest(BaseModel):
@@ -296,6 +301,30 @@ async def list_datasets(
     return rows
 
 
+@router.get("/{dataset_id}")
+@limiter.limit(_rate)
+async def get_single_dataset(
+    request: Request,
+    dataset_id: UUID,
+    user=Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Get basic dataset metadata by ID.
+    """
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    return {
+        "dataset_id": str(dataset["dataset_id"]),
+        "original_file_name": dataset.get("original_file_name"),
+        "original_extension": dataset.get("original_extension"),
+        "status": dataset.get("status"),
+        "created_at": dataset.get("created_at"),
+    }
+
+
 @router.delete("/{dataset_id}")
 @limiter.limit(_rate)
 async def delete_dataset(
@@ -411,7 +440,11 @@ async def analyze_dataset(
     )
 
     if settings.auto_delete_after_analysis:
-        await storage_remove("datasets", dataset["storage_path"])
+        try:
+            await storage_remove("datasets", dataset["storage_path"])
+        except Exception:
+            # Auto-delete is best-effort and should not fail analysis response.
+            pass
 
     await log_user_activity(
         user_id=str(user_id),
@@ -841,7 +874,11 @@ async def clean_dataset(
     )
 
     if settings.auto_delete_after_cleaning:
-        await storage_remove("datasets", dataset["storage_path"])
+        try:
+            await storage_remove("datasets", dataset["storage_path"])
+        except Exception:
+            # Auto-delete is best-effort and should not fail cleaning response.
+            pass
 
     await log_user_activity(
         user_id=str(user_id),
@@ -878,23 +915,59 @@ async def train_quick(
     cleaned_path = engineered_path or cleaned_path
     cleaned_target_column = dataset.get("cleaned_target_column")
 
-    if not cleaned_path:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
-
     target_column = payload.target_column or cleaned_target_column
     if not target_column:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column is required")
-
-    raw = await storage_download("datasets", cleaned_path)
-    if len(raw) > settings.cleaned_max_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Cleaned dataset too large for quick training (max {settings.cleaned_max_bytes} bytes).",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must specify a target_column to train on uncleaned data.",
         )
 
-    df = pd.read_csv(io.BytesIO(raw))
-    if target_column not in df.columns:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found in cleaned data")
+    if not cleaned_path:
+        # Uncleaned fallback wrapper for the Hub
+        raw = await storage_download("datasets", dataset["storage_path"])
+        df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
+        if target_column not in df.columns:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected target column not found in raw dataset")
+            
+        df = df.dropna(subset=[target_column])
+        if df.empty:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column contains all missing rows.")
+            
+        from sklearn.impute import SimpleImputer
+        num_cols = df.select_dtypes(include=['number', 'bool']).columns.tolist()
+        cat_cols = df.select_dtypes(exclude=['number', 'bool']).columns.tolist()
+        if target_column in num_cols: num_cols.remove(target_column)
+        if target_column in cat_cols: cat_cols.remove(target_column)
+        
+        if num_cols:
+            df[num_cols] = SimpleImputer(strategy='median').fit_transform(df[num_cols])
+        if cat_cols:
+            df[cat_cols] = SimpleImputer(strategy='most_frequent').fit_transform(df[cat_cols])
+            df = pd.get_dummies(df, columns=cat_cols, drop_first=True, dummy_na=False)
+            
+        # Instant Model Preview logic: sample max 5k or 5%
+        total_rows = len(df)
+        if total_rows > 50000:
+            df = df.sample(frac=0.05, random_state=42)
+        elif total_rows > 5000:
+            df = df.sample(n=5000, random_state=42)
+    else:
+        raw = await storage_download("datasets", cleaned_path)
+        if len(raw) > settings.cleaned_max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Cleaned dataset too large for quick training (max {settings.cleaned_max_bytes} bytes).",
+            )
+        df = pd.read_csv(io.BytesIO(raw))
+        
+        total_rows = len(df)
+        if total_rows > 50000:
+            df = df.sample(frac=0.05, random_state=42)
+        elif total_rows > 5000:
+            df = df.sample(n=5000, random_state=42)
+            
+        if target_column not in df.columns:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found in cleaned data")
 
     y = df[target_column]
     X = df.drop(columns=[target_column])
@@ -911,55 +984,88 @@ async def train_quick(
         if not is_numeric:
             le = LabelEncoder()
             y_enc = le.fit_transform(y.astype(str))
-            class_labels = list(le.classes_)
+            class_labels = [str(c) for c in le.classes_]
         else:
             # Numeric labels can still be treated as classes
             le = LabelEncoder()
             y_enc = le.fit_transform(y)
-            class_labels = list(le.classes_)
+            class_labels = [int(c) if pd.api.types.is_integer(c) else float(c) if pd.api.types.is_float(c) else str(c) for c in le.classes_]
 
         X_train, X_test, y_train, y_test = train_test_split(
             X.values, y_enc, test_size=0.25, random_state=42, stratify=y_enc if len(set(y_enc)) > 1 else None
         )
 
-        lr = LogisticRegression(max_iter=5000)
-        dt = DecisionTreeClassifier(random_state=42)
-
-        lr.fit(X_train, y_train)
-        dt.fit(X_train, y_train)
-
-        lr_pred = lr.predict(X_test)
-        dt_pred = dt.predict(X_test)
+        def safe_float(v) -> float:
+            try:
+                f = float(v)
+                return 0.0 if np.isnan(f) or np.isinf(f) else f
+            except Exception:
+                return 0.0
 
         def metrics(y_true, y_pred) -> dict[str, float]:
             return {
-                "accuracy": float(accuracy_score(y_true, y_pred)),
-                "precision": float(precision_score(y_true, y_pred, average="weighted", zero_division=0)),
-                "recall": float(recall_score(y_true, y_pred, average="weighted", zero_division=0)),
-                "f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
+                "accuracy": safe_float(accuracy_score(y_true, y_pred)),
+                "precision": safe_float(precision_score(y_true, y_pred, average="weighted", zero_division=0)),
+                "recall": safe_float(recall_score(y_true, y_pred, average="weighted", zero_division=0)),
+                "f1": safe_float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
             }
 
-        lr_metrics = metrics(y_test, lr_pred)
-        dt_metrics = metrics(y_test, dt_pred)
+        from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+        from sklearn.svm import LinearSVC
+        from sklearn.naive_bayes import GaussianNB
+        from sklearn.neighbors import KNeighborsClassifier
+        
+        models_to_run = [
+            ("Logistic Regression", LogisticRegression(max_iter=5000)),
+            ("Decision Tree", DecisionTreeClassifier(random_state=42)),
+            ("Random Forest", RandomForestClassifier(n_estimators=100, random_state=42)),
+            ("Gradient Boosting", GradientBoostingClassifier(random_state=42)),
+            ("Linear SVC", LinearSVC(dual=False, random_state=42)),
+            ("Naive Bayes", GaussianNB()),
+            ("K-Nearest Neighbors", KNeighborsClassifier())
+        ]
+        try:
+            from xgboost import XGBClassifier
+            models_to_run.append(("XGBoost", XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric="logloss")))
+        except ImportError:
+            pass
 
-        # Feature importance from decision tree
+        results_models = []
+        best_f1 = -1.0
+        best_model_name = ""
         feature_names = list(X.columns)
-        importances = getattr(dt, "feature_importances_", None)
-        top_features: list[dict[str, Any]] = []
-        if importances is not None:
-            pairs = list(zip(feature_names, importances))
-            pairs.sort(key=lambda p: p[1], reverse=True)
-            top_features = [{"feature": f, "importance": float(i)} for f, i in pairs[:20]]
+        
+        for name, model in models_to_run:
+            try:
+                model.fit(X_train, y_train)
+                pred = model.predict(X_test)
+                mets = metrics(y_test, pred)
+                
+                # Check importances if possible
+                importances = getattr(model, "feature_importances_", None)
+                if importances is None and hasattr(model, "coef_"):
+                    importances = np.abs(model.coef_[0])
+                    
+                top_features = []
+                if importances is not None:
+                    pairs = list(zip(feature_names, importances))
+                    pairs.sort(key=lambda p: p[1], reverse=True)
+                    top_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in pairs[:20]]
+                
+                results_models.append({"name": name, "metrics": mets, "top_features": top_features})
+                
+                if mets["f1"] > best_f1:
+                    best_f1 = mets["f1"]
+                    best_model_name = name
+            except Exception as e:
+                pass
 
         results = {
             "task_type": "classification",
             "target_column": target_column,
             "class_labels": class_labels,
-            "models": [
-                {"name": "Logistic Regression", "metrics": lr_metrics},
-                {"name": "Decision Tree", "metrics": dt_metrics, "top_features": top_features},
-            ],
-            "best_model": "Decision Tree" if dt_metrics["f1"] >= lr_metrics["f1"] else "Logistic Regression",
+            "models": results_models,
+            "best_model": best_model_name if best_model_name else "Decision Tree",
         }
     else:
         # Regression quick mode
@@ -970,49 +1076,81 @@ async def train_quick(
             X.values, y_num.values, test_size=0.25, random_state=42
         )
 
-        from sklearn.linear_model import LinearRegression
-        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-        from sklearn.tree import DecisionTreeRegressor
+        def safe_float(v) -> float:
+            try:
+                f = float(v)
+                return 0.0 if np.isnan(f) or np.isinf(f) else f
+            except Exception:
+                return 0.0
 
-        lr = LinearRegression()
-        dt = DecisionTreeRegressor(random_state=42)
-
-        lr.fit(X_train, y_train)
-        dt.fit(X_train, y_train)
-
-        lr_pred = lr.predict(X_test)
-        dt_pred = dt.predict(X_test)
-
-        def metrics(y_true, y_pred) -> dict[str, float]:
-            rmse = float(mean_squared_error(y_true, y_pred, squared=False))
+        def get_metrics(y_true, y_pred) -> dict[str, float]:
+            from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+            rmse = safe_float(mean_squared_error(y_true, y_pred, squared=False))
             return {
-                "r2": float(r2_score(y_true, y_pred)),
-                "mae": float(mean_absolute_error(y_true, y_pred)),
+                "r2": safe_float(r2_score(y_true, y_pred)),
+                "mae": safe_float(mean_absolute_error(y_true, y_pred)),
                 "rmse": rmse,
             }
 
-        lr_metrics = metrics(y_test, lr_pred)
-        dt_metrics = metrics(y_test, dt_pred)
-
+        from sklearn.linear_model import LinearRegression
+        from sklearn.tree import DecisionTreeRegressor
+        from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+        from sklearn.svm import LinearSVR
+        from sklearn.neighbors import KNeighborsRegressor
+        
+        models_to_run = [
+            ("Linear Regression", LinearRegression()),
+            ("Decision Tree", DecisionTreeRegressor(random_state=42)),
+            ("Random Forest", RandomForestRegressor(n_estimators=100, random_state=42)),
+            ("Gradient Boosting", GradientBoostingRegressor(random_state=42)),
+            ("Linear SVR", LinearSVR(dual=False, random_state=42)),
+            ("K-Nearest Neighbors", KNeighborsRegressor())
+        ]
+        
+        try:
+            from xgboost import XGBRegressor
+            models_to_run.append(("XGBoost", XGBRegressor(n_estimators=100, random_state=42)))
+        except ImportError:
+            pass
+            
+        results_models = []
+        best_rmse = float('inf')
+        best_model_name = ""
         feature_names = list(X.columns)
-        importances = getattr(dt, "feature_importances_", None)
-        top_features: list[dict[str, Any]] = []
-        if importances is not None:
-            pairs = list(zip(feature_names, importances))
-            pairs.sort(key=lambda p: p[1], reverse=True)
-            top_features = [{"feature": f, "importance": float(i)} for f, i in pairs[:20]]
-
-        best_model = "Decision Tree" if dt_metrics["rmse"] <= lr_metrics["rmse"] else "Linear Regression"
+        
+        for name, model in models_to_run:
+            try:
+                model.fit(X_train, y_train)
+                pred = model.predict(X_test)
+                mets = get_metrics(y_test, pred)
+                
+                # Check importances
+                importances = getattr(model, "feature_importances_", None)
+                if importances is None and hasattr(model, "coef_"):
+                    importances = np.abs(model.coef_)
+                    if importances.ndim > 1:
+                        importances = importances[0]
+                    
+                top_features = []
+                if importances is not None:
+                    pairs = list(zip(feature_names, importances))
+                    pairs.sort(key=lambda p: p[1], reverse=True)
+                    top_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in pairs[:20]]
+                
+                results_models.append({"name": name, "metrics": mets, "top_features": top_features})
+                
+                if mets["rmse"] < best_rmse:
+                    best_rmse = mets["rmse"]
+                    best_model_name = name
+            except Exception as e:
+                pass
 
         results = {
             "task_type": "regression",
             "target_column": target_column,
             "class_labels": [],
-            "models": [
-                {"name": "Linear Regression", "metrics": lr_metrics},
-                {"name": "Decision Tree", "metrics": dt_metrics, "top_features": top_features},
-            ],
-            "best_model": best_model,
+            "models": results_models,
+            "best_model": best_model_name if best_model_name else "Linear Regression",
         }
 
     await rest_patch(
@@ -1033,6 +1171,96 @@ async def train_quick(
     )
     return {"dataset_id": str(dataset_id), "status": "completed", "quick_evaluation": results}
 
+
+@router.post("/{dataset_id}/feature-generation/suggest")
+@limiter.limit(_rate)
+async def suggest_generative_features(
+    request: Request,
+    dataset_id: UUID,
+    user=Depends(get_current_user),
+) -> dict[str, Any]:
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    cleaned_path = dataset.get("cleaned_storage_path")
+    if not cleaned_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
+    
+    raw = await storage_download("datasets", cleaned_path)
+    df = pd.read_csv(io.BytesIO(raw))
+    
+    target_column = dataset.get("cleaned_target_column")
+    
+    try:
+        suggestions = generate_features(df, target_col=target_column)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feature generation failed: {e}")
+        
+    return {
+        "dataset_id": str(dataset_id),
+        "target_column": target_column,
+        "suggested_features": suggestions,
+    }
+
+
+@router.post("/{dataset_id}/feature-generation/apply")
+@limiter.limit(_rate)
+async def apply_generative_features(
+    request: Request,
+    dataset_id: UUID,
+    payload: FeatureGenerationApplyRequest,
+    user=Depends(get_current_user),
+) -> dict[str, Any]:
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    cleaned_path = dataset.get("cleaned_storage_path")
+    if not cleaned_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
+
+    raw = await storage_download("datasets", cleaned_path)
+    df = pd.read_csv(io.BytesIO(raw))
+    
+    try:
+        df_augmented = apply_features(df, payload.features, target_col=dataset.get("cleaned_target_column"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply features: {e}")
+
+    # Re-save the dataset
+    out_csv = df_augmented.to_csv(index=False).encode("utf-8")
+    engineered_path = f"{user_id}/datasets/{dataset_id}/engineered_{dataset['original_file_name']}.csv"
+    
+    await storage_upload("datasets", engineered_path, out_csv, "text/csv")
+    
+    await rest_patch(
+        "datasets",
+        where_query=f"dataset_id=eq.{dataset_id}&select=dataset_id",
+        payload={
+            "engineered_storage_path": engineered_path,
+            "engineered_at": pd.Timestamp.utcnow().isoformat(),
+            "engineered_params": {"generative_features": payload.features},
+            "status": "engineered",
+            "updated_at": pd.Timestamp.utcnow().isoformat(),
+        },
+    )
+
+    await log_user_activity(
+        user_id=str(user_id),
+        action="generative_features_applied",
+        dataset_id=str(dataset_id),
+        metadata={"num_features_added": len(payload.features)}
+    )
+
+    return {
+        "dataset_id": str(dataset_id),
+        "status": "engineered",
+        "engineered_storage_path": engineered_path,
+        "features_added": len(payload.features)
+    }
 
 @router.get("/{dataset_id}/quick-evaluation")
 @limiter.limit(_rate)
@@ -1057,6 +1285,7 @@ async def get_quick_evaluation(
 async def download_dataset_pdf_report(
     request: Request,
     dataset_id: UUID,
+    sections: str | None = Query(None, description="Comma-separated list of sections to include (e.g. 'analysis,cleaning,training')."),
     user=Depends(get_current_user),
 ) -> Response:
     """
@@ -1076,7 +1305,9 @@ async def download_dataset_pdf_report(
             f"&order=created_at.desc&limit=25"
         ),
     )
-    pdf_bytes = build_dataset_report_pdf(dataset=dataset, training_runs=runs)
+
+    sections_list = [s.strip().lower() for s in sections.split(",")] if sections else None
+    pdf_bytes = build_dataset_report_pdf(dataset=dataset, training_runs=runs, sections=sections_list)
     filename = f"datapilot-report-{dataset_id}.pdf"
     await log_user_activity(
         user_id=str(user_id),
@@ -1483,29 +1714,37 @@ async def train_full(
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    if not dataset.get("cleaned_params") or not dataset.get("cleaned_target_column"):
+    if not dataset.get("cleaned_params") and not payload.target_column:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Full training requires cleaned params/target. Run cleaning first.",
+            detail="You must specify a target column to bypass cleaning for full training.",
         )
 
     from uuid import uuid4
 
     run_id = uuid4()
 
+    # Save target override into the training payload directly for Celery workers to parse if uncleaned!
+    target_column = payload.target_column or dataset.get("cleaned_target_column")
+    if not target_column:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must specify a target_column to train on uncleaned data.",
+        )
+
+    run_payload = {
+        "run_id": str(run_id),
+        "user_id": user_id,
+        "dataset_id": str(dataset_id),
+        "mode": "full",
+        "status": "queued",
+        "results_json": {"requested_target": target_column},
+        "error": None,
+    }
+
     await rest_insert(
         "training_runs",
-        payload=[
-            {
-                "run_id": str(run_id),
-                "user_id": user_id,
-                "dataset_id": str(dataset_id),
-                "mode": "full",
-                "status": "queued",
-                "results_json": None,
-                "error": None,
-            }
-        ],
+        payload=[run_payload],
     )
 
     # Enqueue Celery job

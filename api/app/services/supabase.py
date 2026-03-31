@@ -94,8 +94,8 @@ async def storage_remove(bucket: str, object_path: str) -> None:
     headers = _supabase_headers() | {"Accept": "application/json"}
     async with httpx.AsyncClient(timeout=30) as client:
         res = await client.delete(url, headers=headers)
-        # If it was already deleted, treat as success.
-        if res.status_code not in (200, 204):
+        # Best-effort cleanup: treat not-found or invalid-path style responses as success.
+        if res.status_code not in (200, 204, 400, 404):
             res.raise_for_status()
 
 

@@ -54,9 +54,15 @@ def train_full_dataset(self, run_id: str) -> dict:
         dataset = dataset_rows
 
         cleaned_target_column = dataset.get("cleaned_target_column")
-        cleaned_params = dataset.get("cleaned_params") or {}
-        if not cleaned_target_column or not cleaned_params:
+        if not cleaned_target_column:
+            # Fallback to bypass wrapper: extract from the run's pending payload request
+            res_json = run.get("results_json") or {}
+            cleaned_target_column = res_json.get("requested_target")
+
+        if not cleaned_target_column:
             raise RuntimeError("Cleaning params/target missing. Clean the dataset first.")
+
+        cleaned_params = dataset.get("cleaned_params") or {}
 
         missing_strategy = cleaned_params.get("missing_strategy", "median")
         encoding = cleaned_params.get("encoding", "one-hot")
@@ -139,9 +145,21 @@ def train_full_dataset(self, run_id: str) -> dict:
                 stratify=y_enc if len(set(y_enc)) > 1 else None,
             )
 
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.tree import DecisionTreeClassifier
+            from sklearn.svm import LinearSVC
+            from sklearn.naive_bayes import GaussianNB
+            from sklearn.neighbors import KNeighborsClassifier
+            from sklearn.ensemble import GradientBoostingClassifier
+
             models: list[tuple[str, object]] = []
-            rf = RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)
-            models.append(("Random Forest", rf))
+            models.append(("Logistic Regression", LogisticRegression(max_iter=5000)))
+            models.append(("Decision Tree", DecisionTreeClassifier(random_state=42)))
+            models.append(("Random Forest", RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)))
+            models.append(("Gradient Boosting", GradientBoostingClassifier(n_estimators=100, random_state=42)))
+            models.append(("Linear SVC", LinearSVC(dual=False, random_state=42)))
+            models.append(("Naive Bayes", GaussianNB()))
+            models.append(("K-Nearest Neighbors", KNeighborsClassifier()))
 
             # XGBoost is optional
             try:
@@ -155,6 +173,7 @@ def train_full_dataset(self, run_id: str) -> dict:
                     colsample_bytree=0.9,
                     random_state=42,
                     eval_metric="logloss",
+                    use_label_encoder=False
                 )
                 models.append(("XGBoost", xgb))
             except Exception:
@@ -174,6 +193,10 @@ def train_full_dataset(self, run_id: str) -> dict:
 
                 top_features: list[dict] = []
                 importances = getattr(model, "feature_importances_", None)
+                if importances is None and hasattr(model, "coef_"):
+                    importances = np.abs(model.coef_)
+                    if importances.ndim > 1:
+                        importances = importances[0]
                 if importances is not None:
                     pairs = list(zip(list(X_df.columns), importances))
                     pairs.sort(key=lambda p: p[1], reverse=True)
@@ -202,9 +225,19 @@ def train_full_dataset(self, run_id: str) -> dict:
                 random_state=42,
             )
 
+            from sklearn.linear_model import LinearRegression
+            from sklearn.tree import DecisionTreeRegressor
+            from sklearn.svm import LinearSVR
+            from sklearn.neighbors import KNeighborsRegressor
+            from sklearn.ensemble import GradientBoostingRegressor
+
             models: list[tuple[str, object]] = []
-            rf = RandomForestRegressor(n_estimators=400, random_state=42, n_jobs=-1)
-            models.append(("Random Forest", rf))
+            models.append(("Linear Regression", LinearRegression()))
+            models.append(("Decision Tree", DecisionTreeRegressor(random_state=42)))
+            models.append(("Random Forest", RandomForestRegressor(n_estimators=400, random_state=42, n_jobs=-1)))
+            models.append(("Gradient Boosting", GradientBoostingRegressor(n_estimators=100, random_state=42)))
+            models.append(("Linear SVR", LinearSVR(dual=False, random_state=42)))
+            models.append(("K-Nearest Neighbors", KNeighborsRegressor()))
 
             try:
                 from xgboost import XGBRegressor  # type: ignore
@@ -234,6 +267,10 @@ def train_full_dataset(self, run_id: str) -> dict:
 
                 top_features: list[dict] = []
                 importances = getattr(model, "feature_importances_", None)
+                if importances is None and hasattr(model, "coef_"):
+                    importances = np.abs(model.coef_)
+                    if importances.ndim > 1:
+                        importances = importances[0]
                 if importances is not None:
                     pairs = list(zip(list(X_df.columns), importances))
                     pairs.sort(key=lambda p: p[1], reverse=True)

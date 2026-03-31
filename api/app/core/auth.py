@@ -20,8 +20,20 @@ _jwks_cache: JWKSCache | None = None
 
 
 async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
+    settings = get_settings()
+    headers = {"Accept": "application/json"}
+    # Some Supabase projects require an API key even for JWKS endpoint.
+    if settings.supabase_service_role_key:
+        headers["apikey"] = settings.supabase_service_role_key
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
     async with httpx.AsyncClient(timeout=15) as client:
-        res = await client.get(jwks_url, headers={"Accept": "application/json"})
+        res = await client.get(jwks_url, headers=headers)
+        # Backward-compatibility fallback:
+        # some older configs use /auth/v1/keys, while newer Supabase uses
+        # /auth/v1/.well-known/jwks.json.
+        if res.status_code == 404 and jwks_url.endswith("/auth/v1/keys"):
+            fallback_url = jwks_url.replace("/auth/v1/keys", "/auth/v1/.well-known/jwks.json")
+            res = await client.get(fallback_url, headers=headers)
         res.raise_for_status()
         return res.json()
 
@@ -38,7 +50,7 @@ async def _get_jwks() -> dict[str, Any]:
                 "then restart the server. JWKS defaults to YOUR_SUPABASE_URL/auth/v1/keys."
             ),
         )
-    jwks_url = settings.supabase_jwks_url or f"{settings.supabase_url.rstrip('/')}/auth/v1/keys"
+    jwks_url = settings.supabase_jwks_url or f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
 
     now = time.time()
     if _jwks_cache and (now - _jwks_cache.fetched_at) < 3600:
@@ -57,8 +69,13 @@ async def verify_supabase_jwt(token: str) -> dict[str, Any]:
     try:
         unverified = jwt.get_unverified_header(token)
         kid = unverified.get("kid")
+        alg = str(unverified.get("alg") or "")
         if not kid:
             raise ValueError("Missing kid in JWT header")
+        if not alg:
+            raise ValueError("Missing alg in JWT header")
+        if alg not in {"RS256", "ES256", "EdDSA"}:
+            raise ValueError(f"Unsupported JWT alg: {alg}")
 
         jwks = await _get_jwks()
         keys = jwks.get("keys", [])
@@ -72,7 +89,7 @@ async def verify_supabase_jwt(token: str) -> dict[str, Any]:
         decoded = jwt.decode(
             token,
             pem,
-            algorithms=["RS256"],
+            algorithms=[alg],
             options={"verify_aud": False},  # Supabase aud differs by token type
         )
         return decoded
