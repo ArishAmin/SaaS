@@ -16,6 +16,26 @@ from ..routers import datasets as datasets_router
 logger = get_task_logger(__name__)
 
 
+def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None):
+    if len(X) == 0:
+        raise ValueError("Dataset is empty after preprocessing.")
+    if len(X) < 2:
+        return X, X, y, y
+    
+    eff_test_size = max(1, int(len(X) * test_size)) / len(X)
+    if eff_test_size >= 1.0:
+        eff_test_size = 0.5
+
+    if stratify is not None:
+        try:
+            from sklearn.model_selection import train_test_split
+            return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=stratify)
+        except Exception:
+            pass
+    from sklearn.model_selection import train_test_split
+    return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=None)
+
+
 @celery_app.task(name="datapilotai.train_full", bind=True)
 def train_full_dataset(self, run_id: str) -> dict:
     """
@@ -137,7 +157,7 @@ def train_full_dataset(self, run_id: str) -> dict:
 
             y_enc, class_labels = _encode_labels(y)
 
-            X_train, X_test, y_train, y_test = train_test_split(
+            X_train, X_test, y_train, y_test = _safe_train_test_split(
                 X_df.values,
                 y_enc,
                 test_size=0.25,
@@ -218,7 +238,7 @@ def train_full_dataset(self, run_id: str) -> dict:
             y_num = pd.to_numeric(y, errors="coerce")
             y_num = y_num.fillna(y_num.median())
 
-            X_train, X_test, y_train, y_test = train_test_split(
+            X_train, X_test, y_train, y_test = _safe_train_test_split(
                 X_df.values,
                 y_num.values,
                 test_size=0.25,

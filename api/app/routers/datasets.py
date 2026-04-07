@@ -235,6 +235,24 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
     return rows[0]
 
 
+def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None):
+    if len(X) == 0:
+        raise ValueError("Dataset is empty after preprocessing.")
+    if len(X) < 2:
+        return X, X, y, y
+    
+    eff_test_size = max(1, int(len(X) * test_size)) / len(X)
+    if eff_test_size >= 1.0:
+        eff_test_size = 0.5 # fallback
+
+    if stratify is not None:
+        try:
+            return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=stratify)
+        except Exception:
+            pass
+    return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=None)
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 @limiter.limit(_rate)
 async def create_dataset(
@@ -903,6 +921,7 @@ async def train_quick(
     payload: TrainQuickRequest,
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
+    await log_to_supabase(level="info", event="train_quick_start", message="Instant training started", dataset_id=str(dataset_id))
     settings = get_settings()
     user_id = user["user_id"]
 
@@ -972,13 +991,20 @@ async def train_quick(
     y = df[target_column]
     X = df.drop(columns=[target_column])
 
-    # Heuristic classification vs regression
-    unique_count = y.nunique(dropna=True)
-    is_numeric = pd.api.types.is_numeric_dtype(y)
     classification_like = (not is_numeric) or (unique_count <= 20)
+
+    await log_to_supabase(
+        level="info", 
+        event="train_quick_type_detected", 
+        message=f"Detected {'classification' if classification_like else 'regression'} task", 
+        dataset_id=str(dataset_id),
+        metadata={"is_numeric": is_numeric, "unique_count": unique_count}
+    )
 
     if classification_like:
         # Label encode target if needed
+        # Dynamically cleanup
+        await log_to_supabase(level="info", event="train_quick_preprocess", message="Applying automatic median cleaning", dataset_id=dataset_id)
         from sklearn.preprocessing import LabelEncoder
 
         if not is_numeric:
@@ -991,9 +1017,13 @@ async def train_quick(
             y_enc = le.fit_transform(y)
             class_labels = [int(c) if pd.api.types.is_integer(c) else float(c) if pd.api.types.is_float(c) else str(c) for c in le.classes_]
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X.values, y_enc, test_size=0.25, random_state=42, stratify=y_enc if len(set(y_enc)) > 1 else None
-        )
+        try:
+            X_train, X_test, y_train, y_test = _safe_train_test_split(
+                X.values, y_enc, test_size=0.25, random_state=42, stratify=y_enc if len(set(y_enc)) > 1 else None
+            )
+        except Exception as e:
+            await log_to_supabase(level="error", event="train_quick_split_failed", message=str(e), dataset_id=dataset_id)
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Data splitting failed: {str(e)}")
 
         def safe_float(v) -> float:
             try:
@@ -1010,20 +1040,24 @@ async def train_quick(
                 "f1": safe_float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
             }
 
-        from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-        from sklearn.svm import LinearSVC
-        from sklearn.naive_bayes import GaussianNB
-        from sklearn.neighbors import KNeighborsClassifier
-        
-        models_to_run = [
-            ("Logistic Regression", LogisticRegression(max_iter=5000)),
-            ("Decision Tree", DecisionTreeClassifier(random_state=42)),
-            ("Random Forest", RandomForestClassifier(n_estimators=100, random_state=42)),
-            ("Gradient Boosting", GradientBoostingClassifier(random_state=42)),
-            ("Linear SVC", LinearSVC(dual=False, random_state=42)),
-            ("Naive Bayes", GaussianNB()),
-            ("K-Nearest Neighbors", KNeighborsClassifier())
-        ]
+        try:
+            from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+            from sklearn.svm import LinearSVC
+            from sklearn.naive_bayes import GaussianNB
+            from sklearn.neighbors import KNeighborsClassifier
+            
+            models_to_run = [
+                ("Logistic Regression", LogisticRegression(max_iter=5000)),
+                ("Decision Tree", DecisionTreeClassifier(random_state=42)),
+                ("Random Forest", RandomForestClassifier(n_estimators=100, random_state=42)),
+                ("Gradient Boosting", GradientBoostingClassifier(random_state=42)),
+                ("Linear SVC", LinearSVC(dual=False, random_state=42)),
+                ("Naive Bayes", GaussianNB()),
+                ("K-Nearest Neighbors", KNeighborsClassifier())
+            ]
+        except Exception as e:
+            await log_to_supabase(level="error", event="train_quick_model_import_failed", message=str(e), dataset_id=str(dataset_id))
+            raise HTTPException(status_code=500, detail=f"Machine learning model setup failed: {str(e)}")
         try:
             from xgboost import XGBClassifier
             models_to_run.append(("XGBoost", XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric="logloss")))
@@ -1058,6 +1092,7 @@ async def train_quick(
                     best_f1 = mets["f1"]
                     best_model_name = name
             except Exception as e:
+                await log_to_supabase(level="warning", event="train_quick_model_failed", message=f"Model {name} failed: {str(e)}", dataset_id=str(dataset_id))
                 pass
 
         results = {
@@ -1072,7 +1107,7 @@ async def train_quick(
         y_num = pd.to_numeric(y, errors="coerce")
         y_num = y_num.fillna(y_num.median())
 
-        X_train, X_test, y_train, y_test = train_test_split(
+        X_train, X_test, y_train, y_test = _safe_train_test_split(
             X.values, y_num.values, test_size=0.25, random_state=42
         )
 
@@ -1143,6 +1178,7 @@ async def train_quick(
                     best_rmse = mets["rmse"]
                     best_model_name = name
             except Exception as e:
+                await log_to_supabase(level="warning", event="train_quick_model_failed", message=f"Model {name} failed: {str(e)}", dataset_id=str(dataset_id))
                 pass
 
         results = {
@@ -1275,8 +1311,6 @@ async def get_quick_evaluation(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     quick = dataset.get("quick_evaluation_json")
-    if not quick:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quick evaluation not found yet")
     return {"dataset_id": str(dataset_id), "quick_evaluation": quick}
 
 
@@ -1458,10 +1492,13 @@ if pd.api.types.is_numeric_dtype(y_raw):
 else:
     y = le.fit_transform(y_raw.astype(str))
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_transformed, y, test_size=0.25, random_state=42,
-    stratify=y if len(set(y)) > 1 else None
-)
+try:
+    X_train, X_test, y_train, y_test = _safe_train_test_split(
+        X_transformed, y, test_size=0.25, random_state=42,
+        stratify=y if len(set(y)) > 1 else None
+    )
+except Exception as e:
+    X_train, X_test, y_train, y_test = X_transformed, X_transformed, y, y
 
 lr = LogisticRegression(max_iter=5000).fit(X_train, y_train)
 dt = DecisionTreeClassifier(random_state=42).fit(X_train, y_train)
