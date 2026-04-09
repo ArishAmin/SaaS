@@ -41,9 +41,7 @@ The Blueprint securely requests values for specific environment variables that i
 *   **`SUPABASE_SERVICE_ROLE_KEY`**: Your secret Service Role Key.
 *   **`NEXT_PUBLIC_SUPABASE_URL`**: (Same as above)
 *   **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**: Your public Anon Key.
-
-> [!IMPORTANT]
-> Because of how Render Blueprint linking works, the Next.js service (`datapilot-web`) will automatically be fed the live URL of your FastAPI service (`datapilot-api`) as `NEXT_PUBLIC_API_BASE_URL`. You do not need to manually configure the API linkage!
+*   **`NEXT_PUBLIC_API_BASE_URL`**: During setup, since the backend is still being provisioned, Render won't know its final live URL yet. Start by setting this to `https://placeholder-api.onrender.com`. Once the deployment finishes, copy the real `.onrender.com` URL of the `datapilot-api` backend, go to the `datapilot-web` settings area, update this variable, and it will re-deploy instantly.
 
 ## Step 5: Wait for Build
 Once you supply the secrets and click "Apply", Render will simultaneously spin up all four instances. 

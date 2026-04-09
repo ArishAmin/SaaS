@@ -60,10 +60,8 @@ services:
     envVars:
       # Next.js will use this URL to contact your FastAPI backend
       - key: NEXT_PUBLIC_API_BASE_URL
-        fromService:
-          type: web
-          name: datapilot-api
-          property: url
+        sync: false
+
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
