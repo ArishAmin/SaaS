@@ -1,0 +1,78 @@
+services:
+  # -------------------------
+  # 1. FastAPI Backend
+  # -------------------------
+  - type: web
+    name: datapilot-api
+    runtime: python
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: datapilot-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: API_VERSION
+        value: "0.1.0"
+
+  # -------------------------
+  # 2. Celery Worker
+  # -------------------------
+  - type: worker
+    name: datapilot-worker
+    runtime: python
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    # On Linux (Render), we can use normal worker without 'solo' pool.
+    startCommand: celery -A app.worker.celery_worker worker --loglevel=info --concurrency=2
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: datapilot-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        fromService:
+          type: web
+          name: datapilot-api
+          envVarKey: SUPABASE_URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromService:
+          type: web
+          name: datapilot-api
+          envVarKey: SUPABASE_SERVICE_ROLE_KEY
+
+  # -------------------------
+  # 3. Next.js Frontend
+  # -------------------------
+  - type: web
+    name: datapilot-web
+    runtime: node
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      # Next.js will use this URL to contact your FastAPI backend
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: datapilot-api
+          property: url
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+  # -------------------------
+  # 4. Redis Database
+  # -------------------------
+  - type: redis
+    name: datapilot-redis
+    ipAllowList: [] # Blank means only internal Render services can connect
+    plan: free
