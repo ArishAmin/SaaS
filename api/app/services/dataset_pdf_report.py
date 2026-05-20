@@ -6,6 +6,7 @@ Structured for presentation to technical and non-technical stakeholders.
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,7 +19,10 @@ def _pdf_safe(text: str, max_len: int = 24_000) -> str:
     s = str(text)
     if len(s) > max_len:
         s = s[: max_len - 40] + "\n\n[... truncated ...]"
-    return s.encode("latin-1", "replace").decode("latin-1")
+    # fpdf core fonts are Latin-1 only; strip other characters (filenames, metrics, etc.)
+    s = unicodedata.normalize("NFKD", s)
+    s = s.encode("ascii", "ignore").decode("ascii")
+    return s.replace("\r", " ").strip() or "-"
 
 
 def _now_iso() -> str:
@@ -33,8 +37,8 @@ def _fmt_ts(v: Any) -> str:
 
 def _best_from_run(results: Any) -> str:
     if isinstance(results, dict):
-        return str(results.get("best_model") or "—")
-    return "—"
+        return str(results.get("best_model") or "-")
+    return "-"
 
 
 def _metric_labels(task_type: str) -> list[tuple[str, str]]:
@@ -76,8 +80,11 @@ class _ReportPDF(FPDF):
         self.multi_cell(0, 5, _pdf_safe(text))
 
     def bullet(self, text: str) -> None:
-        self.set_font("helvetica", "", 10)
-        self.multi_cell(0, 5, _pdf_safe(f"  - {text}"))
+        self.set_font("helvetica", "", 9)
+        safe = _pdf_safe(text)
+        if len(safe) > 110:
+            safe = safe[:107] + "..."
+        self.cell(0, 5, f"  - {safe}", new_x="LMARGIN", new_y="NEXT")
 
     def key_value_table(self, rows: list[tuple[str, str]]) -> None:
         self.set_font("helvetica", "", 9)
@@ -157,7 +164,7 @@ def build_dataset_report_pdf(
         pdf.ln(4)
         pdf.body_text(
             f"Best performing model (instant preview): {quick.get('best_model')}  |  "
-            f"Task: {quick.get('task_type', '—')}  |  Target: {quick.get('target_column', '—')}"
+            f"Task: {quick.get('task_type', '-')}  |  Target: {quick.get('target_column', '-')}"
         )
 
     if include("analysis") or include("cleaning") or include("training"):
@@ -166,10 +173,10 @@ def build_dataset_report_pdf(
         pdf.key_value_table(
             [
                 ("Original file", f"{dataset.get('original_file_name')} ({dataset.get('original_extension')})"),
-                ("Workflow status", str(dataset.get("status") or "—")),
+                ("Workflow status", str(dataset.get("status") or "-")),
                 ("Created", _fmt_ts(dataset.get("created_at"))),
                 ("Last updated", _fmt_ts(dataset.get("updated_at"))),
-                ("Target column", str(dataset.get("cleaned_target_column") or "—")),
+                ("Target column", str(dataset.get("cleaned_target_column") or "-")),
             ]
         )
 
@@ -199,8 +206,8 @@ def build_dataset_report_pdf(
                 uc = unique.get(row.get("column"))
                 pdf.cell(52, 5, _pdf_safe(c), border=1)
                 pdf.cell(22, 5, _pdf_safe(t), border=1)
-                pdf.cell(28, 5, _pdf_safe(f"{mp:.1f}" if mp is not None else "—"), border=1)
-                pdf.cell(28, 5, _pdf_safe(str(uc) if uc is not None else "—"), border=1)
+                pdf.cell(28, 5, _pdf_safe(f"{mp:.1f}" if mp is not None else "-"), border=1)
+                pdf.cell(28, 5, _pdf_safe(str(uc) if uc is not None else "-"), border=1)
                 pdf.ln()
             if len(col_types) > 60:
                 pdf.body_text(f"... and {len(col_types) - 60} additional columns.")
@@ -213,9 +220,9 @@ def build_dataset_report_pdf(
         pdf.key_value_table(
             [
                 ("Cleaned at", _fmt_ts(dataset.get("cleaned_at"))),
-                ("Missing values", str(params.get("missing_strategy", "—"))),
-                ("Categorical encoding", str(params.get("encoding", "—"))),
-                ("Numeric scaling", str(params.get("scaling", "—"))),
+                ("Missing values", str(params.get("missing_strategy", "-"))),
+                ("Categorical encoding", str(params.get("encoding", "-"))),
+                ("Numeric scaling", str(params.get("scaling", "-"))),
             ]
         )
         eng = dataset.get("engineered_params") or {}
@@ -237,7 +244,11 @@ def build_dataset_report_pdf(
                 pdf.body_text("Generated features applied:")
                 for feat in gen[:25]:
                     if isinstance(feat, dict):
-                        pdf.bullet(f"{feat.get('name', '?')}: {feat.get('formula', feat.get('type', ''))}")
+                        pdf.bullet(
+                            _pdf_safe(
+                                f"{str(feat.get('name', '?'))[:40]}: {str(feat.get('formula', feat.get('type', '')))[:60]}"
+                            )
+                        )
 
     if include("training"):
         quick = dataset.get("quick_evaluation_json") or {}
@@ -253,8 +264,8 @@ def build_dataset_report_pdf(
             pdf.key_value_table(
                 [
                     ("Task type", task),
-                    ("Target column", str(quick.get("target_column") or "—")),
-                    ("Best model", str(quick.get("best_model") or "—")),
+                    ("Target column", str(quick.get("target_column") or "-")),
+                    ("Best model", str(quick.get("best_model") or "-")),
                     ("Preview run at", _fmt_ts(dataset.get("quick_trained_at"))),
                 ]
             )
@@ -291,11 +302,12 @@ def build_dataset_report_pdf(
                     if tops:
                         pdf.ln(4)
                         pdf.set_font("helvetica", "B", 10)
-                        pdf.cell(0, 6, f"Top drivers — {best_name}", new_x="LMARGIN", new_y="NEXT")
+                        pdf.cell(0, 6, _pdf_safe(f"Top drivers - {best_name}"), new_x="LMARGIN", new_y="NEXT")
                         pdf.set_font("helvetica", "", 8)
                         for row in tops[:15]:
                             if isinstance(row, dict):
-                                pdf.bullet(f"{row.get('feature')}: {float(row.get('importance', 0)):.4f}")
+                                feat = str(row.get("feature", ""))[:80]
+                                pdf.bullet(_pdf_safe(f"{feat}: {float(row.get('importance', 0)):.4f}"))
                     break
 
         if runs:
@@ -306,18 +318,20 @@ def build_dataset_report_pdf(
             for r in runs[:15]:
                 rid = str(r.get("run_id", ""))[:8]
                 st = r.get("status")
-                ds = r.get("data_source") or "—"
+                ds = r.get("data_source") or "-"
                 sr = r.get("sample_rows")
                 ms = r.get("duration_ms")
                 best = _best_from_run(r.get("results_json"))
                 pdf.bullet(
-                    f"{rid}… {st} | source={ds} | rows={sr} | {ms}ms | best={best} | {_fmt_ts(r.get('created_at'))}"
+                    _pdf_safe(
+                        f"{rid}... {st} | source={ds} | rows={sr} | {ms}ms | best={best} | {_fmt_ts(r.get('created_at'))}"
+                    )
                 )
 
     # --- Appendix (optional detail) ---
     if include("analysis"):
         pdf.add_page()
-        pdf.section_title("Appendix — technical parameters", None)
+        pdf.section_title("Appendix - technical parameters", None)
         pdf.set_font("helvetica", "B", 9)
         pdf.cell(0, 6, "Cleaning parameters (JSON)", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("courier", "", 7)

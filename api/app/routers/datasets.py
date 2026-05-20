@@ -433,12 +433,23 @@ async def get_single_dataset(
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    quick = dataset.get("quick_evaluation_json")
     return {
         "dataset_id": str(dataset["dataset_id"]),
         "original_file_name": dataset.get("original_file_name"),
         "original_extension": dataset.get("original_extension"),
         "status": dataset.get("status"),
         "created_at": dataset.get("created_at"),
+        "updated_at": dataset.get("updated_at"),
+        "analyzed_at": dataset.get("analyzed_at"),
+        "cleaned_at": dataset.get("cleaned_at"),
+        "cleaned_storage_path": dataset.get("cleaned_storage_path"),
+        "cleaned_target_column": dataset.get("cleaned_target_column"),
+        "engineered_at": dataset.get("engineered_at"),
+        "engineered_storage_path": dataset.get("engineered_storage_path"),
+        "engineered_params": dataset.get("engineered_params"),
+        "quick_trained_at": dataset.get("quick_trained_at"),
+        "has_quick_evaluation": bool(_quick_evaluation_is_displayable(quick)),
     }
 
 
@@ -1486,9 +1497,14 @@ async def apply_generative_features(
 
     # Re-save the dataset
     out_csv = df_augmented.to_csv(index=False).encode("utf-8")
-    engineered_path = f"{user_id}/datasets/{dataset_id}/engineered_{dataset['original_file_name']}.csv"
+    engineered_path = f"{user_id}/datasets/{dataset_id}/engineered.csv"
     
-    await storage_upload("datasets", engineered_path, out_csv, "text/csv")
+    await storage_upload(
+        "datasets",
+        engineered_path,
+        content=out_csv,
+        content_type="text/csv",
+    )
     
     await rest_patch(
         "datasets",
@@ -1509,11 +1525,13 @@ async def apply_generative_features(
         metadata={"num_features_added": len(payload.features)}
     )
 
+    engineered_at = pd.Timestamp.utcnow().isoformat()
     return {
         "dataset_id": str(dataset_id),
         "status": "engineered",
         "engineered_storage_path": engineered_path,
-        "features_added": len(payload.features)
+        "engineered_at": engineered_at,
+        "features_added": len(payload.features),
     }
 
 @router.get("/{dataset_id}/quick-evaluation")
@@ -1555,17 +1573,26 @@ async def download_dataset_pdf_report(
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    runs = await rest_list(
-        "training_runs",
-        query=(
-            f"dataset_id=eq.{dataset_id}"
-            f"&select=run_id,status,created_at,error,results_json,target_column,data_source,sample_rows,duration_ms"
-            f"&order=created_at.desc&limit=25"
-        ),
-    )
+    try:
+        runs = await rest_list(
+            "training_runs",
+            query=(
+                f"dataset_id=eq.{dataset_id}"
+                f"&select=run_id,status,created_at,error,results_json,target_column,data_source,sample_rows,duration_ms"
+                f"&order=created_at.desc&limit=25"
+            ),
+        )
+    except Exception:
+        runs = []
 
     sections_list = [s.strip().lower() for s in sections.split(",")] if sections else None
-    pdf_bytes = build_dataset_report_pdf(dataset=dataset, training_runs=runs, sections=sections_list)
+    try:
+        pdf_bytes = build_dataset_report_pdf(dataset=dataset, training_runs=runs, sections=sections_list)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF generation failed: {exc}",
+        ) from exc
     filename = f"datapilot-report-{dataset_id}.pdf"
     await log_user_activity(
         user_id=str(user_id),
