@@ -14,6 +14,8 @@ from .routers.training_runs import router as training_runs_router
 from .routers.shared_reports import router as shared_reports_router
 from .routers.assistant import router as assistant_router
 from .routers.telemetry import router as telemetry_router
+from .routers.billing import router as billing_router
+from .routers.profiles import router as profiles_router
 from .core.rate_limit import limiter
 from .services.app_logs import log_to_supabase
 
@@ -27,6 +29,8 @@ app.include_router(training_runs_router)
 app.include_router(shared_reports_router)
 app.include_router(assistant_router)
 app.include_router(telemetry_router)
+app.include_router(billing_router)
+app.include_router(profiles_router)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(_request, _exc):

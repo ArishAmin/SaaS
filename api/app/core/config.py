@@ -10,6 +10,15 @@ class Settings(BaseSettings):
     # Supabase typically exposes keys at: {SUPABASE_URL}/auth/v1/keys
     supabase_jwks_url: str | None = None
 
+    # Stripe
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_price_id_pro: str | None = None
+    stripe_price_id_business: str | None = None
+
+    # When False, all users get Business-tier limits (no plan / Stripe gating). Set True in production.
+    billing_enforcement_enabled: bool = False
+
     # Rate limiting
     redis_url: str = "redis://localhost:6379"
     rate_limit_per_minute: str = "30/minute"

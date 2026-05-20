@@ -121,21 +121,50 @@ using (
   and auth.uid()::text = split_part(name, '/', 1)
 );
 
--- 3) Async training runs table
+-- 3) Instant-preview training runs (one row per preview; full training is local Python export)
 create table if not exists public.training_runs (
   run_id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   dataset_id uuid not null references public.datasets(dataset_id) on delete cascade,
 
-  mode text not null, -- 'full'
-  status text not null default 'queued', -- queued/running/completed/failed
-
+  status text not null default 'completed',
   results_json jsonb,
   error text,
+
+  target_column text,
+  data_source text,
+  sample_rows integer,
+  duration_ms integer,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- 3b) Pipeline audit events (append-only tracing)
+create table if not exists public.dataset_events (
+  event_id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  dataset_id uuid not null references public.datasets(dataset_id) on delete cascade,
+  event_type text not null,
+  status text not null default 'completed',
+  metadata jsonb not null default '{}'::jsonb,
+  error text,
+  duration_ms integer,
+  created_at timestamptz not null default now()
+);
+
+alter table public.dataset_events enable row level security;
+
+drop policy if exists "dataset_events_select_own" on public.dataset_events;
+create policy "dataset_events_select_own"
+on public.dataset_events for select using (auth.uid() = user_id);
+
+drop policy if exists "dataset_events_insert_own" on public.dataset_events;
+create policy "dataset_events_insert_own"
+on public.dataset_events for insert with check (auth.uid() = user_id);
+
+create index if not exists dataset_events_dataset_created_idx
+  on public.dataset_events (dataset_id, created_at desc);
 
 drop trigger if exists trg_training_runs_updated_at on public.training_runs;
 create trigger trg_training_runs_updated_at

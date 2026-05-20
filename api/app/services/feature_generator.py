@@ -35,12 +35,16 @@ def detect_column_types(df: pd.DataFrame) -> dict:
 
 def evaluate_feature(df: pd.DataFrame, target_col: str, feature_series: pd.Series, task: str) -> float:
     """Returns the performance delta (e.g., accuracy or R2) by adding the feature."""
-    if len(df) < 50 or feature_series.nunique() <= 1:
+    if feature_series.nunique() <= 1:
         return 0.0
 
+    # Small datasets: skip strict CV (always returns 0 and filters everything out).
+    if len(df) < 50:
+        return 0.01
+
     valid_idx = df[target_col].notna() & feature_series.notna()
-    if valid_idx.sum() < 50:
-        return 0.0
+    if valid_idx.sum() < 20:
+        return 0.01
 
     X_base = df.loc[valid_idx].select_dtypes(include=[np.number]).fillna(0)
     if target_col in X_base.columns:
@@ -103,9 +107,10 @@ def generate_features(df_full: pd.DataFrame, target_col: str | None = None) -> l
                     return # Redundant
 
         impact = 0.0
+        small_dataset = len(df) < 50
         if target_col and target_col in df.columns and name != target_col:
             impact = evaluate_feature(df, target_col, series, task)
-            if impact < 0.001:  # Only suggest if it slightly helps or is neutral-ish
+            if not small_dataset and impact < 0.001:
                 return
 
         # Format impact
@@ -205,7 +210,52 @@ def generate_features(df_full: pd.DataFrame, target_col: str | None = None) -> l
             seen.add(s["name"])
             final_suggestions.append(s)
 
-    return final_suggestions[:20] # Top 20
+    if not final_suggestions:
+        # Always return helpful defaults for tiny or narrow datasets.
+        for col in types["numeric"]:
+            if col == target_col:
+                continue
+            series = df[col]
+            if series.nunique() <= 1:
+                continue
+            final_suggestions.append({
+                "name": f"{col}_scaled",
+                "formula": f"standard_scale({col})",
+                "type": "numeric_transform",
+                "expected_impact": "Exploratory",
+                "impact_score": 0.0,
+                "reason": "Standardizes this numeric column for more stable model training.",
+            })
+            if len(final_suggestions) >= 3:
+                break
+        for col in types["categorical"]:
+            if col == target_col:
+                continue
+            if df[col].nunique() >= 2:
+                final_suggestions.append({
+                    "name": f"{col}_freq_encoded",
+                    "formula": f"freq_encode({col})",
+                    "type": "categorical_encode",
+                    "expected_impact": "Exploratory",
+                    "impact_score": 0.0,
+                    "reason": "Encodes category frequency — useful when categories repeat often.",
+                })
+            if len(final_suggestions) >= 5:
+                break
+        if not final_suggestions and len(df.columns) >= 2:
+            cols = [c for c in df.columns if c != target_col][:2]
+            if len(cols) == 2:
+                c1, c2 = cols
+                final_suggestions.append({
+                    "name": f"{c1}_mul_{c2}",
+                    "formula": f"{c1} * {c2}",
+                    "type": "interaction",
+                    "expected_impact": "Exploratory",
+                    "impact_score": 0.0,
+                    "reason": "Combines two columns — a simple interaction feature to try.",
+                })
+
+    return final_suggestions[:20]  # Top 20
 
 
 def apply_features(df: pd.DataFrame, features: list[dict], target_col: str | None = None) -> pd.DataFrame:

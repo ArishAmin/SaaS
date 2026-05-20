@@ -278,7 +278,8 @@ def train_full_dataset(self, run_id: str) -> dict:
             for name, model in models:
                 model.fit(X_train, y_train)
                 pred = model.predict(X_test)
-                rmse = float(mean_squared_error(y_test, pred, squared=False))
+                from sklearn.metrics import root_mean_squared_error
+                rmse = float(root_mean_squared_error(y_test, pred))
                 metrics = {
                     "r2": float(r2_score(y_test, pred)),
                     "mae": float(mean_absolute_error(y_test, pred)),

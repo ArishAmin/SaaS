@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import io
+import time
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,11 @@ from ..core.auth import get_current_user
 from ..core.config import get_settings
 from ..core.rate_limit import limiter
 from ..services.dataset_pdf_report import build_dataset_report_pdf
+from ..services.export_bundle import build_export_bundle_zip
+from ..services.full_training_export import build_full_training_python_script
 from ..services.activity_logs import log_user_activity
+from ..services.training_runs import log_dataset_event, record_instant_training_run
+from ..services.app_logs import log_to_supabase
 from ..services.feature_generator import generate_features, apply_features
 from ..services.supabase import (
     rest_insert,
@@ -35,6 +40,7 @@ from ..services.supabase import (
     storage_upload,
     storage_list,
 )
+from ..core.billing import get_user_plan_limits
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 _rate = get_settings().rate_limit_per_minute
@@ -66,11 +72,6 @@ class CleaningRequest(BaseModel):
 
 
 class TrainQuickRequest(BaseModel):
-    target_column: str | None = None
-
-
-class TrainFullRequest(BaseModel):
-    # Optional override; if omitted we use `datasets.cleaned_target_column`.
     target_column: str | None = None
 
 
@@ -235,6 +236,92 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
     return rows[0]
 
 
+def _quick_evaluation_is_displayable(quick: Any) -> bool:
+    """Reject stale/placeholder quick evaluations (e.g. all-zero metrics, no models)."""
+    if not quick or not isinstance(quick, dict):
+        return False
+    models = quick.get("models")
+    if not isinstance(models, list) or len(models) == 0:
+        return False
+    metric_keys = ("accuracy", "f1", "r2", "rmse", "mae")
+    for model in models:
+        metrics = model.get("metrics") if isinstance(model, dict) else None
+        if not isinstance(metrics, dict):
+            continue
+        for key in metric_keys:
+            val = metrics.get(key)
+            if isinstance(val, (int, float)) and val > 0:
+                return True
+    return False
+
+
+def _ensure_quick_model_results(
+    results_models: list[dict[str, Any]],
+    X: pd.DataFrame,
+    y: pd.Series,
+    *,
+    classification_like: bool,
+) -> list[dict[str, Any]]:
+    """Guarantee at least one model result; used when advanced models fail on tiny datasets."""
+    if results_models:
+        return results_models
+
+    from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+    from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, r2_score, root_mean_squared_error
+
+    feature_names = list(X.columns)
+
+    def safe_float(v: float) -> float:
+        try:
+            f = float(v)
+            return 0.0 if np.isnan(f) or np.isinf(f) else f
+        except Exception:
+            return 0.0
+
+    try:
+        X_train, X_test, y_train, y_test = _safe_train_test_split(
+            X,
+            y,
+            test_size=0.25,
+            random_state=42,
+            stratify=y if classification_like and y.nunique() > 1 else None,
+        )
+    except Exception:
+        X_train, X_test, y_train, y_test = X, X, y, y
+
+    if classification_like:
+        model = DecisionTreeClassifier(random_state=42, max_depth=6)
+        model.fit(X_train, y_train)
+        pred = model.predict(X_test)
+        metrics = {
+            "accuracy": safe_float(accuracy_score(y_test, pred)),
+            "precision": safe_float(accuracy_score(y_test, pred)),
+            "recall": safe_float(accuracy_score(y_test, pred)),
+            "f1": safe_float(f1_score(y_test, pred, average="weighted", zero_division=0)),
+        }
+        name = "Decision Tree (fallback)"
+    else:
+        y_num = pd.to_numeric(y, errors="coerce").fillna(0)
+        X_train, X_test, y_train, y_test = _safe_train_test_split(X, y_num, test_size=0.25, random_state=42)
+        model = DecisionTreeRegressor(random_state=42, max_depth=6)
+        model.fit(X_train, y_train)
+        pred = model.predict(X_test)
+        metrics = {
+            "r2": safe_float(r2_score(y_test, pred)),
+            "mae": safe_float(mean_absolute_error(y_test, pred)),
+            "rmse": safe_float(root_mean_squared_error(y_test, pred)),
+        }
+        name = "Decision Tree (fallback)"
+
+    importances = getattr(model, "feature_importances_", None)
+    top_features: list[dict[str, Any]] = []
+    if importances is not None:
+        pairs = sorted(zip(feature_names, importances), key=lambda p: p[1], reverse=True)
+        top_features = [{"feature": str(f), "importance": safe_float(float(i))} for f, i in pairs[:20]]
+
+    return [{"name": name, "metrics": metrics, "top_features": top_features}]
+
+
 def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None):
     if len(X) == 0:
         raise ValueError("Dataset is empty after preprocessing.")
@@ -253,20 +340,32 @@ def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None)
     return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=None)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("")
 @limiter.limit(_rate)
-async def create_dataset(
-    request: Request,
-    payload: CreateDatasetRequest,
-    user=Depends(get_current_user),
-) -> dict[str, Any]:
-    settings = get_settings()
+async def create_dataset_record(request: Request, 
+    req: CreateDatasetRequest,
+    user: dict = Depends(get_current_user),
+):
     user_id = user["user_id"]
+    dataset_id = req.dataset_id
+    storage_path = req.storage_path
 
-    _validate_storage_path(user_id, payload.storage_path)
+    # 1) Plan Limit Check
+    limits = await get_user_plan_limits(user_id)
+    
+    # Check concurrent datasets count
+    existing_datasets = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
+    if len(existing_datasets) >= limits.max_concurrent_datasets:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You have reached the maximum number of datasets for your plan ({limits.max_concurrent_datasets}). Please upgrade or delete existing datasets."
+        )
+
+    # 2) Validation
+    _validate_storage_path(user_id, storage_path)
 
     # Strictly avoid trusting client-provided mime types; only extension is used to parse.
-    if payload.original_extension not in ("csv", "json", "xls", "xlsx"):
+    if req.original_extension not in ("csv", "json", "xls", "xlsx"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file extension")
 
     try:
@@ -274,12 +373,12 @@ async def create_dataset(
             "datasets",
             payload=[
                 {
-                    "dataset_id": str(payload.dataset_id),
+                    "dataset_id": str(req.dataset_id),
                     "user_id": user_id,
-                    "storage_path": payload.storage_path,
-                    "original_file_name": payload.original_file_name,
-                    "original_extension": payload.original_extension,
-                    "mime_type": payload.mime_type,
+                    "storage_path": req.storage_path,
+                    "original_file_name": req.original_file_name,
+                    "original_extension": req.original_extension,
+                    "mime_type": req.mime_type,
                     "status": "uploaded",
                     "analysis_json": None,
                     "error": None,
@@ -292,10 +391,10 @@ async def create_dataset(
     await log_user_activity(
         user_id=str(user_id),
         action="dataset_created",
-        dataset_id=str(payload.dataset_id),
-        metadata={"original_file_name": payload.original_file_name, "extension": payload.original_extension},
+        dataset_id=str(req.dataset_id),
+        metadata={"original_file_name": req.original_file_name, "extension": req.original_extension},
     )
-    return {"dataset_id": str(created.get("dataset_id", payload.dataset_id))}
+    return {"dataset_id": str(created.get("dataset_id", req.dataset_id))}
 
 
 @router.get("")
@@ -430,6 +529,7 @@ async def analyze_dataset(
 
     settings = get_settings()
     user_id = user["user_id"]
+    limits = await get_user_plan_limits(user_id)
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
@@ -437,10 +537,13 @@ async def analyze_dataset(
 
     # Download from private storage (service role access).
     raw = await storage_download("datasets", dataset["storage_path"])
-    if len(raw) > settings.instant_max_bytes:
+    
+    # Enforce plan-based size limit
+    max_bytes = limits.max_dataset_size_mb * 1024 * 1024
+    if len(raw) > max_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large for instant analysis (max {settings.instant_max_bytes} bytes).",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"File exceeds the {limits.max_dataset_size_mb}MB limit for your current plan. Please upgrade to analyze larger datasets.",
         )
     df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
     analysis = _analyze_dataframe(df)
@@ -611,7 +714,7 @@ async def get_dataset_quality(
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    Dataset quality score (0–100):
+    Dataset quality score (0â€“100):
     - Penalizes overall missingness
     - Penalizes duplicates ratio
     - Returns actionable improvements
@@ -921,7 +1024,14 @@ async def train_quick(
     payload: TrainQuickRequest,
     user=Depends(get_current_user),
 ) -> dict[str, Any]:
-    await log_to_supabase(level="info", event="train_quick_start", message="Instant training started", dataset_id=str(dataset_id))
+    started = time.perf_counter()
+    run_id = str(uuid4())
+    await log_to_supabase(
+        level="info",
+        event="train_quick_start",
+        message="Instant training started",
+        metadata={"dataset_id": str(dataset_id), "run_id": run_id},
+    )
     settings = get_settings()
     user_id = user["user_id"]
 
@@ -930,8 +1040,14 @@ async def train_quick(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     engineered_path = dataset.get("engineered_storage_path")
-    cleaned_path = dataset.get("cleaned_storage_path")
-    cleaned_path = engineered_path or cleaned_path
+    cleaned_only_path = dataset.get("cleaned_storage_path")
+    if engineered_path:
+        data_source = "engineered"
+    elif cleaned_only_path:
+        data_source = "cleaned"
+    else:
+        data_source = "raw"
+    cleaned_path = engineered_path or cleaned_only_path
     cleaned_target_column = dataset.get("cleaned_target_column")
 
     target_column = payload.target_column or cleaned_target_column
@@ -991,20 +1107,31 @@ async def train_quick(
     y = df[target_column]
     X = df.drop(columns=[target_column])
 
+    is_numeric = pd.api.types.is_numeric_dtype(y)
+    unique_count = y.nunique()
+
     classification_like = (not is_numeric) or (unique_count <= 20)
 
     await log_to_supabase(
-        level="info", 
-        event="train_quick_type_detected", 
-        message=f"Detected {'classification' if classification_like else 'regression'} task", 
-        dataset_id=str(dataset_id),
-        metadata={"is_numeric": is_numeric, "unique_count": unique_count}
+        level="info",
+        event="train_quick_type_detected",
+        message=f"Detected {'classification' if classification_like else 'regression'} task",
+        metadata={
+            "dataset_id": str(dataset_id),
+            "is_numeric": is_numeric,
+            "unique_count": int(unique_count),
+        },
     )
 
     if classification_like:
         # Label encode target if needed
         # Dynamically cleanup
-        await log_to_supabase(level="info", event="train_quick_preprocess", message="Applying automatic median cleaning", dataset_id=dataset_id)
+        await log_to_supabase(
+            level="info",
+            event="train_quick_preprocess",
+            message="Applying automatic median cleaning",
+            metadata={"dataset_id": str(dataset_id)},
+        )
         from sklearn.preprocessing import LabelEncoder
 
         if not is_numeric:
@@ -1019,10 +1146,15 @@ async def train_quick(
 
         try:
             X_train, X_test, y_train, y_test = _safe_train_test_split(
-                X.values, y_enc, test_size=0.25, random_state=42, stratify=y_enc if len(set(y_enc)) > 1 else None
+                X, y_enc, test_size=0.25, random_state=42, stratify=y_enc if len(set(y_enc)) > 1 else None
             )
         except Exception as e:
-            await log_to_supabase(level="error", event="train_quick_split_failed", message=str(e), dataset_id=dataset_id)
+            await log_to_supabase(
+                level="error",
+                event="train_quick_split_failed",
+                message=str(e),
+                metadata={"dataset_id": str(dataset_id)},
+            )
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Data splitting failed: {str(e)}")
 
         def safe_float(v) -> float:
@@ -1056,13 +1188,24 @@ async def train_quick(
                 ("K-Nearest Neighbors", KNeighborsClassifier())
             ]
         except Exception as e:
-            await log_to_supabase(level="error", event="train_quick_model_import_failed", message=str(e), dataset_id=str(dataset_id))
+            await log_to_supabase(
+                level="error",
+                event="train_quick_model_import_failed",
+                message=str(e),
+                metadata={"dataset_id": str(dataset_id)},
+            )
             raise HTTPException(status_code=500, detail=f"Machine learning model setup failed: {str(e)}")
         try:
             from xgboost import XGBClassifier
             models_to_run.append(("XGBoost", XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric="logloss")))
         except ImportError:
             pass
+
+        if len(X) < 30:
+            models_to_run = [
+                ("Logistic Regression", LogisticRegression(max_iter=5000)),
+                ("Decision Tree", DecisionTreeClassifier(random_state=42, max_depth=6)),
+            ]
 
         results_models = []
         best_f1 = -1.0
@@ -1078,7 +1221,8 @@ async def train_quick(
                 # Check importances if possible
                 importances = getattr(model, "feature_importances_", None)
                 if importances is None and hasattr(model, "coef_"):
-                    importances = np.abs(model.coef_[0])
+                    coef = model.coef_
+                    importances = np.abs(coef[0] if coef.ndim > 1 else coef)
                     
                 top_features = []
                 if importances is not None:
@@ -1092,8 +1236,19 @@ async def train_quick(
                     best_f1 = mets["f1"]
                     best_model_name = name
             except Exception as e:
-                await log_to_supabase(level="warning", event="train_quick_model_failed", message=f"Model {name} failed: {str(e)}", dataset_id=str(dataset_id))
+                await log_to_supabase(
+                    level="warning",
+                    event="train_quick_model_failed",
+                    message=f"Model {name} failed: {str(e)}",
+                    metadata={"dataset_id": str(dataset_id)},
+                )
                 pass
+
+        results_models = _ensure_quick_model_results(
+            results_models, X, pd.Series(y_enc), classification_like=True
+        )
+        if results_models and not best_model_name:
+            best_model_name = results_models[0]["name"].replace(" (fallback)", "")
 
         results = {
             "task_type": "classification",
@@ -1108,7 +1263,7 @@ async def train_quick(
         y_num = y_num.fillna(y_num.median())
 
         X_train, X_test, y_train, y_test = _safe_train_test_split(
-            X.values, y_num.values, test_size=0.25, random_state=42
+            X, y_num, test_size=0.25, random_state=42
         )
 
         def safe_float(v) -> float:
@@ -1119,8 +1274,8 @@ async def train_quick(
                 return 0.0
 
         def get_metrics(y_true, y_pred) -> dict[str, float]:
-            from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-            rmse = safe_float(mean_squared_error(y_true, y_pred, squared=False))
+            from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
+            rmse = safe_float(root_mean_squared_error(y_true, y_pred))
             return {
                 "r2": safe_float(r2_score(y_true, y_pred)),
                 "mae": safe_float(mean_absolute_error(y_true, y_pred)),
@@ -1147,6 +1302,12 @@ async def train_quick(
             models_to_run.append(("XGBoost", XGBRegressor(n_estimators=100, random_state=42)))
         except ImportError:
             pass
+
+        if len(X) < 30:
+            models_to_run = [
+                ("Linear Regression", LinearRegression()),
+                ("Decision Tree", DecisionTreeRegressor(random_state=42, max_depth=6)),
+            ]
             
         results_models = []
         best_rmse = float('inf')
@@ -1178,8 +1339,19 @@ async def train_quick(
                     best_rmse = mets["rmse"]
                     best_model_name = name
             except Exception as e:
-                await log_to_supabase(level="warning", event="train_quick_model_failed", message=f"Model {name} failed: {str(e)}", dataset_id=str(dataset_id))
+                await log_to_supabase(
+                    level="warning",
+                    event="train_quick_model_failed",
+                    message=f"Model {name} failed: {str(e)}",
+                    metadata={"dataset_id": str(dataset_id)},
+                )
                 pass
+
+        results_models = _ensure_quick_model_results(
+            results_models, X, y_num, classification_like=False
+        )
+        if results_models and not best_model_name:
+            best_model_name = results_models[0]["name"].replace(" (fallback)", "")
 
         results = {
             "task_type": "regression",
@@ -1188,6 +1360,15 @@ async def train_quick(
             "models": results_models,
             "best_model": best_model_name if best_model_name else "Linear Regression",
         }
+
+    if not results.get("models"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not train any models on this dataset. Try cleaning first or pick a different target column.",
+        )
+
+    duration_ms = int((time.perf_counter() - started) * 1000)
+    sample_rows = int(len(df))
 
     await rest_patch(
         "datasets",
@@ -1199,13 +1380,50 @@ async def train_quick(
         },
     )
 
+    await record_instant_training_run(
+        run_id=run_id,
+        user_id=str(user_id),
+        dataset_id=str(dataset_id),
+        results_json=results,
+        target_column=target_column,
+        data_source=data_source,
+        sample_rows=sample_rows,
+        duration_ms=duration_ms,
+        status="completed",
+    )
+    await log_dataset_event(
+        user_id=str(user_id),
+        dataset_id=str(dataset_id),
+        event_type="train_instant_preview",
+        status="completed",
+        duration_ms=duration_ms,
+        metadata={
+            "run_id": run_id,
+            "target_column": target_column,
+            "data_source": data_source,
+            "task_type": results.get("task_type"),
+            "best_model": results.get("best_model"),
+            "sample_rows": sample_rows,
+        },
+    )
+
     await log_user_activity(
         user_id=str(user_id),
         action="quick_training_completed",
         dataset_id=str(dataset_id),
-        metadata={"target_column": target_column, "task_type": results.get("task_type")},
+        metadata={
+            "run_id": run_id,
+            "target_column": target_column,
+            "task_type": results.get("task_type"),
+            "data_source": data_source,
+        },
     )
-    return {"dataset_id": str(dataset_id), "status": "completed", "quick_evaluation": results}
+    return {
+        "dataset_id": str(dataset_id),
+        "run_id": run_id,
+        "status": "completed",
+        "quick_evaluation": results,
+    }
 
 
 @router.post("/{dataset_id}/feature-generation/suggest")
@@ -1311,7 +1529,13 @@ async def get_quick_evaluation(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     quick = dataset.get("quick_evaluation_json")
-    return {"dataset_id": str(dataset_id), "quick_evaluation": quick}
+    if not _quick_evaluation_is_displayable(quick):
+        quick = None
+    return {
+        "dataset_id": str(dataset_id),
+        "quick_evaluation": quick,
+        "quick_trained_at": dataset.get("quick_trained_at"),
+    }
 
 
 @router.get("/{dataset_id}/report/pdf")
@@ -1335,7 +1559,7 @@ async def download_dataset_pdf_report(
         "training_runs",
         query=(
             f"dataset_id=eq.{dataset_id}"
-            f"&select=run_id,status,created_at,error,results_json"
+            f"&select=run_id,status,created_at,error,results_json,target_column,data_source,sample_rows,duration_ms"
             f"&order=created_at.desc&limit=25"
         ),
     )
@@ -1355,50 +1579,17 @@ async def download_dataset_pdf_report(
     )
 
 
-@router.get("/{dataset_id}/export/cleaned")
-@limiter.limit(_rate)
-async def export_cleaned(
-    request: Request,
-    dataset_id: UUID,
-    format: str = "csv",
-    user=Depends(get_current_user),
-) -> Any:
-    dataset = await _get_dataset(dataset_id)
-    user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    cleaned_path = dataset.get("cleaned_storage_path")
-    cleaned_params = dataset.get("cleaned_params") or {}
-    cleaned_target_column = dataset.get("cleaned_target_column")
-    if not cleaned_path or not cleaned_target_column:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleaned dataset not available")
-
-    raw = await storage_download("datasets", cleaned_path)
-
-    if format == "csv":
-        await log_user_activity(
-            user_id=str(user_id),
-            action="cleaned_csv_exported",
-            dataset_id=str(dataset_id),
-        )
-        return Response(content=raw, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename=\"cleaned.csv\"'})
-
-    if format == "python-code":
-        # Production-friendly: export a script that reproduces preprocessing from the RAW dataset,
-        # using saved cleaning + feature-selection parameters.
-        target = cleaned_target_column
-        params = cleaned_params
-        engineered_params = dataset.get("engineered_params") or {}
-        keep_features = engineered_params.get("keep_features") or []
-
-        missing_strategy = params.get("missing_strategy", "median")
-        encoding = params.get("encoding", "one-hot")
-        scaling = params.get("scaling", "standard")
-
-        keep_features_py = repr([str(x) for x in keep_features]) if keep_features else "None"
-
-        code = f"""import pandas as pd
+def _build_cleaning_python_script(dataset: dict[str, Any], target: str | None) -> str | None:
+    if not target:
+        return None
+    params = dataset.get("cleaned_params") or {}
+    engineered_params = dataset.get("engineered_params") or {}
+    keep_features = engineered_params.get("keep_features") or []
+    missing_strategy = params.get("missing_strategy", "median")
+    encoding = params.get("encoding", "one-hot")
+    scaling = params.get("scaling", "standard")
+    keep_features_py = repr([str(x) for x in keep_features]) if keep_features else "None"
+    return f"""import pandas as pd
 import numpy as np
 
 from sklearn.model_selection import train_test_split
@@ -1410,25 +1601,18 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-# =========================
 # DataPilot AI export
-# =========================
-RAW_DATA_PATH = r\"your_raw_dataset.csv\"  # Update to your raw dataset path
+RAW_DATA_PATH = r\"your_raw_dataset.csv\"
 TARGET_COLUMN = {target!r}
-
-# Cleaning params captured from DataPilot AI
-MISSING_STRATEGY = {missing_strategy!r}   # 'mean' | 'median' | 'drop'
-ENCODING = {encoding!r}                  # 'label' | 'one-hot'
-SCALING = {scaling!r}                    # 'standard' | 'min-max'
-
-# Feature selection captured from DataPilot AI (if you applied feature engineering)
-KEEP_FEATURES = {keep_features_py}       # list[str] or None
+MISSING_STRATEGY = {missing_strategy!r}
+ENCODING = {encoding!r}
+SCALING = {scaling!r}
+KEEP_FEATURES = {keep_features_py}
 
 def build_preprocessor(numeric_cols, categorical_cols):
     numeric_impute = 'median' if MISSING_STRATEGY in ('median', 'drop') else 'mean'
     scaler = StandardScaler() if SCALING == 'standard' else MinMaxScaler()
     num_pipe = Pipeline([('imputer', SimpleImputer(strategy=numeric_impute)), ('scaler', scaler)])
-
     if ENCODING == 'label':
         cat_pipe = Pipeline([
             ('imputer', SimpleImputer(strategy='most_frequent')),
@@ -1439,13 +1623,11 @@ def build_preprocessor(numeric_cols, categorical_cols):
             ('imputer', SimpleImputer(strategy='most_frequent')),
             ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False)),
         ])
-
     transformers = []
     if numeric_cols:
         transformers.append(('num', num_pipe, numeric_cols))
     if categorical_cols:
         transformers.append(('cat', cat_pipe, categorical_cols))
-
     return ColumnTransformer(transformers=transformers, remainder='drop')
 
 def metrics(y_true, y_pred):
@@ -1456,59 +1638,79 @@ def metrics(y_true, y_pred):
         'f1': float(f1_score(y_true, y_pred, average='weighted', zero_division=0)),
     }}
 
-# Load data (CSV). If your raw file is Excel/JSON, adjust read_* accordingly.
 df = pd.read_csv(RAW_DATA_PATH)
-if TARGET_COLUMN not in df.columns:
-    raise ValueError(f\"Target column not found: {{TARGET_COLUMN}}. Available: {{list(df.columns)[:20]}}...\")
-
-# Drop rows with missing target.
 df = df.dropna(subset=[TARGET_COLUMN])
-
 feature_cols = [c for c in df.columns if c != TARGET_COLUMN]
-
 if MISSING_STRATEGY == 'drop':
     df = df.dropna(subset=feature_cols + [TARGET_COLUMN])
-
 X = df[feature_cols]
 y_raw = df[TARGET_COLUMN]
-
-# Optional: apply exported feature selection (post-cleaning, pre-encoding)
 if KEEP_FEATURES:
-    missing = [c for c in KEEP_FEATURES if c not in X.columns]
-    if missing:
-        raise ValueError(f\"KEEP_FEATURES includes unknown columns: {{missing[:10]}}...\")
     X = X[KEEP_FEATURES]
-
 numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
 categorical_cols = [c for c in X.columns if c not in numeric_cols]
-
 preprocessor = build_preprocessor(numeric_cols, categorical_cols)
 X_transformed = preprocessor.fit_transform(X)
-
-# Encode labels for classification.
 le = LabelEncoder()
-if pd.api.types.is_numeric_dtype(y_raw):
-    y = le.fit_transform(y_raw)
-else:
-    y = le.fit_transform(y_raw.astype(str))
-
-try:
-    X_train, X_test, y_train, y_test = _safe_train_test_split(
-        X_transformed, y, test_size=0.25, random_state=42,
-        stratify=y if len(set(y)) > 1 else None
-    )
-except Exception as e:
-    X_train, X_test, y_train, y_test = X_transformed, X_transformed, y, y
-
+y = le.fit_transform(y_raw.astype(str) if not pd.api.types.is_numeric_dtype(y_raw) else y_raw)
+X_train, X_test, y_train, y_test = train_test_split(X_transformed, y, test_size=0.25, random_state=42)
 lr = LogisticRegression(max_iter=5000).fit(X_train, y_train)
 dt = DecisionTreeClassifier(random_state=42).fit(X_train, y_train)
-
-lr_pred = lr.predict(X_test)
-dt_pred = dt.predict(X_test)
-
-print('Logistic Regression:', metrics(y_test, lr_pred))
-print('Decision Tree:', metrics(y_test, dt_pred))
+print('Logistic Regression:', metrics(y_test, lr.predict(X_test)))
+print('Decision Tree:', metrics(y_test, dt.predict(X_test)))
 """
+
+
+@router.get("/{dataset_id}/export/cleaned")
+@limiter.limit(_rate)
+async def export_cleaned(
+    request: Request,
+    dataset_id: UUID,
+    format: str = "csv",
+    source: str = Query("latest", description="latest | cleaned | engineered"),
+    user=Depends(get_current_user),
+) -> Any:
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    cleaned_path = dataset.get("cleaned_storage_path")
+    engineered_path = dataset.get("engineered_storage_path")
+    cleaned_params = dataset.get("cleaned_params") or {}
+    cleaned_target_column = dataset.get("cleaned_target_column")
+
+    src = (source or "latest").lower()
+    if src == "engineered":
+        storage_path = engineered_path
+        if not storage_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No engineered dataset found. Apply generated features first.",
+            )
+    elif src == "cleaned":
+        storage_path = cleaned_path
+        if not storage_path or not cleaned_target_column:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleaned dataset not available")
+    else:
+        storage_path = engineered_path or cleaned_path
+        if not storage_path:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No processed dataset available. Run cleaning first.")
+
+    raw = await storage_download("datasets", storage_path)
+
+    if format == "csv":
+        await log_user_activity(
+            user_id=str(user_id),
+            action="cleaned_csv_exported",
+            dataset_id=str(dataset_id),
+        )
+        return Response(content=raw, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename=\"cleaned.csv\"'})
+
+    if format == "python-code":
+        code = _build_cleaning_python_script(dataset, cleaned_target_column)
+        if not code:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleaned dataset not available")
         from fastapi.responses import PlainTextResponse
 
         await log_user_activity(
@@ -1518,7 +1720,79 @@ print('Decision Tree:', metrics(y_test, dt_pred))
         )
         return PlainTextResponse(code, media_type="text/plain")
 
+    if format == "train-full":
+        code = build_full_training_python_script(dataset)
+        if not code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Run instant preview on Train models first, then export the full-training script.",
+            )
+        from fastapi.responses import PlainTextResponse
+
+        await log_user_activity(
+            user_id=str(user_id),
+            action="full_training_script_exported",
+            dataset_id=str(dataset_id),
+            metadata={"best_model": (dataset.get("quick_evaluation_json") or {}).get("best_model")},
+        )
+        return PlainTextResponse(
+            code,
+            media_type="text/plain",
+            headers={"Content-Disposition": 'attachment; filename="train_full_model.py"'},
+        )
+
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown format")
+
+
+@router.get("/{dataset_id}/export/bundle")
+@limiter.limit(_rate)
+async def export_bundle(
+    request: Request,
+    dataset_id: UUID,
+    user=Depends(get_current_user),
+) -> Response:
+    """ZIP with PDF report, available CSVs, and cleaning script."""
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    cleaned_path = dataset.get("cleaned_storage_path")
+    engineered_path = dataset.get("engineered_storage_path")
+    if not cleaned_path and not engineered_path and not dataset.get("analysis_json"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nothing to export yet. Run at least analysis or cleaning on this dataset.",
+        )
+
+    cleaned_csv: bytes | None = None
+    engineered_csv: bytes | None = None
+    if cleaned_path:
+        cleaned_csv = await storage_download("datasets", cleaned_path)
+    if engineered_path:
+        engineered_csv = await storage_download("datasets", engineered_path)
+
+    cleaning_script = _build_cleaning_python_script(dataset, dataset.get("cleaned_target_column"))
+    training_script = build_full_training_python_script(dataset)
+
+    zip_bytes = build_export_bundle_zip(
+        dataset={**dataset, "dataset_id": str(dataset_id)},
+        cleaned_csv=cleaned_csv,
+        engineered_csv=engineered_csv,
+        cleaning_script=cleaning_script,
+        training_script=training_script,
+    )
+    filename = f"datapilot-export-{str(dataset_id)[:8]}.zip"
+    await log_user_activity(
+        user_id=str(user_id),
+        action="export_bundle_downloaded",
+        dataset_id=str(dataset_id),
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{dataset_id}/feature-importance")
@@ -1733,69 +2007,6 @@ async def feature_engineer(
         metadata={"selected_features": len(keep_features), "dropped_features": len(dropped_features)},
     )
     return response
-
-
-@router.post("/{dataset_id}/train-full")
-@limiter.limit(_rate)
-async def train_full(
-    request: Request,
-    dataset_id: UUID,
-    payload: TrainFullRequest,
-    user=Depends(get_current_user),
-) -> dict[str, Any]:
-    """
-    Schedules full-mode async training via Celery + Redis.
-    """
-    dataset = await _get_dataset(dataset_id)
-    user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    if not dataset.get("cleaned_params") and not payload.target_column:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must specify a target column to bypass cleaning for full training.",
-        )
-
-    from uuid import uuid4
-
-    run_id = uuid4()
-
-    # Save target override into the training payload directly for Celery workers to parse if uncleaned!
-    target_column = payload.target_column or dataset.get("cleaned_target_column")
-    if not target_column:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must specify a target_column to train on uncleaned data.",
-        )
-
-    run_payload = {
-        "run_id": str(run_id),
-        "user_id": user_id,
-        "dataset_id": str(dataset_id),
-        "mode": "full",
-        "status": "queued",
-        "results_json": {"requested_target": target_column},
-        "error": None,
-    }
-
-    await rest_insert(
-        "training_runs",
-        payload=[run_payload],
-    )
-
-    # Enqueue Celery job
-    from ..worker.tasks_full_training import train_full_dataset
-
-    train_full_dataset.delay(str(run_id))
-
-    await log_user_activity(
-        user_id=str(user_id),
-        action="full_training_queued",
-        dataset_id=str(dataset_id),
-        metadata={"run_id": str(run_id)},
-    )
-    return {"run_id": str(run_id), "status": "queued"}
 
 
 @router.post("/{dataset_id}/recommend")
