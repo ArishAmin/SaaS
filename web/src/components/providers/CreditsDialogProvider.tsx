@@ -7,7 +7,6 @@ import { Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -70,8 +69,7 @@ export function CreditsDialogProvider({ children }: { children: React.ReactNode 
                 <Sparkles className="h-5 w-5 text-blue-500" />
                 More credits needed
               </DialogTitle>
-              <DialogDescription asChild>
-                <div className="space-y-3 text-left text-sm text-muted-foreground pt-1">
+              <div className="space-y-3 text-left text-sm text-muted-foreground pt-1">
                   <p>{payload?.message ?? "Upgrade to keep using paid pipeline steps."}</p>
                   <p>
                     Your balance:{" "}
@@ -97,7 +95,6 @@ export function CreditsDialogProvider({ children }: { children: React.ReactNode 
                     </li>
                   </ul>
                 </div>
-              </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <Button variant="outline" asChild className="w-full sm:w-auto">
