@@ -69,7 +69,7 @@ services:
   - type: cron
     name: acutize-ttl-cron
     runtime: python
-    plan: free
+    plan: starter
     schedule: "0 * * * *"
     rootDir: api
     buildCommand: pip install requests
