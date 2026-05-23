@@ -26,16 +26,17 @@ async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
     if settings.supabase_service_role_key:
         headers["apikey"] = settings.supabase_service_role_key
         headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
-    async with httpx.AsyncClient(timeout=15) as client:
-        res = await client.get(jwks_url, headers=headers)
-        # Backward-compatibility fallback:
-        # some older configs use /auth/v1/keys, while newer Supabase uses
-        # /auth/v1/.well-known/jwks.json.
-        if res.status_code == 404 and jwks_url.endswith("/auth/v1/keys"):
-            fallback_url = jwks_url.replace("/auth/v1/keys", "/auth/v1/.well-known/jwks.json")
-            res = await client.get(fallback_url, headers=headers)
-        res.raise_for_status()
-        return res.json()
+    from .http_client import HTTPClient
+    client = HTTPClient.get_client()
+    res = await client.get(jwks_url, headers=headers)
+    # Backward-compatibility fallback:
+    # some older configs use /auth/v1/keys, while newer Supabase uses
+    # /auth/v1/.well-known/jwks.json.
+    if res.status_code == 404 and jwks_url.endswith("/auth/v1/keys"):
+        fallback_url = jwks_url.replace("/auth/v1/keys", "/auth/v1/.well-known/jwks.json")
+        res = await client.get(fallback_url, headers=headers)
+    res.raise_for_status()
+    return res.json()
 
 
 async def _get_jwks() -> dict[str, Any]:

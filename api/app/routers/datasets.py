@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import time
+import asyncio
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -537,7 +538,7 @@ async def analyze_dataset(
 
     raw = await storage_download("datasets", dataset["storage_path"])
     df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
-    analysis = _analyze_dataframe(df)
+    analysis = await asyncio.to_thread(_analyze_dataframe, df)
 
     # Persist analysis for subsequent UI fetch.
     await rest_patch(
@@ -928,7 +929,7 @@ async def clean_dataset(
         scaling=scaling,
     )
 
-    X_transformed = preprocessor.fit_transform(X)
+    X_transformed = await asyncio.to_thread(preprocessor.fit_transform, X)
     X_df, _ = _extract_cleaned_features_and_names(
         preprocessor, X_transformed, numeric_cols, categorical_cols
     )
@@ -936,7 +937,10 @@ async def clean_dataset(
     cleaned_df = pd.concat([X_df, y.reset_index(drop=True)], axis=1)
     cleaned_df.columns = list(X_df.columns) + [target_column]
 
-    csv_bytes = cleaned_df.to_csv(index=False).encode("utf-8")
+    def _to_csv_bytes(df: pd.DataFrame) -> bytes:
+        return df.to_csv(index=False).encode("utf-8")
+
+    csv_bytes = await asyncio.to_thread(_to_csv_bytes, cleaned_df)
     if len(csv_bytes) > settings.cleaned_max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -1210,42 +1214,51 @@ async def train_quick(
                 ("Decision Tree", DecisionTreeClassifier(random_state=42, max_depth=6)),
             ]
 
-        results_models = []
-        best_f1 = -1.0
-        best_model_name = ""
-        feature_names = list(X.columns)
-        
-        for name, model in models_to_run:
-            try:
-                model.fit(X_train, y_train)
-                pred = model.predict(X_test)
-                mets = metrics(y_test, pred)
-                
-                # Check importances if possible
-                importances = getattr(model, "feature_importances_", None)
-                if importances is None and hasattr(model, "coef_"):
-                    coef = model.coef_
-                    importances = np.abs(coef[0] if coef.ndim > 1 else coef)
+        def _fit_and_evaluate_models_clf(models, X_tr, y_tr, X_te, y_te, f_names):
+            res_models = []
+            b_f1 = -1.0
+            b_name = ""
+            for n, m in models:
+                try:
+                    m.fit(X_tr, y_tr)
+                    p = m.predict(X_te)
+                    mets = metrics(y_te, p)
                     
-                top_features = []
-                if importances is not None:
-                    pairs = list(zip(feature_names, importances))
-                    pairs.sort(key=lambda p: p[1], reverse=True)
-                    top_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in pairs[:20]]
-                
-                results_models.append({"name": name, "metrics": mets, "top_features": top_features})
-                
-                if mets["f1"] > best_f1:
-                    best_f1 = mets["f1"]
-                    best_model_name = name
-            except Exception as e:
-                await log_to_supabase(
-                    level="warning",
-                    event="train_quick_model_failed",
-                    message=f"Model {name} failed: {str(e)}",
-                    metadata={"dataset_id": str(dataset_id)},
-                )
-                pass
+                    imps = getattr(m, "feature_importances_", None)
+                    if imps is None and hasattr(m, "coef_"):
+                        c = m.coef_
+                        imps = np.abs(c[0] if c.ndim > 1 else c)
+                        
+                    t_features = []
+                    if imps is not None:
+                        prs = list(zip(f_names, imps))
+                        prs.sort(key=lambda p: p[1], reverse=True)
+                        t_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in prs[:20]]
+                    
+                    res_models.append({"name": n, "metrics": mets, "top_features": t_features})
+                    if mets["f1"] > b_f1:
+                        b_f1 = mets["f1"]
+                        b_name = n
+                except Exception as e:
+                    res_models.append({"name": n, "error": str(e)})
+            return res_models, b_name
+
+        try:
+            results_models, best_model_name = await asyncio.to_thread(
+                _fit_and_evaluate_models_clf, models_to_run, X_train, y_train, X_test, y_test, feature_names
+            )
+            # Log any errors caught during fitting
+            for rm in results_models:
+                if "error" in rm:
+                    await log_to_supabase(
+                        level="warning",
+                        event="train_quick_model_failed",
+                        message=f"Model {rm['name']} failed: {rm['error']}",
+                        metadata={"dataset_id": str(dataset_id)},
+                    )
+            results_models = [rm for rm in results_models if "error" not in rm]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Model training failed: {str(e)}")
 
         results_models = _ensure_quick_model_results(
             results_models, X, pd.Series(y_enc), classification_like=True
@@ -1315,43 +1328,52 @@ async def train_quick(
                 ("Decision Tree", DecisionTreeRegressor(random_state=42, max_depth=6)),
             ]
             
-        results_models = []
-        best_rmse = float('inf')
-        best_model_name = ""
-        feature_names = list(X.columns)
-        
-        for name, model in models_to_run:
-            try:
-                model.fit(X_train, y_train)
-                pred = model.predict(X_test)
-                mets = get_metrics(y_test, pred)
-                
-                # Check importances
-                importances = getattr(model, "feature_importances_", None)
-                if importances is None and hasattr(model, "coef_"):
-                    importances = np.abs(model.coef_)
-                    if importances.ndim > 1:
-                        importances = importances[0]
+        def _fit_and_evaluate_models_reg(models, X_tr, y_tr, X_te, y_te, f_names):
+            res_models = []
+            b_rmse = float('inf')
+            b_name = ""
+            for n, m in models:
+                try:
+                    m.fit(X_tr, y_tr)
+                    p = m.predict(X_te)
+                    mets = get_metrics(y_te, p)
                     
-                top_features = []
-                if importances is not None:
-                    pairs = list(zip(feature_names, importances))
-                    pairs.sort(key=lambda p: p[1], reverse=True)
-                    top_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in pairs[:20]]
-                
-                results_models.append({"name": name, "metrics": mets, "top_features": top_features})
-                
-                if mets["rmse"] < best_rmse:
-                    best_rmse = mets["rmse"]
-                    best_model_name = name
-            except Exception as e:
-                await log_to_supabase(
-                    level="warning",
-                    event="train_quick_model_failed",
-                    message=f"Model {name} failed: {str(e)}",
-                    metadata={"dataset_id": str(dataset_id)},
-                )
-                pass
+                    imps = getattr(m, "feature_importances_", None)
+                    if imps is None and hasattr(m, "coef_"):
+                        imps = np.abs(m.coef_)
+                        if imps.ndim > 1:
+                            imps = imps[0]
+                        
+                    t_features = []
+                    if imps is not None:
+                        prs = list(zip(f_names, imps))
+                        prs.sort(key=lambda p: p[1], reverse=True)
+                        t_features = [{"feature": str(f), "importance": safe_float(i)} for f, i in prs[:20]]
+                    
+                    res_models.append({"name": n, "metrics": mets, "top_features": t_features})
+                    if mets["rmse"] < b_rmse:
+                        b_rmse = mets["rmse"]
+                        b_name = n
+                except Exception as e:
+                    res_models.append({"name": n, "error": str(e)})
+            return res_models, b_name
+
+        try:
+            results_models, best_model_name = await asyncio.to_thread(
+                _fit_and_evaluate_models_reg, models_to_run, X_train, y_train, X_test, y_test, feature_names
+            )
+            # Log any errors caught during fitting
+            for rm in results_models:
+                if "error" in rm:
+                    await log_to_supabase(
+                        level="warning",
+                        event="train_quick_model_failed",
+                        message=f"Model {rm['name']} failed: {rm['error']}",
+                        metadata={"dataset_id": str(dataset_id)},
+                    )
+            results_models = [rm for rm in results_models if "error" not in rm]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Model training failed: {str(e)}")
 
         results_models = _ensure_quick_model_results(
             results_models, X, y_num, classification_like=False

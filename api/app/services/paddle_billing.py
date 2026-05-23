@@ -36,8 +36,9 @@ async def _paddle_request(method: str, path: str, payload: dict | None = None) -
         "Authorization": f"Bearer {settings.paddle_api_key}",
         "Content-Type": "application/json",
     }
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.request(method, url, headers=headers, json=payload)
+    from ..core.http_client import HTTPClient
+    client = HTTPClient.get_client()
+    resp = await client.request(method, url, headers=headers, json=payload)
     if resp.status_code >= 400:
         detail = resp.text
         try:

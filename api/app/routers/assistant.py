@@ -98,23 +98,24 @@ async def chat(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            res = await client.post(url, headers=headers, json=body)
-            if res.status_code >= 400:
-                text = await res.text()
-                raise HTTPException(status_code=502, detail=f"LLM error: {text[:500]}")
-            data = res.json()
-            reply = (
-                ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-                or "No reply generated."
-            )
-            await log_user_activity(
-                user_id=str(user_id),
-                action="assistant_chat_used",
-                dataset_id=str(payload.dataset_id) if payload.dataset_id else None,
-                metadata={"history_count": len(payload.history)},
-            )
-            return ChatResponse(reply=str(reply))
+        from ..core.http_client import HTTPClient
+        client = HTTPClient.get_client()
+        res = await client.post(url, headers=headers, json=body)
+        if res.status_code >= 400:
+            text = await res.text()
+            raise HTTPException(status_code=502, detail=f"LLM error: {text[:500]}")
+        data = res.json()
+        reply = (
+            ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+            or "No reply generated."
+        )
+        await log_user_activity(
+            user_id=str(user_id),
+            action="assistant_chat_used",
+            dataset_id=str(payload.dataset_id) if payload.dataset_id else None,
+            metadata={"history_count": len(payload.history)},
+        )
+        return ChatResponse(reply=str(reply))
     except HTTPException:
         raise
     except Exception as e:

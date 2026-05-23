@@ -121,10 +121,10 @@ Run Supabase migration `20260521100000_paddle_credits.sql` for credits + Paddle 
 
 ## Scaling & upgrades
 
-- **API slow on large CSVs:** bump `acutize-api` to **Standard** ($25/mo, 2 GB RAM).  
-- **Redis evictions / rate limits flaky:** set `acutize-redis` to **Starter** ($10/mo).  
+- **API slow on large CSVs:** bump `acutize-api` to **Standard** ($25/mo, 2 GB RAM). Uvicorn uses `--workers 4` by default in the Blueprint for concurrency.
+- **Redis evictions / rate limits flaky:** set `acutize-redis` to **Starter** ($10/mo). Connection pooling is used to stay within the 20 connection limit on the free tier.
 - **Cold starts on free workspace:** use Render **Pro** workspace ($25/mo) or upgrade service plans.  
-- **Re-enable TTL cleanup:** add a Render **Cron Job** (cheaper than a 24/7 worker) that calls an admin cleanup endpoint, or run Celery worker + beat only when `TTL_CLEANUP_ENABLED=true`.
+- **TTL cleanup:** A Render **Cron Job** is included in the Blueprint. It calls `/admin/cleanup-ttl` hourly using `ADMIN_CLEANUP_TOKEN`.
 
 ---
 

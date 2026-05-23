@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+import asyncio
+from contextlib import asynccontextmanager
 
 from .routers.health import router as health_router
 from .routers.datasets import router as datasets_router
@@ -16,13 +18,23 @@ from .routers.assistant import router as assistant_router
 from .routers.telemetry import router as telemetry_router
 from .routers.billing import router as billing_router
 from .routers.profiles import router as profiles_router
+from .routers.admin import router as admin_router
 from .core.config import get_settings
 from .core.rate_limit import limiter
+from .core.http_client import HTTPClient
 from .middleware.security import SecurityHeadersMiddleware
 from .services.app_logs import log_to_supabase
 
 
-app = FastAPI(title="Acutize API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize connection pool
+    HTTPClient.get_client()
+    yield
+    # Cleanup on shutdown
+    await HTTPClient.close()
+
+app = FastAPI(title="Acutize API", version="0.1.0", lifespan=lifespan)
 
 # 1. Base App Middlewares (Inner layers)
 app.include_router(health_router)
@@ -33,6 +45,7 @@ app.include_router(assistant_router)
 app.include_router(telemetry_router)
 app.include_router(billing_router)
 app.include_router(profiles_router)
+app.include_router(admin_router)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(_request, _exc):
@@ -48,31 +61,35 @@ async def request_logging_middleware(request: Request, call_next):
         response = await call_next(request)
         duration_ms = int((time.perf_counter() - start) * 1000)
         response.headers["X-Request-ID"] = request_id
-        await log_to_supabase(
-            level="info",
-            event="http_request",
-            message="Request completed",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=duration_ms,
-            request_id=request_id,
-            metadata={"query": request.url.query},
+        asyncio.create_task(
+            log_to_supabase(
+                level="info",
+                event="http_request",
+                message="Request completed",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+                request_id=request_id,
+                metadata={"query": request.url.query},
+            )
         )
         return response
     except Exception as exc:
         duration_ms = int((time.perf_counter() - start) * 1000)
-        await log_to_supabase(
-            level="error",
-            event="http_request_error",
-            message=str(exc),
-            method=request.method,
-            path=request.url.path,
-            status_code=500,
-            duration_ms=duration_ms,
-            request_id=request_id,
-            error={"type": exc.__class__.__name__, "detail": str(exc)},
-            metadata={"query": request.url.query},
+        asyncio.create_task(
+            log_to_supabase(
+                level="error",
+                event="http_request_error",
+                message=str(exc),
+                method=request.method,
+                path=request.url.path,
+                status_code=500,
+                duration_ms=duration_ms,
+                request_id=request_id,
+                error={"type": exc.__class__.__name__, "detail": str(exc)},
+                metadata={"query": request.url.query},
+            )
         )
         # Ensure we return a JSONResponse that Starlette can handle.
         # Note: CORS headers will be added by the CORSMiddleware layer which wraps this.
