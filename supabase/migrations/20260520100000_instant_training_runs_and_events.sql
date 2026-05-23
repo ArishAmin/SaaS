@@ -1,5 +1,5 @@
 -- =============================================================================
--- DataPilot AI — Combined migration
+-- Acutize — Combined migration
 -- Instant-preview training_runs, pipeline tracing, export support
 -- Safe to run multiple times (idempotent where possible).
 -- Run in Supabase SQL Editor (or: supabase db push).

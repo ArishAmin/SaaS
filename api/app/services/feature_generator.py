@@ -69,10 +69,13 @@ def evaluate_feature(df: pd.DataFrame, target_col: str, feature_series: pd.Serie
     except Exception:
         return 0.0
 
-def generate_features(df_full: pd.DataFrame, target_col: str | None = None) -> list[dict]:
-    # Use max 10k rows for speed
-    if len(df_full) > 10000:
-        df = df_full.sample(10000, random_state=42)
+def generate_features(
+    df_full: pd.DataFrame,
+    target_col: str | None = None,
+    max_rows: int = 20_000,
+) -> list[dict]:
+    if len(df_full) > max_rows:
+        df = df_full.sample(n=max_rows, random_state=42)
     else:
         df = df_full.copy()
 

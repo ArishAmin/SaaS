@@ -45,7 +45,7 @@ if use_eager_fallback:
     celery_kwargs["task_always_eager"] = True
     celery_kwargs["task_store_eager_result"] = False
 
-celery_app = Celery("datapilotai", broker=broker_url, backend=backend_url)
+celery_app = Celery("acutizeai", broker=broker_url, backend=backend_url)
 
 # Sensible defaults for ML jobs
 celery_app.conf.update(
@@ -60,7 +60,7 @@ celery_app.conf.update(
 if settings.ttl_cleanup_enabled:
     celery_app.conf.beat_schedule = {
         "ttl-cleanup": {
-            "task": "datapilotai.cleanup_ttl",
+            "task": "acutizeai.cleanup_ttl",
             "schedule": settings.ttl_cleanup_interval_minutes * 60,
         }
     }

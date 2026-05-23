@@ -93,7 +93,7 @@ async def upload_sample_to_storage(
 
 async def run():
     print("=" * 60)
-    print("DataPilot AI — Full API QA")
+    print("Acutize — Full API QA")
     print(f"API: {API_BASE}")
     print("=" * 60)
 

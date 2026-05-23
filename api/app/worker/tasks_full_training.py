@@ -36,7 +36,7 @@ def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None)
     return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=None)
 
 
-@celery_app.task(name="datapilotai.train_full", bind=True)
+@celery_app.task(name="acutizeai.train_full", bind=True)
 def train_full_dataset(self, run_id: str) -> dict:
     """
     Full-mode async training task.

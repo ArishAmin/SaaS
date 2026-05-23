@@ -10,29 +10,34 @@ class Settings(BaseSettings):
     # Supabase typically exposes keys at: {SUPABASE_URL}/auth/v1/keys
     supabase_jwks_url: str | None = None
 
-    # Stripe
-    stripe_secret_key: str | None = None
-    stripe_webhook_secret: str | None = None
-    stripe_price_id_pro: str | None = None
-    stripe_price_id_business: str | None = None
+    # Paddle Billing (https://developer.paddle.com)
+    paddle_api_key: str | None = None
+    paddle_webhook_secret: str | None = None
+    paddle_environment: str = "sandbox"  # sandbox | production
+    paddle_price_id_pro: str | None = None
+    paddle_price_id_pro_yearly: str | None = None
+    paddle_price_id_business: str | None = None
+    paddle_price_id_business_yearly: str | None = None
+    app_public_url: str = "http://localhost:3000"
 
-    # When False, all users get Business-tier limits (no plan / Stripe gating). Set True in production.
-    billing_enforcement_enabled: bool = False
+    # Set True in production (Render blueprint enables this). False only for local dev without billing.
+    billing_enforcement_enabled: bool = True
+
+    # production | development
+    app_env: str = "development"
+    # Comma-separated origins for CORS, e.g. https://app.example.com,https://www.example.com
+    allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Rate limiting
     redis_url: str = "redis://localhost:6379"
     rate_limit_per_minute: str = "30/minute"
 
-    # Instant analyzer limits (DoS / resource safety)
-    instant_max_rows: int = 10_000
-    instant_max_columns: int = 200
-    instant_max_bytes: int = 50 * 1024 * 1024
-
-    # Cleaning / quick-training limits
-    cleaning_max_rows: int = 10_000
-    cleaning_max_columns: int = 200
-    cleaning_max_bytes: int = 50 * 1024 * 1024
-    cleaned_max_bytes: int = 60 * 1024 * 1024
+    # Global safety ceilings (per-plan caps applied in data_limits.py)
+    max_columns: int = 200
+    preview_max_rows: int = 20_000
+    free_pipeline_max_rows: int = 20_000
+    paid_pipeline_max_rows: int = 2_000_000
+    cleaned_max_bytes: int = 80 * 1024 * 1024
 
     # Full async training limits (guardrails)
     full_max_rows: int = 250_000

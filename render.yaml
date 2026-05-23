@@ -1,76 +1,93 @@
+# Acutize — Render Blueprint (use this file only; api/render.yaml is legacy).
+# Docs: DEPLOY.md
+#
+# Cost-focused layout (May 2026):
+#   - API + Web on Starter ($7/mo each) = $14/mo compute
+#   - Redis Free for shared rate limits (upgrade to Starter $10/mo if you scale API replicas)
+#   - No Celery worker (full training runs on the user's machine via export; TTL cleanup off by default)
+#   - Supabase (auth/DB/storage) billed separately — Free tier OK for launch, Pro ~$25/mo when you grow
+#   - Render workspace: Hobby $0 (cold starts) or Pro $25/mo for always-on production
+
 services:
   # -------------------------
   # 1. FastAPI Backend
   # -------------------------
   - type: web
-    name: datapilot-api
+    name: acutize-api
     runtime: python
+    plan: starter
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.13"
       - key: REDIS_URL
         fromService:
           type: redis
-          name: datapilot-redis
+          name: acutize-redis
           property: connectionString
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_ENVIRONMENT
+        value: sandbox
+      - key: PADDLE_PRICE_ID_PRO
+        sync: false
+      - key: PADDLE_PRICE_ID_PRO_YEARLY
+        sync: false
+      - key: PADDLE_PRICE_ID_BUSINESS
+        sync: false
+      - key: PADDLE_PRICE_ID_BUSINESS_YEARLY
+        sync: false
+      - key: APP_PUBLIC_URL
+        sync: false
+      - key: BILLING_ENFORCEMENT_ENABLED
+        value: "true"
+      - key: APP_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: OPENAI_API_KEY
         sync: false
       - key: API_VERSION
         value: "0.1.0"
 
   # -------------------------
-  # 2. Celery Worker
-  # -------------------------
-  - type: worker
-    name: datapilot-worker
-    runtime: python
-    rootDir: api
-    buildCommand: pip install -r requirements.txt
-    # On Linux (Render), we can use normal worker without 'solo' pool.
-    startCommand: celery -A app.worker.celery_worker worker --loglevel=info --concurrency=2
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: datapilot-redis
-          property: connectionString
-      - key: SUPABASE_URL
-        fromService:
-          type: web
-          name: datapilot-api
-          envVarKey: SUPABASE_URL
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        fromService:
-          type: web
-          name: datapilot-api
-          envVarKey: SUPABASE_SERVICE_ROLE_KEY
-
-  # -------------------------
-  # 3. Next.js Frontend
+  # 2. Next.js Frontend
   # -------------------------
   - type: web
-    name: datapilot-web
+    name: acutize-web
     runtime: node
+    plan: starter
     rootDir: web
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     envVars:
-      # Next.js will use this URL to contact your FastAPI backend
+      - key: NODE_VERSION
+        value: "20"
       - key: NEXT_PUBLIC_API_BASE_URL
         sync: false
-
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         sync: false
+      - key: NEXT_PUBLIC_BILLING_ENFORCEMENT_ENABLED
+        value: "true"
 
   # -------------------------
-  # 4. Redis Database
+  # 3. Redis (rate limiting; optional TTL worker removed)
   # -------------------------
   - type: redis
-    name: datapilot-redis
-    ipAllowList: [] # Blank means only internal Render services can connect
+    name: acutize-redis
     plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru

@@ -20,7 +20,7 @@ joblib>=1.3
 
 def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
     lines = [
-        "DataPilot AI — Project Export Bundle",
+        "Acutize — Project Export Bundle",
         "====================================",
         "",
         f"Dataset: {dataset.get('original_file_name')}",
@@ -29,7 +29,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
         "WHAT IS INSIDE THIS ZIP",
         "------------------------",
         "  README.txt                          — This file",
-        "  report/datapilot-report.pdf         — Full project report (analysis, cleaning, models)",
+        "  report/acutize-report.pdf         — Full project report (analysis, cleaning, models)",
         "  scripts/requirements-train.txt      — Python packages for training script",
         "  scripts/cleaning_pipeline.py        — Reproduce cleaning on a NEW raw CSV (optional)",
     ]
@@ -41,7 +41,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
         )
         lines.append(f"       Preview winner: {best}")
     if dataset.get("cleaned_storage_path"):
-        lines.append("  data/cleaned.csv                      — Cleaned & encoded dataset from DataPilot")
+        lines.append("  data/cleaned.csv                      — Cleaned & encoded dataset from acutize")
     if dataset.get("engineered_storage_path"):
         lines.append("  data/engineered.csv                   — With generated features applied")
     lines.extend(
@@ -54,17 +54,17 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
             "3. Change ONLY this line near the top:",
             '     DATA_PATH = r"C:\\path\\to\\your\\dataset.csv"',
             "   Recommended:",
-            "     • data/engineered.csv  (if you added features in DataPilot)",
+            "     • data/engineered.csv  (if you added features in acutize)",
             "     • data/cleaned.csv     (if you only cleaned)",
-            "     • Or your own raw CSV — then set APPLY_DATAPILOT_CLEANING = True",
+            "     • Or your own raw CSV — then set APPLY_acutize_CLEANING = True",
             "4. In a terminal:",
             "     pip install -r scripts/requirements-train.txt",
             "     python scripts/train_full_model.py",
-            "5. Output: datapilot_model.pkl next to the script.",
+            "5. Output: acutize_model.pkl next to the script.",
             "",
             "PDF REPORT",
             "----------",
-            "Open report/datapilot-report.pdf for an executive summary suitable for sharing.",
+            "Open report/acutize-report.pdf for an executive summary suitable for sharing.",
             "",
             "Pipeline timestamps:",
             f"  Analyzed:    {dataset.get('analyzed_at') or '—'}",
@@ -90,7 +90,7 @@ def build_export_bundle_zip(
     with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("README.txt", _readme(dataset, has_train_script=bool(training_script)))
         pdf = build_dataset_report_pdf(dataset=dataset, training_runs=None, sections=None)
-        zf.writestr("report/datapilot-report.pdf", pdf)
+        zf.writestr("report/acutize-report.pdf", pdf)
         zf.writestr("scripts/requirements-train.txt", TRAIN_REQUIREMENTS)
         if cleaned_csv:
             zf.writestr("data/cleaned.csv", cleaned_csv)

@@ -21,7 +21,7 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-@celery_app.task(name="datapilotai.cleanup_ttl", bind=True)
+@celery_app.task(name="acutizeai.cleanup_ttl", bind=True)
 def cleanup_ttl(self) -> dict:
     """
     Periodic TTL cleanup:

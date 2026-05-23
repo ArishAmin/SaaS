@@ -41,6 +41,9 @@ from ..services.supabase import (
     storage_list,
 )
 from ..core.billing import get_user_plan_limits
+from ..core.data_limits import LoadMode, PREVIEW_MAX_ROWS, get_user_data_limits
+from ..services.credits import CreditAction, check_dataset_slot, require_credits
+from ..services.dataframe_io import load_for_user, read_tabular_bytes, sample_for_preview
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 _rate = get_settings().rate_limit_per_minute
@@ -152,10 +155,10 @@ def _detect_column_type(series: pd.Series) -> str:
 
 
 def _analyze_dataframe(df: pd.DataFrame) -> dict[str, Any]:
-    settings = get_settings()
+    from ..core.data_limits import MAX_COLUMNS
 
     df = df.copy()
-    df = df.iloc[:, : settings.instant_max_columns]
+    df = df.iloc[:, :MAX_COLUMNS]
 
     column_types: list[dict[str, Any]] = []
     missing_values: list[dict[str, Any]] = []
@@ -197,26 +200,18 @@ def _analyze_dataframe(df: pd.DataFrame) -> dict[str, Any]:
 
 
 def _parse_file_bytes(data: bytes, extension: AllowedExtension, max_rows: int) -> pd.DataFrame:
-    bio = io.BytesIO(data)
+    """Backward-compatible wrapper; prefer load_for_user() for plan-aware caps."""
+    return read_tabular_bytes(data, extension, max_rows)
 
-    if extension == "csv":
-        return pd.read_csv(bio, nrows=max_rows)
 
-    if extension == "json":
-        # Try array/object JSON first; if it fails, fall back to JSON Lines.
-        try:
-            bio.seek(0)
-            df = pd.read_json(bio)
-        except Exception:
-            bio.seek(0)
-            df = pd.read_json(bio, lines=True)
-        return df.head(max_rows)
-
-    if extension in ("xls", "xlsx"):
-        bio.seek(0)
-        return pd.read_excel(bio, nrows=max_rows)
-
-    raise ValueError("Unsupported extension")
+async def _load_dataset_bytes(
+    user_id: str,
+    raw: bytes,
+    extension: AllowedExtension,
+    mode: LoadMode = LoadMode.PIPELINE,
+) -> pd.DataFrame:
+    udl = await get_user_data_limits(user_id)
+    return load_for_user(udl, raw, extension, mode)
 
 
 async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
@@ -350,16 +345,9 @@ async def create_dataset_record(request: Request,
     dataset_id = req.dataset_id
     storage_path = req.storage_path
 
-    # 1) Plan Limit Check
-    limits = await get_user_plan_limits(user_id)
-    
-    # Check concurrent datasets count
+    # Plan: dataset slot limit (Business = unlimited)
     existing_datasets = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
-    if len(existing_datasets) >= limits.max_concurrent_datasets:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You have reached the maximum number of datasets for your plan ({limits.max_concurrent_datasets}). Please upgrade or delete existing datasets."
-        )
+    await check_dataset_slot(user_id, len(existing_datasets))
 
     # 2) Validation
     _validate_storage_path(user_id, storage_path)
@@ -541,22 +529,14 @@ async def analyze_dataset(
     settings = get_settings()
     user_id = user["user_id"]
     limits = await get_user_plan_limits(user_id)
+    await require_credits(user_id, CreditAction.ANALYZE, dataset_id=str(dataset_id))
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    # Download from private storage (service role access).
     raw = await storage_download("datasets", dataset["storage_path"])
-    
-    # Enforce plan-based size limit
-    max_bytes = limits.max_dataset_size_mb * 1024 * 1024
-    if len(raw) > max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"File exceeds the {limits.max_dataset_size_mb}MB limit for your current plan. Please upgrade to analyze larger datasets.",
-        )
-    df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
+    df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
     analysis = _analyze_dataframe(df)
 
     # Persist analysis for subsequent UI fetch.
@@ -636,14 +616,7 @@ async def get_eda_report(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     raw = await storage_download("datasets", dataset["storage_path"])
-    if len(raw) > settings.instant_max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large for EDA report (max {settings.instant_max_bytes} bytes).",
-        )
-
-    df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
-    df = df.iloc[:, : settings.instant_max_columns]
+    df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
 
     numeric_cols: list[str] = []
     numeric_series: dict[str, pd.Series] = {}
@@ -738,14 +711,7 @@ async def get_dataset_quality(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     raw = await storage_download("datasets", dataset["storage_path"])
-    if len(raw) > settings.instant_max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large for quality scoring (max {settings.instant_max_bytes} bytes).",
-        )
-
-    df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
-    df = df.iloc[:, : settings.instant_max_columns]
+    df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
 
     if df.empty:
         return {
@@ -886,6 +852,7 @@ async def clean_dataset(
 ) -> dict[str, Any]:
     settings = get_settings()
     user_id = user["user_id"]
+    await require_credits(user_id, CreditAction.CLEAN, dataset_id=str(dataset_id))
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
@@ -894,13 +861,13 @@ async def clean_dataset(
     target_column = payload.target_column
 
     raw = await storage_download("datasets", dataset["storage_path"])
-    if len(raw) > settings.cleaning_max_bytes:
+    udl = await get_user_data_limits(user_id)
+    if len(raw) > udl.max_file_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large for cleaning (max {settings.cleaning_max_bytes} bytes).",
+            detail=f"File too large for cleaning (max {udl.max_dataset_size_mb} MB on your plan).",
         )
-
-    df = _parse_file_bytes(raw, _get_dataset_extension(dataset), settings.cleaning_max_rows)
+    df = await _load_dataset_bytes(user_id, raw, _get_dataset_extension(dataset), LoadMode.PIPELINE)
 
     if target_column not in df.columns:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found")
@@ -1037,14 +1004,16 @@ async def train_quick(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     run_id = str(uuid4())
+    settings = get_settings()
+    user_id = user["user_id"]
+    await require_credits(user_id, CreditAction.TRAIN_INSTANT, dataset_id=str(dataset_id))
+
     await log_to_supabase(
         level="info",
         event="train_quick_start",
         message="Instant training started",
         metadata={"dataset_id": str(dataset_id), "run_id": run_id},
     )
-    settings = get_settings()
-    user_id = user["user_id"]
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
@@ -1068,52 +1037,47 @@ async def train_quick(
             detail="You must specify a target_column to train on uncleaned data.",
         )
 
+    udl = await get_user_data_limits(user_id)
     if not cleaned_path:
-        # Uncleaned fallback wrapper for the Hub
         raw = await storage_download("datasets", dataset["storage_path"])
-        df = _parse_file_bytes(raw, dataset["original_extension"], settings.instant_max_rows)
+        df = read_tabular_bytes(
+            raw,
+            dataset["original_extension"],
+            PREVIEW_MAX_ROWS,
+            udl.max_columns,
+        )
         if target_column not in df.columns:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected target column not found in raw dataset")
-            
+
         df = df.dropna(subset=[target_column])
         if df.empty:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column contains all missing rows.")
-            
+
         from sklearn.impute import SimpleImputer
-        num_cols = df.select_dtypes(include=['number', 'bool']).columns.tolist()
-        cat_cols = df.select_dtypes(exclude=['number', 'bool']).columns.tolist()
-        if target_column in num_cols: num_cols.remove(target_column)
-        if target_column in cat_cols: cat_cols.remove(target_column)
-        
+        num_cols = df.select_dtypes(include=["number", "bool"]).columns.tolist()
+        cat_cols = df.select_dtypes(exclude=["number", "bool"]).columns.tolist()
+        if target_column in num_cols:
+            num_cols.remove(target_column)
+        if target_column in cat_cols:
+            cat_cols.remove(target_column)
+
         if num_cols:
-            df[num_cols] = SimpleImputer(strategy='median').fit_transform(df[num_cols])
+            df[num_cols] = SimpleImputer(strategy="median").fit_transform(df[num_cols])
         if cat_cols:
-            df[cat_cols] = SimpleImputer(strategy='most_frequent').fit_transform(df[cat_cols])
+            df[cat_cols] = SimpleImputer(strategy="most_frequent").fit_transform(df[cat_cols])
             df = pd.get_dummies(df, columns=cat_cols, drop_first=True, dummy_na=False)
-            
-        # Instant Model Preview logic: sample max 5k or 5%
-        total_rows = len(df)
-        if total_rows > 50000:
-            df = df.sample(frac=0.05, random_state=42)
-        elif total_rows > 5000:
-            df = df.sample(n=5000, random_state=42)
     else:
         raw = await storage_download("datasets", cleaned_path)
         if len(raw) > settings.cleaned_max_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Cleaned dataset too large for quick training (max {settings.cleaned_max_bytes} bytes).",
+                detail=f"Cleaned dataset too large to load (max {settings.cleaned_max_bytes // (1024 * 1024)} MB).",
             )
-        df = pd.read_csv(io.BytesIO(raw))
-        
-        total_rows = len(df)
-        if total_rows > 50000:
-            df = df.sample(frac=0.05, random_state=42)
-        elif total_rows > 5000:
-            df = df.sample(n=5000, random_state=42)
-            
+        df = read_tabular_bytes(raw, "csv", PREVIEW_MAX_ROWS, udl.max_columns)
         if target_column not in df.columns:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found in cleaned data")
+
+    df = sample_for_preview(df, PREVIEW_MAX_ROWS)
 
     y = df[target_column]
     X = df.drop(columns=[target_column])
@@ -1122,6 +1086,31 @@ async def train_quick(
     unique_count = y.nunique()
 
     classification_like = (not is_numeric) or (unique_count <= 20)
+
+    # ── Plan-based model filtering ──────────────────────────────────────
+    plan_limits = await get_user_plan_limits(str(user_id))
+    allowed = plan_limits.allowed_models  # e.g. ["linear_regression", "logistic_regression", "decision_tree"] or ["all"]
+
+    # Map display model names → plan config keys
+    _MODEL_KEY_MAP: dict[str, str] = {
+        "Linear Regression": "linear_regression",
+        "Logistic Regression": "logistic_regression",
+        "Decision Tree": "decision_tree",
+        "Random Forest": "random_forest",
+        "Gradient Boosting": "gradient_boosting",
+        "XGBoost": "xgboost",
+        "Linear SVC": "svm",
+        "Linear SVR": "svm",
+        "Naive Bayes": "naive_bayes",
+        "K-Nearest Neighbors": "knn",
+    }
+
+    def _plan_allows(model_display_name: str) -> bool:
+        if "all" in allowed:
+            return True
+        key = _MODEL_KEY_MAP.get(model_display_name, model_display_name.lower().replace(" ", "_"))
+        return key in allowed
+    # ────────────────────────────────────────────────────────────────────
 
     await log_to_supabase(
         level="info",
@@ -1211,6 +1200,9 @@ async def train_quick(
             models_to_run.append(("XGBoost", XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric="logloss")))
         except ImportError:
             pass
+
+        # Filter models by plan
+        models_to_run = [(n, m) for n, m in models_to_run if _plan_allows(n)]
 
         if len(X) < 30:
             models_to_run = [
@@ -1313,6 +1305,9 @@ async def train_quick(
             models_to_run.append(("XGBoost", XGBRegressor(n_estimators=100, random_state=42)))
         except ImportError:
             pass
+
+        # Filter models by plan
+        models_to_run = [(n, m) for n, m in models_to_run if _plan_allows(n)]
 
         if len(X) < 30:
             models_to_run = [
@@ -1448,18 +1443,20 @@ async def suggest_generative_features(
     user_id = user["user_id"]
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    await require_credits(user_id, CreditAction.FEATURE_SUGGEST, dataset_id=str(dataset_id))
 
     cleaned_path = dataset.get("cleaned_storage_path")
     if not cleaned_path:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
     
     raw = await storage_download("datasets", cleaned_path)
-    df = pd.read_csv(io.BytesIO(raw))
-    
+    df = await _load_dataset_bytes(user_id, raw, "csv", LoadMode.PIPELINE)
+    udl = await get_user_data_limits(user_id)
+
     target_column = dataset.get("cleaned_target_column")
-    
+
     try:
-        suggestions = generate_features(df, target_col=target_column)
+        suggestions = generate_features(df, target_col=target_column, max_rows=udl.pipeline_max_rows)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Feature generation failed: {e}")
         
@@ -1482,14 +1479,15 @@ async def apply_generative_features(
     user_id = user["user_id"]
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    # No extra credits: saving engineered CSV is included in FEATURE_SUGGEST.
 
     cleaned_path = dataset.get("cleaned_storage_path")
     if not cleaned_path:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
 
     raw = await storage_download("datasets", cleaned_path)
-    df = pd.read_csv(io.BytesIO(raw))
-    
+    df = await _load_dataset_bytes(user_id, raw, "csv", LoadMode.PIPELINE)
+
     try:
         df_augmented = apply_features(df, payload.features, target_col=dataset.get("cleaned_target_column"))
     except Exception as e:
@@ -1572,6 +1570,7 @@ async def download_dataset_pdf_report(
     user_id = user["user_id"]
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    await require_credits(user_id, CreditAction.EXPORT_PDF, dataset_id=str(dataset_id))
 
     try:
         runs = await rest_list(
@@ -1593,7 +1592,7 @@ async def download_dataset_pdf_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF generation failed: {exc}",
         ) from exc
-    filename = f"datapilot-report-{dataset_id}.pdf"
+    filename = f"acutize-report-{dataset_id}.pdf"
     await log_user_activity(
         user_id=str(user_id),
         action="pdf_report_downloaded",
@@ -1628,7 +1627,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
-# DataPilot AI export
+# Acutize export
 RAW_DATA_PATH = r\"your_raw_dataset.csv\"
 TARGET_COLUMN = {target!r}
 MISSING_STRATEGY = {missing_strategy!r}
@@ -1783,6 +1782,7 @@ async def export_bundle(
     user_id = user["user_id"]
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    await require_credits(user_id, CreditAction.EXPORT_BUNDLE, dataset_id=str(dataset_id))
 
     cleaned_path = dataset.get("cleaned_storage_path")
     engineered_path = dataset.get("engineered_storage_path")
@@ -1809,7 +1809,7 @@ async def export_bundle(
         cleaning_script=cleaning_script,
         training_script=training_script,
     )
-    filename = f"datapilot-export-{str(dataset_id)[:8]}.zip"
+    filename = f"acutize-export-{str(dataset_id)[:8]}.zip"
     await log_user_activity(
         user_id=str(user_id),
         action="export_bundle_downloaded",
@@ -1892,14 +1892,18 @@ async def feature_engineer(
     if not cleaned_path or not target_column:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleaned dataset not available")
 
+    if not payload.dry_run:
+        await require_credits(user_id, CreditAction.FEATURE_ENGINEER, dataset_id=str(dataset_id))
+
     raw = await storage_download("datasets", cleaned_path)
+    udl = await get_user_data_limits(user_id)
     if len(raw) > settings.cleaned_max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Cleaned dataset too large to feature-engineer (max {settings.cleaned_max_bytes} bytes).",
+            detail=f"Cleaned dataset too large to feature-engineer (max {settings.cleaned_max_bytes // (1024 * 1024)} MB).",
         )
 
-    df = pd.read_csv(io.BytesIO(raw))
+    df = await _load_dataset_bytes(user_id, raw, "csv", LoadMode.PIPELINE)
     if target_column not in df.columns:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column missing in cleaned dataset")
 
@@ -2049,21 +2053,18 @@ async def recommend_models(
     """
     settings = get_settings()
     user_id = user["user_id"]
+    await require_credits(user_id, CreditAction.RECOMMEND, dataset_id=str(dataset_id))
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     raw = await storage_download("datasets", dataset["storage_path"])
-    if len(raw) > settings.instant_max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large for recommendation (max {settings.instant_max_bytes} bytes).",
-        )
-
-    max_rows = payload.sample_max_rows or settings.instant_max_rows
-    df = _parse_file_bytes(raw, dataset["original_extension"], max_rows)
-    df = df.iloc[:, : settings.instant_max_columns]
+    udl = await get_user_data_limits(user_id)
+    cap = min(payload.sample_max_rows or udl.pipeline_max_rows, udl.pipeline_max_rows)
+    df = load_for_user(udl, raw, dataset["original_extension"], LoadMode.PIPELINE)
+    if len(df) > cap:
+        df = df.head(cap)
 
     # Determine target column (prefer cleaned_target_column from cleaning step)
     target_column = payload.target_column or dataset.get("cleaned_target_column")
@@ -2110,7 +2111,7 @@ async def recommend_models(
         )
         suggestions.append(
             ModelSuggestion(
-                name="Random Forest",
+                name="Random Forest (if available)",
                 explanation="Improves generalization over a single tree; typically handles noise and mixed feature types well.",
             )
         )
@@ -2132,7 +2133,6 @@ async def recommend_models(
         extra_notes: list[str] = []
         if top_missing_features:
             extra_notes.append(f"High-missing features detected: {', '.join(top_missing_features)}")
-        extra_notes.append("Quick training uses Logistic Regression and Decision Tree; full jobs add Random Forest and XGBoost when available.")
 
     else:
         suggestions.append(
@@ -2143,7 +2143,7 @@ async def recommend_models(
         )
         suggestions.append(
             ModelSuggestion(
-                name="Random Forest Regressor",
+                name="Random Forest Regressor (if available)",
                 explanation="Captures non-linearities and interactions for regression targets; robust against noise.",
             )
         )
@@ -2163,9 +2163,6 @@ async def recommend_models(
         extra_notes = []
         if top_missing_features:
             extra_notes.append(f"High-missing features detected: {', '.join(top_missing_features)}")
-        extra_notes.append(
-            "Quick training uses Linear Regression and Decision Tree; full jobs add Random Forest and XGBoost regressors when available.",
-        )
 
     await log_user_activity(
         user_id=str(user_id),

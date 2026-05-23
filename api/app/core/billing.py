@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 
 from pydantic import BaseModel
@@ -12,51 +14,65 @@ class PlanType(str, Enum):
 
 
 class PlanLimits(BaseModel):
+    """Plan caps. max_concurrent_datasets=None means unlimited (Business only)."""
+
     max_dataset_size_mb: int
-    max_concurrent_datasets: int
+    max_concurrent_datasets: int | None
+    monthly_credits: int
     allowed_models: list[str]
     max_compute_seconds: int
     support_priority: str
+    price_usd: int | None = None  # None = free
 
 
 PLAN_CONFIGS: dict[PlanType, PlanLimits] = {
     PlanType.HOBBY: PlanLimits(
-        max_dataset_size_mb=2,
+        max_dataset_size_mb=10,
         max_concurrent_datasets=3,
-        allowed_models=["linear_regression", "logistic_regression"],
+        monthly_credits=60,
+        allowed_models=["linear_regression", "logistic_regression", "decision_tree"],
         max_compute_seconds=300,
         support_priority="community",
+        price_usd=0,
     ),
     PlanType.PRO: PlanLimits(
-        max_dataset_size_mb=100,
-        max_concurrent_datasets=10,
-        allowed_models=["linear_regression", "logistic_regression", "random_forest", "xgboost", "svm"],
-        max_compute_seconds=1800,
-        support_priority="email",
-    ),
-    PlanType.BUSINESS: PlanLimits(
-        max_dataset_size_mb=1024,
-        max_concurrent_datasets=50,
+        max_dataset_size_mb=30,
+        max_concurrent_datasets=12,
+        monthly_credits=450,
         allowed_models=[
             "linear_regression",
             "logistic_regression",
+            "decision_tree",
             "random_forest",
+            "gradient_boosting",
             "xgboost",
             "svm",
-            "neural_network",
+            "naive_bayes",
+            "knn",
         ],
-        max_compute_seconds=7200,
+        max_compute_seconds=1800,
+        support_priority="email",
+        price_usd=25,
+    ),
+    PlanType.BUSINESS: PlanLimits(
+        max_dataset_size_mb=75,
+        max_concurrent_datasets=None,
+        monthly_credits=2500,
+        allowed_models=["all"],
+        max_compute_seconds=3600,
         support_priority="priority_email",
+        price_usd=70,
     ),
 }
 
-# Used when billing_enforcement_enabled=False (local QA / full feature testing).
 UNRESTRICTED_PLAN_LIMITS = PlanLimits(
-    max_dataset_size_mb=1024,
-    max_concurrent_datasets=100,
+    max_dataset_size_mb=75,
+    max_concurrent_datasets=None,
+    monthly_credits=999_999,
     allowed_models=["all"],
     max_compute_seconds=7200,
     support_priority="dev",
+    price_usd=None,
 )
 
 
@@ -65,7 +81,6 @@ def is_billing_enforcement_enabled() -> bool:
 
 
 def get_plan_limits(plan_name: str) -> PlanLimits:
-    """Returns limits for a given plan name, defaults to Hobby if unknown."""
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
     try:
@@ -75,20 +90,29 @@ def get_plan_limits(plan_name: str) -> PlanLimits:
 
 
 def has_active_subscription(status: str) -> bool:
-    """
-    Checks if the subscription status allows for Pro/Business access.
-    Includes 'past_due' for the user-requested grace period.
-    """
     if not is_billing_enforcement_enabled():
         return True
-    return status in ("active", "past_due", "trailing")
+    return status in ("active", "past_due", "trialing")
+
+
+def plan_from_paddle_price_id(price_id: str) -> PlanType:
+    settings = get_settings()
+    business_ids = {
+        settings.paddle_price_id_business,
+        settings.paddle_price_id_business_yearly,
+    }
+    pro_ids = {
+        settings.paddle_price_id_pro,
+        settings.paddle_price_id_pro_yearly,
+    }
+    if price_id and price_id in {x for x in business_ids if x}:
+        return PlanType.BUSINESS
+    if price_id and price_id in {x for x in pro_ids if x}:
+        return PlanType.PRO
+    return PlanType.HOBBY
 
 
 async def get_user_plan_limits(user_id: str) -> PlanLimits:
-    """
-    Fetch user's plan from DB and return the corresponding limits.
-    When enforcement is disabled, everyone gets unrestricted limits.
-    """
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
 

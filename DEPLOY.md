@@ -1,55 +1,133 @@
-# DataPilot AI - Deployment Guide (Render)
+# Acutize — Deploy on Render (Blueprint)
 
-This guide covers deploying the entire monorepo architecture (FastAPI Backend, Next.js Frontend, Redis, and Celery Worker) to [Render](https://render.com/) using a single Configuration Blueprint.
+Deploy with the **root** `render.yaml` only. The file `api/render.yaml` is outdated (typo service name, Postgres reference) — do not use it for Blueprint.
 
-## Prerequisites
-1. A [Render](https://render.com/) account.
-2. A [Supabase](https://supabase.com/) project (with your Database and Auth components).
-3. Your codebase pushed to a GitHub/GitLab repository.
+## Architecture (cost-optimized)
+
+| Service | Role | Default plan | ~Monthly |
+|--------|------|--------------|----------|
+| `acutize-api` | FastAPI (analyze, clean, features, instant preview, export) | Starter | $7 |
+| `acutize-web` | Next.js dashboard | Starter | $7 |
+| `acutize-redis` | Rate-limit storage for API | Free → Starter if needed | $0 → $10 |
+| **Supabase** (external) | Auth, Postgres, file storage | Free → Pro | $0 → $25 |
+
+**Not deployed:** Celery worker. Full model training is exported for the user’s machine (`train_full_model.py`). Background TTL cleanup is disabled by default (`TTL_CLEANUP_ENABLED=false`).
+
+### Typical monthly stack cost
+
+| Stage | Render compute | Render workspace | Supabase | **Total fixed** |
+|-------|----------------|------------------|----------|-----------------|
+| Launch (Hobby workspace) | ~$14 | $0 | $0 (Free) | **~$14** |
+| Production (Pro workspace, no cold starts) | ~$14 | $25 | $25 (Pro) | **~$64** |
+| Scale (Standard API 2GB RAM) | ~$39 | $25 | $25+ | **~$89+** |
+
+Add Paddle fees (~5% + $0.50 per transaction, varies by region) and OpenAI usage if you enable the assistant.
 
 ---
 
-## Step 1: The Blueprint Configuration
+## Prerequisites
 
-We have created a `render.yaml` file at the root of your repository. This file serves as an **Infrastructure as Code (IaC)** blueprint. It instructs Render exactly how to spin up all four services and automatically wires them together so they can talk to each other.
+1. [Render](https://render.com/) account  
+2. [Supabase](https://supabase.com/) project (Auth + DB + Storage bucket `datasets`)  
+3. [Paddle](https://www.paddle.com/) catalog: recurring prices for **Pro ($25/mo)** and **Business ($70/mo)**  
+4. Git repo connected to Render  
 
-### Architecture Handled by Blueprint:
-1.  **`datapilot-api`**: FastAPI Python Web Service (Runs the main API endpoints).
-2.  **`datapilot-worker`**: Celery Background Worker (Runs the heavy ML Training loop).
-3.  **`datapilot-web`**: Next.js Node Web Service (Serves your dashboard).
-4.  **`datapilot-redis`**: Managed Redis Instance (Acts as the message broker between API and Worker).
+---
 
-## Step 2: Push Your Code
-Ensure that the `render.yaml` file is committed to your GitHub branch. 
+## Step 1: Commit the blueprint
+
 ```bash
-git add render.yaml
-git commit -m "chore: add render blueprint"
+git add render.yaml DEPLOY.md
+git commit -m "chore: render blueprint for api, web, redis"
 git push
 ```
 
-## Step 3: Deploy to Render
-1. Log in to your [Render Dashboard](https://dashboard.render.com/).
-2. Click on the **"Blueprints"** tab on the left sidebar.
-3. Click **"New Blueprint Instance"**.
-4. Connect your GitHub account and select your `DataPilotAI` repository.
-5. Render will detect the `render.yaml` file. Click **"Approve"**.
+## Step 2: Create Blueprint instance
 
-## Step 4: Supply Secrets
-The Blueprint securely requests values for specific environment variables that it cannot infer automatically. When prompted by Render, provide your production Supabase keys:
+1. [Render Dashboard](https://dashboard.render.com/) → **Blueprints** → **New Blueprint Instance**  
+2. Select the `acutizeAI` repo  
+3. Approve the detected `render.yaml`  
 
-*   **`SUPABASE_URL`**: E.g., `https://xxxxxxxxx.supabase.co`
-*   **`SUPABASE_SERVICE_ROLE_KEY`**: Your secret Service Role Key.
-*   **`NEXT_PUBLIC_SUPABASE_URL`**: (Same as above)
-*   **`NEXT_PUBLIC_SUPABASE_ANON_KEY`**: Your public Anon Key.
-*   **`NEXT_PUBLIC_API_BASE_URL`**: During setup, since the backend is still being provisioned, Render won't know its final live URL yet. Start by setting this to `https://placeholder-api.onrender.com`. Once the deployment finishes, copy the real `.onrender.com` URL of the `datapilot-api` backend, go to the `datapilot-web` settings area, update this variable, and it will re-deploy instantly.
+## Step 3: Environment variables
 
-## Step 5: Wait for Build
-Once you supply the secrets and click "Apply", Render will simultaneously spin up all four instances. 
-- The Redis instance will deploy instantly.
-- The Python and Node.js environments will install their dependencies (`requirements.txt` and `package.json`).
-- Once the builds finish, the Next.js site will be given an `.onrender.com` URL!
+Set when prompted (or in each service → **Environment**):
+
+### API (`acutize-api`)
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `SUPABASE_URL` | Yes | `https://xxxx.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role (secret) |
+| `SUPABASE_JWKS_URL` | Yes | Usually `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` |
+| `PADDLE_API_KEY` | If billing on | Paddle Billing API secret key |
+| `PADDLE_WEBHOOK_SECRET` | If billing on | Notification destination secret |
+| `PADDLE_ENVIRONMENT` | Yes | `sandbox` or `production` |
+| `PADDLE_PRICE_ID_PRO` | If billing on | Paddle Price ID for $25/mo Pro |
+| `PADDLE_PRICE_ID_PRO_YEARLY` | If billing on | Paddle Price ID for $249/yr Pro (17% off) |
+| `PADDLE_PRICE_ID_BUSINESS` | If billing on | Paddle Price ID for $70/mo Business |
+| `PADDLE_PRICE_ID_BUSINESS_YEARLY` | If billing on | Paddle Price ID for $697/yr Business (17% off) |
+| `APP_PUBLIC_URL` | Yes | Your live web URL, e.g. `https://acutize-web.onrender.com` |
+| `BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (real limits + credits) |
+| `ALLOWED_ORIGINS` | Prod | Your web URL only, e.g. `https://acutize-web.onrender.com` (CORS) |
+| `APP_ENV` | Prod | Blueprint sets `production` (generic errors, HSTS) |
+| `OPENAI_API_KEY` | Optional | Feature suggestions / assistant |
+| `SUPABASE_LOG_ENABLED` | Optional | Set `false` to skip writing `app_logs` rows (saves DB writes) |
+
+`REDIS_URL` is wired automatically from `acutize-redis`.
+
+### Web (`acutize-web`)
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Same as API Supabase URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon key |
+| `NEXT_PUBLIC_API_BASE_URL` | Yes | `https://acutize-api.onrender.com` (after API deploys) |
+| `NEXT_PUBLIC_BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (must match API) |
+
+After the API URL is live, update `NEXT_PUBLIC_API_BASE_URL` and redeploy the web service.
+
+### Paddle sandbox → production (when you go live)
+
+Keep the same env var **names**. Only change values:
+
+1. `PADDLE_ENVIRONMENT` → `production`
+2. Replace `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` with live dashboard values
+3. Replace all four `PADDLE_PRICE_ID_*` with production catalog price IDs
+4. Re-register webhook URL on the **live** Paddle notification destination
+
+With `PADDLE_ENVIRONMENT=sandbox` and sandbox keys, the site behaves like production (limits, credits, checkout) — payments are test-only until you swap credentials.
+
+## Step 4: Supabase
+
+1. Run migrations under `supabase/migrations/` in order. If signup shows “database error saving new user”, run `supabase/fix_signup_run_in_sql_editor.sql` once in the SQL Editor (starter `profiles` tables often require `email` + `username` on insert).  
+2. Create storage bucket **`datasets`** (private)  
+3. Configure Auth redirect URLs for your Render web URL  
+
+## Step 5: Paddle webhooks (production)
+
+1. In Paddle → **Developer tools** → **Notifications**, add destination: `https://<acutize-api>/billing/webhook`  
+2. Subscribe to: `subscription.activated`, `subscription.updated`, `subscription.canceled`, `transaction.completed`  
+3. Copy the endpoint secret into `PADDLE_WEBHOOK_SECRET`  
+
+Run Supabase migration `20260521100000_paddle_credits.sql` for credits + Paddle columns on `profiles`.
+
+## Step 6: Verify
+
+- `https://<acutize-api>/health` → `{"status":"ok"}`  
+- Sign up / login on web  
+- Upload → clean → features → save → instant preview  
 
 ---
 
-### Cost Estimation (Without Free Tier)
-If you cannot use the completely free Redis instance, you can safely swap it to the $3/month starter tier. Web and Worker instances usually cost $7/mo each on the Starter tier. The total tech stack usually costs ~$20/mo starting out.
+## Scaling & upgrades
+
+- **API slow on large CSVs:** bump `acutize-api` to **Standard** ($25/mo, 2 GB RAM).  
+- **Redis evictions / rate limits flaky:** set `acutize-redis` to **Starter** ($10/mo).  
+- **Cold starts on free workspace:** use Render **Pro** workspace ($25/mo) or upgrade service plans.  
+- **Re-enable TTL cleanup:** add a Render **Cron Job** (cheaper than a 24/7 worker) that calls an admin cleanup endpoint, or run Celery worker + beat only when `TTL_CLEANUP_ENABLED=true`.
+
+---
+
+## Local vs production
+
+Local dev can use `BILLING_ENFORCEMENT_ENABLED=false` and Redis optional (API falls back to in-memory rate limits). Production blueprint sets enforcement to `true`.

@@ -1,4 +1,4 @@
--- DataPilot AI: MVP schema + security policies
+-- Acutize: MVP schema + security policies
 -- Run in Supabase SQL editor (or via migrations).
 
 -- 1) Datasets table (one per uploaded file)

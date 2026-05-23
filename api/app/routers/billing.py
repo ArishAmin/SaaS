@@ -1,179 +1,176 @@
-import stripe
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, Field
 
-from ..core.config import get_settings
 from ..core.auth import get_current_user
-from ..services.supabase import rest_patch, rest_list
+from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled
+from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
+from ..core.billing import get_plan_limits
+from ..services.credits import (
+    CREDIT_ACTION_LABELS,
+    CREDIT_COSTS,
+    credits_refresh_mode,
+    get_credits_summary,
+    list_credit_transactions,
+)
+from ..services.paddle_billing import (
+    apply_subscription_update,
+    apply_transaction_completed,
+    create_checkout,
+    create_customer_portal,
+    verify_webhook_signature,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 settings = get_settings()
 
-if settings.stripe_secret_key:
-    stripe.api_key = settings.stripe_secret_key
-
 
 class CheckoutRequest(BaseModel):
-    price_id: str
+    plan: str = Field(..., pattern="^(pro|business)$")
+    interval: str = Field("monthly", pattern="^(monthly|yearly)$")
     success_url: str
-    cancel_url: str
+    cancel_url: str | None = None
 
 
-@router.post("/create-checkout-session")
-async def create_checkout_session(
-    req: CheckoutRequest,
-    user: dict = Depends(get_current_user)
-):
-    if not settings.stripe_secret_key:
-        raise HTTPException(status_code=500, detail="Stripe is not configured on this server.")
-    try:
-        user_id = user["user_id"]
-        email = user["claims"].get("email") if isinstance(user.get("claims"), dict) else None
+class PortalRequest(BaseModel):
+    return_url: str | None = None
 
-        # 1. Check if user already has a stripe_customer_id
-        profile_matches = await rest_list("profiles", f"id=eq.{user_id}")
-        customer_id = None
-        if profile_matches and profile_matches[0].get("stripe_customer_id"):
-            customer_id = profile_matches[0]["stripe_customer_id"]
 
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            customer_email=email if not customer_id else None,
-            line_items=[
-                {
-                    "price": req.price_id,
-                    "quantity": 1,
-                },
-            ],
-            mode="subscription",
-            success_url=req.success_url,
-            cancel_url=req.cancel_url,
-            metadata={
-                "user_id": user_id
+@router.get("/plans")
+async def list_plans() -> dict:
+    """Public plan metadata for pricing page (no secrets)."""
+    credit_costs = {k.value: v for k, v in CREDIT_COSTS.items()}
+    plans = []
+    for plan_type in (PlanType.HOBBY, PlanType.PRO, PlanType.BUSINESS):
+        cfg = PLAN_CONFIGS[plan_type]
+        plans.append(
+            {
+                "id": plan_type.value,
+                "price_usd": cfg.price_usd,
+                "monthly_credits": cfg.monthly_credits,
+                "max_dataset_size_mb": cfg.max_dataset_size_mb,
+                "max_concurrent_datasets": cfg.max_concurrent_datasets,
+                "allowed_models": cfg.allowed_models,
+                "max_compute_seconds": cfg.max_compute_seconds,
+                "support_priority": cfg.support_priority,
+                "credit_costs": credit_costs,
             }
         )
-        return {"url": session.url}
-    except stripe.StripeError as e:
-        await log_to_supabase(
-            level="error",
-            event="stripe_checkout_error",
-            message=str(e),
-        )
-        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return {"plans": plans, "enforcement_enabled": is_billing_enforcement_enabled()}
+
+
+@router.get("/credits")
+async def my_credits(user: dict = Depends(get_current_user)) -> dict:
+    return await get_credits_summary(user["user_id"])
+
+
+@router.get("/account")
+async def billing_account(user: dict = Depends(get_current_user)) -> dict:
+    """Plan limits, credit costs, balance, and spend history for the usage settings page."""
+    user_id = str(user["user_id"])
+    from ..core.data_limits import PREVIEW_MAX_ROWS, get_user_data_limits
+    from ..services.supabase import rest_list
+
+    profiles = await rest_list("profiles", f"id=eq.{user_id}")
+    profile = profiles[0] if profiles else {"plan": "hobby", "subscription_status": "none"}
+    plan_name = profile.get("plan", "hobby")
+    data_limits = await get_user_data_limits(user_id)
+    limits = get_plan_limits(plan_name)
+
+    credit_rows = [
+        {
+            "action": action.value,
+            "label": CREDIT_ACTION_LABELS.get(action.value, action.value),
+            "credits": cost,
+            "free": cost == 0,
+        }
+        for action, cost in CREDIT_COSTS.items()
+        if cost > 0 or action.value in ("feature_apply",)
+    ]
+    credit_rows = [r for r in credit_rows if r["credits"] > 0]
+
+    return {
+        "plan": plan_name,
+        "subscription_status": profile.get("subscription_status", "none"),
+        "credits": await get_credits_summary(user_id),
+        "plan_limits": {
+            "max_dataset_size_mb": limits.max_dataset_size_mb,
+            "max_concurrent_datasets": limits.max_concurrent_datasets,
+            "monthly_credits": limits.monthly_credits,
+            "allowed_models": limits.allowed_models,
+            "max_compute_seconds": limits.max_compute_seconds,
+            "support_priority": limits.support_priority,
+            "credits_refresh_mode": credits_refresh_mode(plan_name),
+        },
+        "data_limits": {
+            "pipeline_max_rows": data_limits.pipeline_max_rows,
+            "preview_max_rows": PREVIEW_MAX_ROWS,
+            "uses_full_dataset": data_limits.uses_full_dataset,
+            "max_columns": data_limits.max_columns,
+        },
+        "credit_costs_table": credit_rows,
+        "transactions": await list_credit_transactions(user_id, limit=100),
+    }
+
+
+@router.post("/checkout")
+async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
+    if not settings.paddle_api_key:
+        raise HTTPException(status_code=500, detail="Paddle is not configured on this server.")
+    user_id = user["user_id"]
+    email = user.get("claims", {}).get("email") if isinstance(user.get("claims"), dict) else None
+    success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
+    url = await create_checkout(
+        user_id=str(user_id),
+        email=email,
+        plan=req.plan,
+        interval=req.interval,
+        success_url=success,
+    )
+    return {"url": url}
 
 
 @router.post("/customer-portal")
-async def create_portal_session(
-    user: dict = Depends(get_current_user)
-):
-    if not settings.stripe_secret_key:
-        raise HTTPException(status_code=500, detail="Stripe is not configured on this server.")
-    try:
-        user_id = user["user_id"]
-        profile_matches = await rest_list("profiles", f"id=eq.{user_id}")
-        if not profile_matches or not profile_matches[0].get("stripe_customer_id"):
-            raise HTTPException(status_code=400, detail="No billing history found. Please upgrade first.")
-
-        customer_id = profile_matches[0]["stripe_customer_id"]
-
-        portal_session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url=f"http://localhost:3000/dashboard/settings"
-        )
-        return {"url": portal_session.url}
-    except stripe.StripeError as e:
-        await log_to_supabase(
-            level="error",
-            event="stripe_portal_error",
-            message=str(e),
-        )
-        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+async def paddle_customer_portal(req: PortalRequest | None = None, user: dict = Depends(get_current_user)):
+    if not settings.paddle_api_key:
+        raise HTTPException(status_code=500, detail="Paddle is not configured on this server.")
+    return_url = (req.return_url if req else None) or f"{settings.app_public_url}/dashboard/settings"
+    url = await create_customer_portal(user_id=str(user["user_id"]), return_url=return_url)
+    return {"url": url}
 
 
 @router.post("/webhook")
-async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
-    if not settings.stripe_webhook_secret or settings.stripe_webhook_secret == "whsec_...":
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
-
-    payload = await request.body()
+async def paddle_webhook(
+    request: Request,
+    paddle_signature: str | None = Header(None, alias="Paddle-Signature"),
+):
+    raw = await request.body()
     try:
-        event = stripe.Webhook.construct_event(
-            payload, stripe_signature, settings.stripe_webhook_secret
-        )
-    except stripe.SignatureVerificationError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid signature: {str(e)}")
+        event = verify_webhook_signature(raw, paddle_signature)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Webhook Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Webhook error: {e}")
 
-    # Handle the event — convert to dict for safe access in stripe v15+
-    event_dict = event.to_dict() if hasattr(event, 'to_dict') else dict(event)
-    event_type = event_dict.get("type", "")
+    event_type = event.get("event_type", "")
+    data = event.get("data", {})
 
-    if event_type in [
-        "customer.subscription.created",
-        "customer.subscription.updated",
-        "customer.subscription.deleted",
-    ]:
-        subscription_data = event_dict.get("data", {}).get("object", {})
-        await _handle_subscription_change(subscription_data)
+    try:
+        if event_type.startswith("subscription."):
+            await apply_subscription_update(data)
+        elif event_type == "transaction.completed":
+            await apply_transaction_completed(data)
+            sub_id = data.get("subscription_id")
+            if sub_id:
+                # Subscription object may arrive in a separate webhook; transaction still updates customer ids.
+                pass
+    except Exception as e:
+        await log_to_supabase(
+            level="error",
+            event="paddle_webhook_handler_error",
+            message=str(e),
+            metadata={"event_type": event_type},
+        )
+        raise HTTPException(status_code=500, detail="Webhook handler failed")
 
-    return {"status": "success"}
-
-
-async def _handle_subscription_change(subscription: dict):
-    """Process subscription webhook data (already converted to plain dict)."""
-    stripe_customer_id = subscription.get("customer", "")
-    stripe_subscription_id = subscription.get("id", "")
-    sub_status = subscription.get("status", "")
-
-    # Map Stripe price IDs back to our internal plan names
-    items_data = subscription.get("items", {})
-    items_list = items_data.get("data", []) if isinstance(items_data, dict) else []
-    price_id = items_list[0].get("price", {}).get("id", "") if items_list else ""
-
-    plan_name = "hobby"
-    if price_id == settings.stripe_price_id_pro:
-        plan_name = "pro"
-    elif price_id == settings.stripe_price_id_business:
-        plan_name = "business"
-
-    # Find user by metadata or by stripe_customer_id
-    user_id = subscription.get("metadata", {}).get("user_id")
-
-    where_query = ""
-    if user_id:
-        where_query = f"id=eq.{user_id}"
-    else:
-        where_query = f"stripe_customer_id=eq.{stripe_customer_id}"
-
-    # Convert Unix timestamp to ISO format safely
-    period_end = subscription.get("current_period_end")
-    period_end_iso = None
-    if period_end and isinstance(period_end, (int, float)):
-        period_end_iso = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
-
-    payload = {
-        "stripe_customer_id": stripe_customer_id,
-        "stripe_subscription_id": stripe_subscription_id,
-        "plan": plan_name,
-        "subscription_status": sub_status,
-        "cancel_at_period_end": subscription.get("cancel_at_period_end", False),
-    }
-    if period_end_iso:
-        payload["current_period_end"] = period_end_iso
-
-    await rest_patch("profiles", where_query, payload)
-
-    await log_to_supabase(
-        level="info",
-        event="subscription_change",
-        message=f"Plan updated to {plan_name} (status: {sub_status})",
-        metadata={"user_id": user_id, "plan": plan_name, "status": sub_status},
-    )
+    return {"status": "ok"}

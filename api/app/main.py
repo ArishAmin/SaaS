@@ -16,11 +16,13 @@ from .routers.assistant import router as assistant_router
 from .routers.telemetry import router as telemetry_router
 from .routers.billing import router as billing_router
 from .routers.profiles import router as profiles_router
+from .core.config import get_settings
 from .core.rate_limit import limiter
+from .middleware.security import SecurityHeadersMiddleware
 from .services.app_logs import log_to_supabase
 
 
-app = FastAPI(title="DataPilot AI API", version="0.1.0")
+app = FastAPI(title="Acutize API", version="0.1.0")
 
 # 1. Base App Middlewares (Inner layers)
 app.include_router(health_router)
@@ -74,13 +76,16 @@ async def request_logging_middleware(request: Request, call_next):
         )
         # Ensure we return a JSONResponse that Starlette can handle.
         # Note: CORS headers will be added by the CORSMiddleware layer which wraps this.
+        settings = get_settings()
+        detail = "Internal server error occurred."
+        if settings.app_env != "production":
+            detail = str(exc)
         return JSONResponse(
             status_code=500,
             content={
-                "detail": "Internal server error occurred.",
-                "request_id": request_id, 
-                "type": exc.__class__.__name__
-            }
+                "detail": detail,
+                "request_id": request_id,
+            },
         )
 
 # 3. Rate Limiting layer (Middle)
@@ -90,20 +95,23 @@ app.add_middleware(SlowAPIMiddleware)
 # 4. Local Dev Private Network Handling
 # Removed from inner layer to be added as an outermost layer.
 
+def _cors_origins() -> list[str]:
+    settings = get_settings()
+    origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if settings.app_env != "production":
+        for local in (
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ):
+            if local not in origins:
+                origins.append(local)
+    return origins
+
+
 # 5. CORS Layer (Outermost)
-# We add this LAST so it is the first to handle requests and the last to handle responses.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://localhost:3000",
-        "https://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "http://localhost:3002",
-        "http://127.0.0.1:3002",
-    ],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,6 +124,8 @@ class PNAMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             response.headers["Access-Control-Allow-Private-Network"] = "true"
         return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # 6. PNA Layer (Absolute Outermost)
 app.add_middleware(PNAMiddleware)

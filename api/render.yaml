@@ -1,3 +1,4 @@
+# DEPRECATED — use the repo root render.yaml for Render Blueprint deployments.
 services:
   # Web Service (API)
   - type: web
@@ -8,12 +9,12 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: datapilot-db
+          name: acutize-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: datapilot-redis
+          name: acutize-redis
           property: connectionString
       - key: SUPABASE_URL
         sync: false
@@ -22,7 +23,7 @@ services:
 
   # Background Worker
   - type: worker
-    name: datapilot-worker
+    name: acutize-worker
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.worker.celery_worker worker --loglevel=info --concurrency=1
@@ -30,7 +31,7 @@ services:
       - key: REDIS_URL
         fromService:
           type: redis
-          name: datapilot-redis
+          name: acutize-redis
           property: connectionString
       - key: SUPABASE_URL
         sync: false
@@ -39,6 +40,6 @@ services:
 
   # Redis Instance
   - type: redis
-    name: datapilot-redis
+    name: acutize-redis
     ipAllowList: [] # Only allow internal connections
     plan: free

@@ -62,7 +62,7 @@ class _ReportPDF(FPDF):
         self.set_y(-12)
         self.set_font("helvetica", "I", 8)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 8, _pdf_safe(f"DataPilot AI  |  Page {self.page_no()}"), align="C")
+        self.cell(0, 8, _pdf_safe(f"Acutize  |  Page {self.page_no()}"), align="C")
 
     def section_title(self, title: str, number: int | None = None) -> None:
         self.ln(4)
@@ -114,7 +114,7 @@ def build_dataset_report_pdf(
     pdf.add_page()
     pdf.set_font("helvetica", "B", 22)
     pdf.set_text_color(15, 15, 15)
-    pdf.cell(0, 12, "DataPilot AI", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 12, "Acutize", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 14)
     pdf.cell(0, 8, "Machine Learning Project Report", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
@@ -133,7 +133,7 @@ def build_dataset_report_pdf(
         0,
         5,
         _pdf_safe(
-            "This document summarizes the end-to-end workflow performed in DataPilot AI: "
+            "This document summarizes the end-to-end workflow performed in Acutize: "
             "data profiling, cleaning, optional feature engineering, and instant model comparison. "
             "Metrics reflect a sample-based preview for directional guidance, not a production deployment."
         ),

@@ -147,7 +147,7 @@ y = y.fillna(y.median())
     )
 
     return f'''"""
-DataPilot AI — Full local training script
+Acutize — Full local training script
 =========================================
 Generated for: {dataset.get("original_file_name", "your dataset")}
 
@@ -160,12 +160,12 @@ RECOMMENDED DATA_PATH (from export ZIP after unzip):
   - data/engineered.csv  — if you applied generated features
   - data/cleaned.csv     — if you only ran cleaning
 
-You may also use your original raw file; set APPLY_DATAPILOT_CLEANING = True.
+You may also use your original raw file; set APPLY_acutize_CLEANING = True.
 
 Instant preview winner: {best_model} ({task_type})
 Target column: {target!r}
 
-Output: datapilot_model.pkl (saved next to this script)
+Output: acutize_model.pkl (saved next to this script)
 """
 
 import warnings
@@ -187,18 +187,18 @@ from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler,
 # =============================================================================
 {engineered_note}DATA_PATH = r"C:\\path\\to\\your\\dataset.csv"
 
-# Set True ONLY if DATA_PATH is your raw upload (before DataPilot cleaning).
+# Set True ONLY if DATA_PATH is your raw upload (before acutize cleaning).
 # Set False if using data/cleaned.csv or data/engineered.csv from the export ZIP.
-APPLY_DATAPILOT_CLEANING = False
+APPLY_acutize_CLEANING = False
 
 TARGET_COLUMN = {target!r}
 TASK_TYPE = {task_type!r}
 BEST_MODEL_NAME = {best_model!r}
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
-MODEL_OUTPUT = "datapilot_model.pkl"
+MODEL_OUTPUT = "acutize_model.pkl"
 
-# Cleaning settings from DataPilot (used when APPLY_DATAPILOT_CLEANING = True)
+# Cleaning settings from acutize (used when APPLY_acutize_CLEANING = True)
 MISSING_STRATEGY = {missing_strategy!r}
 ENCODING = {encoding!r}
 SCALING = {scaling!r}
@@ -207,7 +207,7 @@ SCALING = {scaling!r}
 PREVIEW_SUMMARY = {preview_json!r}
 
 
-def apply_datapilot_cleaning(df: pd.DataFrame) -> pd.DataFrame:
+def apply_acutize_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=[TARGET_COLUMN])
     feature_cols = [c for c in df.columns if c != TARGET_COLUMN]
     if MISSING_STRATEGY == "drop":
@@ -253,9 +253,9 @@ def main():
     if TARGET_COLUMN not in df.columns:
         raise ValueError(f"Target {{TARGET_COLUMN}} not in columns: {{list(df.columns)[:20]}}...")
 
-    if APPLY_DATAPILOT_CLEANING:
-        print("Applying DataPilot cleaning pipeline...")
-        df = apply_datapilot_cleaning(df)
+    if APPLY_acutize_CLEANING:
+        print("Applying acutize cleaning pipeline...")
+        df = apply_acutize_cleaning(df)
 
     y_raw = df[TARGET_COLUMN]
     X = df.drop(columns=[TARGET_COLUMN])
