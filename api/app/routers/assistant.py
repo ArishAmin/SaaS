@@ -102,7 +102,7 @@ async def chat(
         client = HTTPClient.get_client()
         res = await client.post(url, headers=headers, json=body)
         if res.status_code >= 400:
-            text = await res.text()
+            text = res.text
             raise HTTPException(status_code=502, detail=f"LLM error: {text[:500]}")
         data = res.json()
         reply = (

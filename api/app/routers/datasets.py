@@ -1085,6 +1085,7 @@ async def train_quick(
 
     y = df[target_column]
     X = df.drop(columns=[target_column])
+    feature_names = list(X.columns)
 
     is_numeric = pd.api.types.is_numeric_dtype(y)
     unique_count = y.nunique()
