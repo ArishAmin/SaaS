@@ -1,0 +1,153 @@
+"use client";
+
+import React from "react";
+import { Check, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+
+const PLANS = [
+  {
+    id: "hobby",
+    name: "Free",
+    price: "$0",
+    description: "Explore the pipeline with a monthly credit allowance.",
+    features: [
+      "60 credits one-time (until you upgrade)",
+      "10 MB max file size · up to 20,000 rows per step",
+      "Instant profile, EDA & quality views",
+      "Pay credits only when you run a step",
+      "Community support",
+    ],
+    buttonText: "Start for Free",
+    badge: null,
+    popular: false,
+    href: "/signup",
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$25",
+    period: "/mo",
+    description: "For practitioners running multiple datasets each month.",
+    features: [
+      "450 credits per month",
+      "30 MB max file size · full file on pipeline steps",
+      "All instant-preview models",
+      "Generate features & export tools",
+      "Priority email support",
+    ],
+    buttonText: "Get Pro Now",
+    badge: "Most Popular",
+    popular: true,
+    href: "/signup?plan=pro",
+  },
+  {
+    id: "business",
+    name: "Business",
+    price: "$70",
+    period: "/mo",
+    description: "Unlimited datasets and larger files within server-safe limits.",
+    features: [
+      "2,500 credits per month",
+      "75 MB max file size · full file on pipeline steps",
+      "Unlimited concurrent datasets",
+      "Python full-training export script",
+      "Priority support via Paddle",
+    ],
+    buttonText: "Scale with Business",
+    badge: null,
+    popular: false,
+    href: "/signup?plan=business",
+  },
+];
+
+interface PricingSectionProps {
+  hideCTA?: boolean;
+}
+
+export function PricingSection({ hideCTA = false }: PricingSectionProps) {
+  return (
+    <section id="pricing" className="py-24 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-indigo-500/5 blur-[120px] -z-10" />
+      <div className="absolute bottom-0 left-0 w-1/3 h-1/3 bg-purple-500/5 blur-[120px] -z-10" />
+
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-3xl mx-auto mb-20">
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
+            {hideCTA ? "Choose Your Path" : "Simple, Transparent Pricing"}
+          </h2>
+          <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
+            {hideCTA 
+              ? "Explore our comprehensive plans tailored for every data journey." 
+              : "Choose the plan that's right for your data journey. Start free, upgrade as you grow."}
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          {PLANS.map((plan) => (
+            <div
+              key={plan.id}
+              className={cn(
+                "relative flex flex-col p-8 rounded-3xl bg-white dark:bg-zinc-900 border transition-all duration-300",
+                plan.popular
+                  ? "border-indigo-500 shadow-xl shadow-indigo-500/10 scale-105 z-10"
+                  : "border-zinc-200 dark:border-white/5",
+                !hideCTA && "hover:translate-y-[-4px]"
+              )}
+            >
+              {plan.badge && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {plan.badge}
+                </div>
+              )}
+
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">{plan.name}</h3>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-zinc-900 dark:text-white">{plan.price}</span>
+                  {plan.period && (
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">{plan.period}</span>
+                  )}
+                </div>
+                <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  {plan.description}
+                </p>
+              </div>
+
+              <div className="flex-grow space-y-4 mb-2">
+                {plan.features.map((feature, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              {!hideCTA && (
+                <div className="mt-8">
+                  <Button
+                    asChild
+                    className={cn(
+                      "w-full h-12 rounded-xl font-bold transition-all group",
+                      plan.popular
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20"
+                        : "bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-900 dark:text-white"
+                    )}
+                  >
+                    <Link href={plan.href}>
+                      {plan.buttonText}
+                      <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
