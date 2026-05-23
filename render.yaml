@@ -73,7 +73,7 @@ services:
     schedule: "0 * * * *"
     rootDir: api
     buildCommand: pip install requests
-    startCommand: python -c "import os, requests; url = os.environ.get('API_URL', '').rstrip('/') + '/admin/cleanup-ttl'; token = os.environ.get('ADMIN_CLEANUP_TOKEN'); res = requests.post(url, headers={'Authorization': f'Bearer {token}'}); res.raise_for_status()"
+    startCommand: python cron_cleanup.py
     envVars:
       - key: PYTHON_VERSION
         value: "3.10.13"
