@@ -40,7 +40,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-foreground mb-3">3. Account Registration</h2>
             <p>
               To access the Service, you must create an account with a valid email address. You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You agree to notify us immediately at{" "}
-              <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>{" "}
+              <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>{" "}
               of any unauthorised use of your account.
             </p>
           </section>
@@ -88,7 +88,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">9. Termination</h2>
             <p>
-              We reserve the right to suspend or terminate your account at our sole discretion if we believe you have violated these Terms or engaged in fraudulent or harmful conduct. You may terminate your account at any time by contacting us at <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>. Upon termination, all your data will be deleted according to our data retention policy outlined in our Privacy Policy.
+              We reserve the right to suspend or terminate your account at our sole discretion if we believe you have violated these Terms or engaged in fraudulent or harmful conduct. You may terminate your account at any time by contacting us at <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>. Upon termination, all your data will be deleted according to our data retention policy outlined in our Privacy Policy.
             </p>
           </section>
 
@@ -110,7 +110,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-foreground mb-3">12. Contact</h2>
             <p>
               For questions about these Terms, please contact us at:{" "}
-              <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>
+              <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>
             </p>
           </section>
         </div>

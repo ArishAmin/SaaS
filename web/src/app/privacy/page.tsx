@@ -26,7 +26,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-foreground mb-3">1. Who We Are</h2>
             <p>
               Acutize ("we", "us", or "our") is an AI-powered data preparation and machine learning platform. This Privacy Policy explains how we collect, store, use, and safeguard your personal information when you use our services at <strong>acutize.com</strong>. If you have questions, contact us at{" "}
-              <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>.
+              <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>.
             </p>
           </section>
 
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
               <li>Request deletion of your account and all associated data.</li>
               <li>Object to specific types of data processing.</li>
             </ul>
-            <p className="mt-2">To exercise any of these rights, email us at <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>.</p>
+            <p className="mt-2">To exercise any of these rights, email us at <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>.</p>
           </section>
 
           <section>
@@ -105,7 +105,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-foreground mb-3">10. Contact Us</h2>
             <p>
               For any privacy-related questions or requests, please reach out to us at:{" "}
-              <a href="mailto:aminarish88@gmail.com" className="underline text-foreground">aminarish88@gmail.com</a>
+              <a href="mailto:support@acutize.com" className="underline text-foreground">support@acutize.com</a>
             </p>
           </section>
         </div>

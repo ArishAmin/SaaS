@@ -10,7 +10,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY")
 API_BASE = "http://127.0.0.1:8001"
 
-EMAIL = "aminarish88@gmail.com"
+EMAIL = "support@acutize.com"
 PASSWORD = "arish123"
 
 # Mock dataset details

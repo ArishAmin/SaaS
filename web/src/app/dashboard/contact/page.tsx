@@ -41,14 +41,14 @@ export default function ContactPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <a href="mailto:aminarish88@gmail.com" className="text-sm font-medium hover:underline">aminarish88@gmail.com</a>
+              <a href="mailto:support@acutize.com" className="text-sm font-medium hover:underline">support@acutize.com</a>
               <p className="text-xs text-foreground/70 mt-1">Average response time: &lt;2 hours</p>
             </CardContent>
           </Card>
 
           <div className="space-y-4 px-2">
             <h3 className="font-semibold text-sm uppercase tracking-wide text-foreground/60">Our Promise</h3>
-            
+
             <div className="flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-500 shrink-0" />
               <div>
@@ -56,7 +56,7 @@ export default function ContactPage() {
                 <p className="text-xs text-foreground/70 mt-1">Your data never leaves your private cloud instance. We are fully compliant with modern data protection regulations.</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <Zap className="w-5 h-5 text-amber-500 shrink-0" />
               <div>
@@ -103,7 +103,7 @@ export default function ContactPage() {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-1.5">
                 <label htmlFor="email" className="text-sm font-medium">Work Email</label>
                 <input

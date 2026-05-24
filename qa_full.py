@@ -16,7 +16,7 @@ load_dotenv("api/.env")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 API_BASE = os.environ.get("API_BASE", "http://127.0.0.1:8001")
-EMAIL = "aminarish88@gmail.com"
+EMAIL = "support@acutize.com"
 PASSWORD = "arish123"
 SAMPLE_CSV = Path("sample.csv")
 
