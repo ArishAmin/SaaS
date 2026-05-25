@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
 
+    # Email
+    resend_api_key: str | None = None
+
     # Centralized API logs to Supabase (table: public.app_logs)
     supabase_log_enabled: bool = True
 

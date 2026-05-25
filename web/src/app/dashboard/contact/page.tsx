@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Mail, Clock, ShieldCheck, Zap } from "lucide-react";
+import { apiRequest } from "@/lib/api";
 
 export default function ContactPage() {
   const [loading, setLoading] = useState(false);
@@ -12,13 +13,28 @@ export default function ContactPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    // Simulate sending an email request since we lack a true email backend currently
-    setTimeout(() => {
-      setLoading(false);
+
+    const data = {
+      firstName: (document.getElementById("firstName") as HTMLInputElement).value,
+      lastName: (document.getElementById("lastName") as HTMLInputElement).value,
+      email: (document.getElementById("email") as HTMLInputElement).value,
+      subject: (document.getElementById("subject") as HTMLSelectElement).value,
+      message: (document.getElementById("message") as HTMLTextAreaElement).value,
+    };
+
+    try {
+      await apiRequest("/support/contact", {
+        method: "POST",
+        body: data,
+      });
       toast.success("Thank you for reaching out! A member of our team will contact you shortly.");
       const form = e.target as HTMLFormElement;
       form.reset();
-    }, 1500);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send message. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -118,10 +134,10 @@ export default function ContactPage() {
               <div className="space-y-1.5">
                 <label htmlFor="subject" className="text-sm font-medium">Topic</label>
                 <select id="subject" className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
-                  <option value="enterprise">Enterprise Sales</option>
-                  <option value="support">Technical Support</option>
-                  <option value="bug">Bug Report</option>
-                  <option value="other">Other</option>
+                  <option value="enterprise" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Enterprise Sales</option>
+                  <option value="support" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Technical Support</option>
+                  <option value="bug" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Bug Report</option>
+                  <option value="other" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Other</option>
                 </select>
               </div>
 

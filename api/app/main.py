@@ -19,6 +19,7 @@ from .routers.telemetry import router as telemetry_router
 from .routers.billing import router as billing_router
 from .routers.profiles import router as profiles_router
 from .routers.admin import router as admin_router
+from .routers.support import router as support_router
 from .core.config import get_settings
 from .core.rate_limit import limiter
 from .core.http_client import HTTPClient
@@ -46,6 +47,7 @@ app.include_router(telemetry_router)
 app.include_router(billing_router)
 app.include_router(profiles_router)
 app.include_router(admin_router)
+app.include_router(support_router)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(_request, _exc):
