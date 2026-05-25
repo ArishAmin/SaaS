@@ -32,7 +32,7 @@ async def contact_support(req: ContactRequest, user: dict = Depends(get_current_
     """
 
     payload = {
-        "from": "Acutize Support <onboarding@resend.dev>",
+        "from": "Acutize Support <support@acutize.com>",
         "to": ["support@acutize.com"],
         "subject": f"New Contact Request: {req.subject}",
         "html": html_content,
