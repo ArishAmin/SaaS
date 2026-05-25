@@ -77,8 +77,8 @@ export default function PricingPage() {
               Simple pricing for your data pipeline
             </h1>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Browsing analyzer, EDA, and quality is free. Credits are spent only when you run a step
-              (clean, suggest features, train preview, etc.). A typical generative run ≈{" "}
+              Credits are spent only when you run a step
+              (analyze, clean, suggest features, train preview, etc.). A typical generative run ≈{" "}
               <strong className="text-slate-800 dark:text-slate-200">
                 {GENERATIVE_PIPELINE_CREDITS} credits
               </strong>
@@ -120,8 +120,8 @@ export default function PricingPage() {
                 <div
                   key={plan.id}
                   className={`relative flex flex-col p-8 rounded-3xl bg-white dark:bg-slate-900 border ${plan.popular
-                      ? "border-blue-500 shadow-xl shadow-blue-500/10 md:scale-105 z-10"
-                      : "border-slate-200 dark:border-slate-800"
+                    ? "border-blue-500 shadow-xl shadow-blue-500/10 md:scale-105 z-10"
+                    : "border-slate-200 dark:border-slate-800"
                     } transition-all duration-300 hover:translate-y-[-4px]`}
                 >
                   {plan.badge && (
@@ -182,8 +182,8 @@ export default function PricingPage() {
                     onClick={() => handleSelectPlan(plan.id)}
                     disabled={!!loadingPlan}
                     className={`w-full py-4 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group ${plan.popular
-                        ? "bg-blue-600 hover:bg-blue-700 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {loadingPlan === plan.id ? (

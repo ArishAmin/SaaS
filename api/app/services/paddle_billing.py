@@ -79,6 +79,25 @@ def _parse_paddle_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def _same_plan_subscription_is_current(profile: dict[str, Any], requested_plan: str) -> bool:
+    current_plan = str(profile.get("plan") or "").strip().lower()
+    if current_plan != requested_plan:
+        return False
+
+    current_status = str(profile.get("subscription_status") or "").strip().lower()
+    period_end = _parse_paddle_datetime(profile.get("current_period_end"))
+    period_has_not_ended = period_end is None or period_end > datetime.now(timezone.utc)
+    terminal_statuses = {"canceled", "deleted", "inactive", "none", "expired"}
+
+    if current_status in {"active", "past_due", "trialing", "paused"}:
+        return period_has_not_ended
+    if period_end and period_has_not_ended:
+        return True
+    if profile.get("paddle_subscription_id") and current_status not in terminal_statuses:
+        return True
+    return False
+
+
 async def create_checkout(
     *,
     user_id: str,
@@ -92,12 +111,7 @@ async def create_checkout(
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     profile = profiles[0] if profiles else {}
     customer_id = profile.get("paddle_customer_id")
-    current_plan = profile.get("plan")
-    current_status = profile.get("subscription_status")
-    current_period_end = _parse_paddle_datetime(profile.get("current_period_end"))
-    subscription_active = current_status in ("active", "past_due", "trialing")
-    subscription_unexpired = current_period_end is None or current_period_end > datetime.now(timezone.utc)
-    if current_plan == plan and subscription_active and subscription_unexpired:
+    if _same_plan_subscription_is_current(profile, plan):
         raise HTTPException(
             status_code=409,
             detail=(

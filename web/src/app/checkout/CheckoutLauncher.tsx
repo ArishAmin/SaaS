@@ -49,6 +49,7 @@ export function CheckoutLauncher() {
   const [scriptReady, setScriptReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [redirectingToDashboard, setRedirectingToDashboard] = useState(false);
   const openedRef = useRef(false);
   const setupError = !transactionId
     ? "Missing checkout transaction."
@@ -83,12 +84,16 @@ export function CheckoutLauncher() {
           }
           if (eventName?.includes("completed")) {
             setCompleted(true);
+            setRedirectingToDashboard(true);
             window.setTimeout(() => {
               window.location.assign("/dashboard?checkout=success");
             }, 800);
           }
           if (eventName === "checkout.closed") {
-            window.location.assign("/pricing");
+            setRedirectingToDashboard(true);
+            window.setTimeout(() => {
+              window.location.assign("/dashboard");
+            }, 500);
           }
         },
       });
@@ -110,6 +115,15 @@ export function CheckoutLauncher() {
       });
     }
   }, [scriptReady, setupError, transactionId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      setRedirectingToDashboard(true);
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
 
   const visibleError = setupError ?? error;
 
@@ -144,11 +158,13 @@ export function CheckoutLauncher() {
               {scriptReady ? <ShieldCheck className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
             </div>
             <h1 className="text-xl font-semibold">
-              {completed ? "Redirecting to dashboard" : "Opening secure checkout"}
+              {redirectingToDashboard ? "Redirecting to dashboard" : "Opening secure checkout"}
             </h1>
             <p className="mt-2 text-sm text-slate-400">
-              {completed
-                ? "Your payment is complete. Taking you back to your workspace."
+              {redirectingToDashboard
+                ? completed
+                  ? "Your payment is complete. Taking you back to your workspace."
+                  : "Taking you back to your workspace."
                 : "You will be redirected after payment succeeds."}
             </p>
           </>
