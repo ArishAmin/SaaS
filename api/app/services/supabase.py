@@ -12,17 +12,20 @@ def _supabase_headers() -> dict[str, str]:
     settings = get_settings()
     if not settings.supabase_service_role_key or not settings.supabase_url:
         raise RuntimeError("Supabase configuration missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+    
+    api_key = settings.supabase_service_role_key.split('\n')[0].strip()
     return {
-        "apikey": settings.supabase_service_role_key,
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": api_key,
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
 
+def _clean_supabase_url() -> str:
+    return get_settings().supabase_url.split('\n')[0].strip().rstrip('/')
 
 async def rest_list(table: str, query: str) -> list[dict[str, Any]]:
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/{table}?{query}"
+    url = f"{_clean_supabase_url()}/rest/v1/{table}?{query}"
     client = HTTPClient.get_client()
     res = await client.get(url, headers=_supabase_headers())
     res.raise_for_status()
@@ -30,8 +33,7 @@ async def rest_list(table: str, query: str) -> list[dict[str, Any]]:
 
 
 async def rest_insert(table: str, payload: list[dict[str, Any]]) -> dict[str, Any]:
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/{table}"
+    url = f"{_clean_supabase_url()}/rest/v1/{table}"
     headers = _supabase_headers() | {"Prefer": "return=representation"}
     client = HTTPClient.get_client()
     res = await client.post(url, headers=headers, content=json.dumps(payload))
@@ -43,8 +45,7 @@ async def rest_insert(table: str, payload: list[dict[str, Any]]) -> dict[str, An
 
 
 async def rest_patch(table: str, where_query: str, payload: dict[str, Any]) -> dict[str, Any]:
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/{table}?{where_query}"
+    url = f"{_clean_supabase_url()}/rest/v1/{table}?{where_query}"
     headers = _supabase_headers() | {"Prefer": "return=representation"}
     client = HTTPClient.get_client()
     res = await client.patch(url, headers=headers, content=json.dumps(payload))
@@ -56,8 +57,7 @@ async def rest_patch(table: str, where_query: str, payload: dict[str, Any]) -> d
 
 
 async def rest_delete(table: str, where_query: str) -> None:
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/rest/v1/{table}?{where_query}"
+    url = f"{_clean_supabase_url()}/rest/v1/{table}?{where_query}"
     client = HTTPClient.get_client()
     res = await client.delete(url, headers=_supabase_headers())
     res.raise_for_status()
@@ -67,8 +67,7 @@ async def storage_list(bucket: str, prefix: str, *, limit: int = 1000, offset: i
     """
     Lists objects under a prefix. Returns objects with at least `name`.
     """
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/list/{bucket}"
+    url = f"{_clean_supabase_url()}/storage/v1/object/list/{bucket}"
     headers = _supabase_headers()
     payload = {"prefix": prefix, "limit": limit, "offset": offset}
     client = HTTPClient.get_client()
@@ -78,9 +77,8 @@ async def storage_list(bucket: str, prefix: str, *, limit: int = 1000, offset: i
 
 
 async def storage_download(bucket: str, object_path: str) -> bytes:
-    settings = get_settings()
     encoded_path = urllib.parse.quote(object_path, safe="")
-    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{bucket}/{encoded_path}"
+    url = f"{_clean_supabase_url()}/storage/v1/object/{bucket}/{encoded_path}"
     headers = _supabase_headers() | {"Accept": "*/*"}
     client = HTTPClient.get_client()
     res = await client.get(url, headers=headers)
@@ -89,9 +87,8 @@ async def storage_download(bucket: str, object_path: str) -> bytes:
 
 
 async def storage_remove(bucket: str, object_path: str) -> None:
-    settings = get_settings()
     encoded_path = urllib.parse.quote(object_path, safe="")
-    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{bucket}/{encoded_path}"
+    url = f"{_clean_supabase_url()}/storage/v1/object/{bucket}/{encoded_path}"
     headers = _supabase_headers() | {"Accept": "application/json"}
     client = HTTPClient.get_client()
     res = await client.delete(url, headers=headers)
