@@ -66,6 +66,7 @@ Set when prompted (or in each service → **Environment**):
 | `PADDLE_PRICE_ID_PRO_YEARLY` | If billing on | Paddle Price ID for $249/yr Pro (17% off) |
 | `PADDLE_PRICE_ID_BUSINESS` | If billing on | Paddle Price ID for $70/mo Business |
 | `PADDLE_PRICE_ID_BUSINESS_YEARLY` | If billing on | Paddle Price ID for $697/yr Business (17% off) |
+| `PADDLE_CHECKOUT_URL` | Optional | Leave blank to use Paddle's default payment link; if set, use an approved checkout/payment-link page, not the post-payment dashboard URL |
 | `APP_PUBLIC_URL` | Yes | Your live web URL, e.g. `https://acutize-web.onrender.com` |
 | `BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (real limits + credits) |
 | `ALLOWED_ORIGINS` | Prod | Your web URL only, e.g. `https://acutize-web.onrender.com` (CORS) |
@@ -83,6 +84,8 @@ Set when prompted (or in each service → **Environment**):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon key |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes | `https://acutize-api.onrender.com` (after API deploys) |
 | `NEXT_PUBLIC_BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (must match API) |
+| `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | If billing on | `sandbox` for test checkouts, `production` for live |
+| `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | If billing on | Paddle client-side token; sandbox tokens start with `test_`, live tokens start with `live_` |
 
 After the API URL is live, update `NEXT_PUBLIC_API_BASE_URL` and redeploy the web service.
 

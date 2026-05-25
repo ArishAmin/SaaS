@@ -35,6 +35,7 @@ async def _paddle_request(method: str, path: str, payload: dict | None = None) -
     headers = {
         "Authorization": f"Bearer {settings.paddle_api_key}",
         "Content-Type": "application/json",
+        "Paddle-Version": "1",
     }
     from ..core.http_client import HTTPClient
     client = HTTPClient.get_client()
@@ -77,19 +78,20 @@ async def create_checkout(
     interval: str = "monthly",
     success_url: str,
 ) -> str:
+    settings = get_settings()
     price_id = _price_id_for_plan(plan, interval)
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     customer_id = profiles[0].get("paddle_customer_id") if profiles else None
+    checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
 
     payload: dict[str, Any] = {
+        "collection_mode": "automatic",
         "items": [{"price_id": price_id, "quantity": 1}],
-        "custom_data": {"user_id": user_id, "plan": plan},
-        "checkout": {"url": success_url},
+        "custom_data": {"user_id": user_id, "plan": plan, "interval": interval},
+        "checkout": {"url": checkout_url},
     }
     if customer_id:
         payload["customer_id"] = customer_id
-    elif email:
-        payload["customer"] = {"email": email}
 
     data = await _paddle_request("POST", "/transactions", payload)
     checkout = data.get("checkout") or {}

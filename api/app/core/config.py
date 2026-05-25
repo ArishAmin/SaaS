@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     paddle_price_id_pro_yearly: str | None = None
     paddle_price_id_business: str | None = None
     paddle_price_id_business_yearly: str | None = None
+    paddle_checkout_url: str | None = None
     app_public_url: str = "http://localhost:3000"
 
     # Set True in production (Render blueprint enables this). False only for local dev without billing.
@@ -78,4 +79,3 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     return Settings()
-
