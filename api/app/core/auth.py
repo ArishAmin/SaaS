@@ -24,7 +24,7 @@ async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
     headers = {"Accept": "application/json"}
     # Some Supabase projects require an API key even for JWKS endpoint.
     if settings.supabase_service_role_key:
-        api_key = settings.supabase_service_role_key.strip()
+        api_key = settings.supabase_service_role_key.split('\n')[0].strip()
         headers["apikey"] = api_key
         headers["Authorization"] = f"Bearer {api_key}"
     from .http_client import HTTPClient
@@ -44,8 +44,8 @@ async def _get_jwks() -> dict[str, Any]:
     global _jwks_cache
     settings = get_settings()
     
-    supa_url = (settings.supabase_url or "").strip()
-    jwks_url_setting = (settings.supabase_jwks_url or "").strip()
+    supa_url = (settings.supabase_url or "").split('\n')[0].strip()
+    jwks_url_setting = (settings.supabase_jwks_url or "").split('\n')[0].strip()
     
     if not supa_url and not jwks_url_setting:
         raise HTTPException(
