@@ -71,7 +71,7 @@ export default function PricingPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-sm font-medium mb-4">
               <Coins className="w-4 h-4" />
-              Credits on demand · Paddle checkout
+              Credits on demand
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4">
               Simple pricing for your data pipeline
@@ -119,11 +119,10 @@ export default function PricingPage() {
               return (
                 <div
                   key={plan.id}
-                  className={`relative flex flex-col p-8 rounded-3xl bg-white dark:bg-slate-900 border ${
-                    plan.popular
+                  className={`relative flex flex-col p-8 rounded-3xl bg-white dark:bg-slate-900 border ${plan.popular
                       ? "border-blue-500 shadow-xl shadow-blue-500/10 md:scale-105 z-10"
                       : "border-slate-200 dark:border-slate-800"
-                  } transition-all duration-300 hover:translate-y-[-4px]`}
+                    } transition-all duration-300 hover:translate-y-[-4px]`}
                 >
                   {plan.badge && (
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -182,11 +181,10 @@ export default function PricingPage() {
                   <button
                     onClick={() => handleSelectPlan(plan.id)}
                     disabled={!!loadingPlan}
-                    className={`w-full py-4 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group ${
-                      plan.popular
+                    className={`w-full py-4 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group ${plan.popular
                         ? "bg-blue-600 hover:bg-blue-700 text-white"
                         : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {loadingPlan === plan.id ? (
                       <Loader2 className="w-5 h-5 animate-spin" />

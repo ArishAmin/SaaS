@@ -24,8 +24,9 @@ async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
     headers = {"Accept": "application/json"}
     # Some Supabase projects require an API key even for JWKS endpoint.
     if settings.supabase_service_role_key:
-        headers["apikey"] = settings.supabase_service_role_key
-        headers["Authorization"] = f"Bearer {settings.supabase_service_role_key}"
+        api_key = settings.supabase_service_role_key.strip()
+        headers["apikey"] = api_key
+        headers["Authorization"] = f"Bearer {api_key}"
     from .http_client import HTTPClient
     client = HTTPClient.get_client()
     res = await client.get(jwks_url, headers=headers)
@@ -42,7 +43,11 @@ async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
 async def _get_jwks() -> dict[str, Any]:
     global _jwks_cache
     settings = get_settings()
-    if not settings.supabase_url and not settings.supabase_jwks_url:
+    
+    supa_url = (settings.supabase_url or "").strip()
+    jwks_url_setting = (settings.supabase_jwks_url or "").strip()
+    
+    if not supa_url and not jwks_url_setting:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
@@ -51,7 +56,7 @@ async def _get_jwks() -> dict[str, Any]:
                 "then restart the server. JWKS defaults to YOUR_SUPABASE_URL/auth/v1/keys."
             ),
         )
-    jwks_url = settings.supabase_jwks_url or f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    jwks_url = jwks_url_setting or f"{supa_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
 
     now = time.time()
     if _jwks_cache and (now - _jwks_cache.fetched_at) < 3600:
