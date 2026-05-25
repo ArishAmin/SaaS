@@ -48,6 +48,7 @@ export function CheckoutLauncher() {
   const transactionId = searchParams.get("_ptxn") ?? searchParams.get("transaction_id");
   const [scriptReady, setScriptReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
   const openedRef = useRef(false);
   const setupError = !transactionId
     ? "Missing checkout transaction."
@@ -79,6 +80,12 @@ export function CheckoutLauncher() {
           const eventName = event.name ?? event.type;
           if (eventName === "checkout.error") {
             setError("Paddle could not open this checkout.");
+          }
+          if (eventName?.includes("completed")) {
+            setCompleted(true);
+            window.setTimeout(() => {
+              window.location.assign("/dashboard?checkout=success");
+            }, 800);
           }
           if (eventName === "checkout.closed") {
             window.location.assign("/pricing");
@@ -136,8 +143,14 @@ export function CheckoutLauncher() {
             <div className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-full bg-blue-500/15 text-blue-300">
               {scriptReady ? <ShieldCheck className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
             </div>
-            <h1 className="text-xl font-semibold">Opening secure checkout</h1>
-            <p className="mt-2 text-sm text-slate-400">You will be redirected after payment succeeds.</p>
+            <h1 className="text-xl font-semibold">
+              {completed ? "Redirecting to dashboard" : "Opening secure checkout"}
+            </h1>
+            <p className="mt-2 text-sm text-slate-400">
+              {completed
+                ? "Your payment is complete. Taking you back to your workspace."
+                : "You will be redirected after payment succeeds."}
+            </p>
           </>
         )}
       </section>

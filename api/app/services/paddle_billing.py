@@ -70,6 +70,15 @@ def _price_id_for_plan(plan: str, interval: str = "monthly") -> str:
     return pid
 
 
+def _parse_paddle_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 async def create_checkout(
     *,
     user_id: str,
@@ -81,7 +90,22 @@ async def create_checkout(
     settings = get_settings()
     price_id = _price_id_for_plan(plan, interval)
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
-    customer_id = profiles[0].get("paddle_customer_id") if profiles else None
+    profile = profiles[0] if profiles else {}
+    customer_id = profile.get("paddle_customer_id")
+    current_plan = profile.get("plan")
+    current_status = profile.get("subscription_status")
+    current_period_end = _parse_paddle_datetime(profile.get("current_period_end"))
+    subscription_active = current_status in ("active", "past_due", "trialing")
+    subscription_unexpired = current_period_end is None or current_period_end > datetime.now(timezone.utc)
+    if current_plan == plan and subscription_active and subscription_unexpired:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"You are already subscribed to the {plan} plan. "
+                "You can change plans from billing settings when you want to upgrade or downgrade."
+            ),
+        )
+
     checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
 
     payload: dict[str, Any] = {
