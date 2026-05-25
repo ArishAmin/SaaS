@@ -84,7 +84,6 @@ async def create_checkout(
     payload: dict[str, Any] = {
         "items": [{"price_id": price_id, "quantity": 1}],
         "custom_data": {"user_id": user_id, "plan": plan},
-        "collection_mode": "automatic",
         "checkout": {"url": success_url},
     }
     if customer_id:
