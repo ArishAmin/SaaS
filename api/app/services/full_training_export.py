@@ -217,18 +217,30 @@ def apply_acutize_cleaning(df: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
     categorical_cols = [c for c in X.columns if c not in numeric_cols]
     numeric_impute = "median" if MISSING_STRATEGY in ("median", "drop") else "mean"
-    scaler = StandardScaler() if SCALING == "standard" else MinMaxScaler()
-    num_pipe = Pipeline([("imputer", SimpleImputer(strategy=numeric_impute)), ("scaler", scaler)])
+    num_steps = []
+    if MISSING_STRATEGY != "none":
+        num_steps.append(("imputer", SimpleImputer(strategy=numeric_impute)))
+    if SCALING == "standard":
+        num_steps.append(("scaler", StandardScaler()))
+    elif SCALING == "min-max":
+        num_steps.append(("scaler", MinMaxScaler()))
+    num_pipe = Pipeline(num_steps) if num_steps else "passthrough"
     if ENCODING == "label":
-        cat_pipe = Pipeline([
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
-        ])
+        cat_steps = []
+        if MISSING_STRATEGY != "none":
+            cat_steps.append(("imputer", SimpleImputer(strategy="most_frequent")))
+        cat_steps.append(("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)))
+        cat_pipe = Pipeline(cat_steps)
+    elif ENCODING == "one-hot":
+        cat_steps = []
+        if MISSING_STRATEGY != "none":
+            cat_steps.append(("imputer", SimpleImputer(strategy="most_frequent")))
+        cat_steps.append(("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)))
+        cat_pipe = Pipeline(cat_steps)
+    elif MISSING_STRATEGY != "none":
+        cat_pipe = Pipeline([("imputer", SimpleImputer(strategy="most_frequent"))])
     else:
-        cat_pipe = Pipeline([
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-        ])
+        cat_pipe = "passthrough"
     transformers = []
     if numeric_cols:
         transformers.append(("num", num_pipe, numeric_cols))

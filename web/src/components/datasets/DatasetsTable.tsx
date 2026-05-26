@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { BarChart3, Download, Lightbulb, Sparkles, Trash2, Wand2, Brain } from "lucide-react";
 
 import { apiRequest } from "@/lib/api";
-import { PdfReportButton } from "@/components/reports/PdfReportButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,8 +89,7 @@ export function DatasetsTable() {
         <div>
           <CardTitle>Your datasets</CardTitle>
           <CardDescription>
-            Status and timestamps. Use <strong>PDF report</strong> anytime to export a shareable summary of analysis,
-            cleaning, training, and runs.
+            Status, timestamps, and the next actions for each uploaded dataset.
           </CardDescription>
         </div>
         <Button variant="outline" onClick={refresh} disabled={loading}>
@@ -141,51 +140,68 @@ export function DatasetsTable() {
                     <td className="p-3 text-foreground/70">{fmtDate(r.engineered_at)}</td>
                     <td className="p-3 text-foreground/70">{fmtDate(r.quick_trained_at)}</td>
                     <td className="p-3">
-                      <div className="flex justify-end gap-2 flex-wrap">
+                      <div className="flex justify-end gap-1.5 flex-wrap">
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/analyzer?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
+                          <BarChart3 className="h-3.5 w-3.5" />
                           Analyze
                         </Button>
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/cleaning?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
+                          <Wand2 className="h-3.5 w-3.5" />
                           Clean
                         </Button>
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/feature-generation?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
+                          <Sparkles className="h-3.5 w-3.5" />
                           Engineering
                         </Button>
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/recommendation?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
+                          <Lightbulb className="h-3.5 w-3.5" />
                           Recommendations
                         </Button>
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/training?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
-                          Train ML
+                          <Brain className="h-3.5 w-3.5" />
+                          Train Model
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
+                          className="h-8 gap-1.5 px-2.5"
                           onClick={() => (window.location.href = `/dashboard/export?datasetId=${encodeURIComponent(r.dataset_id)}`)}
                         >
+                          <Download className="h-3.5 w-3.5" />
                           Export
                         </Button>
-                        <PdfReportButton datasetId={r.dataset_id} size="sm" label="PDF" />
-                        <Button variant="destructive" size="sm" onClick={() => setDeletingDatasetId(r.dataset_id)}>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2.5"
+                          onClick={() => setDeletingDatasetId(r.dataset_id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                           Delete
                         </Button>
                       </div>
@@ -220,4 +236,3 @@ export function DatasetsTable() {
     </Card>
   );
 }
-

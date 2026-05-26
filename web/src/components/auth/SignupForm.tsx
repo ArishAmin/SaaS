@@ -18,12 +18,40 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { GoogleLoginButton } from "./GoogleLoginButton";
 import { cn } from "@/lib/utils";
 
+const commonWeakPasswords = new Set([
+  "password",
+  "password1",
+  "password123",
+  "12345678",
+  "123456789",
+  "qwerty123",
+  "admin123",
+  "letmein123",
+  "welcome123",
+]);
+
+function passwordIssues(password: string, name = "", email = "") {
+  const lower = password.toLowerCase();
+  const emailUser = email.split("@")[0]?.toLowerCase() ?? "";
+  const nameParts = name.toLowerCase().split(/\s+/).filter((part) => part.length >= 3);
+  return [
+    password.length >= 10 ? null : "Use at least 10 characters.",
+    /[a-z]/.test(password) ? null : "Add a lowercase letter.",
+    /[A-Z]/.test(password) ? null : "Add an uppercase letter.",
+    /\d/.test(password) ? null : "Add a number.",
+    /[^A-Za-z0-9]/.test(password) ? null : "Add a symbol.",
+    commonWeakPasswords.has(lower) ? "Avoid common passwords." : null,
+    emailUser && lower.includes(emailUser) ? "Do not include your email name." : null,
+    nameParts.some((part) => lower.includes(part)) ? "Do not include your name." : null,
+  ].filter(Boolean) as string[];
+}
+
 const signupSchema = z
   .object({
     name: z.string().trim().min(2, "Name must be at least 2 characters."),
     email: z.string().email("Please enter a valid email address."),
-    password: z.string().min(8, "Password must be at least 8 characters."),
-    confirmPassword: z.string().min(8, "Confirm password is required."),
+    password: z.string().min(10, "Password must be at least 10 characters."),
+    confirmPassword: z.string().min(1, "Confirm password is required."),
     acceptedTOS: z.boolean().refine((val) => val === true, {
       message: "You must accept the terms and conditions.",
     }),
@@ -31,6 +59,10 @@ const signupSchema = z
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .refine((data) => passwordIssues(data.password, data.name, data.email).length === 0, {
+    message: "Choose a stronger password.",
+    path: ["password"],
   });
 
 type SignupValues = z.infer<typeof signupSchema>;
@@ -47,6 +79,11 @@ export function SignupForm() {
   });
 
   const acceptedTOS = form.watch("acceptedTOS");
+  const password = form.watch("password");
+  const confirmPassword = form.watch("confirmPassword");
+  const passwordChecks = passwordIssues(password || "", form.watch("name"), form.watch("email"));
+  const confirmPasswordStarted = Boolean(confirmPassword);
+  const passwordsMatch = Boolean(password) && password === confirmPassword;
 
   async function onSubmit(values: SignupValues) {
     setLoading(true);
@@ -202,6 +239,26 @@ export function SignupForm() {
                 {form.formState.errors.password.message}
               </p>
             )}
+            {password ? (
+              <div
+                className={cn(
+                  "rounded-lg border p-3 text-[11px] leading-5",
+                  passwordChecks.length === 0
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                    : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                )}
+              >
+                {passwordChecks.length === 0 ? (
+                  <p className="font-medium">Password looks strong.</p>
+                ) : (
+                  passwordChecks.map((issue) => (
+                    <p key={issue} className="font-medium">
+                      {issue}
+                    </p>
+                  ))
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -221,6 +278,18 @@ export function SignupForm() {
                 {form.formState.errors.confirmPassword.message}
               </p>
             )}
+            {confirmPasswordStarted ? (
+              <div
+                className={cn(
+                  "rounded-lg border p-3 text-[11px] font-medium leading-5",
+                  passwordsMatch
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                    : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                )}
+              >
+                {passwordsMatch ? "Passwords match." : "Passwords do not match."}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-start space-x-3 mt-1 px-1">

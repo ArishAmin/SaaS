@@ -70,9 +70,9 @@ class CleaningRequest(BaseModel):
     target_column: str = Field(min_length=1)
 
     # Advanced options
-    missing_strategy: Literal["mean", "median", "drop"] = "median"
-    encoding: Literal["label", "one-hot"] = "one-hot"
-    scaling: Literal["standard", "min-max"] = "standard"
+    missing_strategy: Literal["none", "mean", "median", "drop"] = "mean"
+    encoding: Literal["none", "label", "one-hot"] = "none"
+    scaling: Literal["none", "standard", "min-max"] = "none"
 
 
 class TrainQuickRequest(BaseModel):
@@ -433,6 +433,7 @@ async def get_single_dataset(
         "analyzed_at": dataset.get("analyzed_at"),
         "cleaned_at": dataset.get("cleaned_at"),
         "cleaned_storage_path": dataset.get("cleaned_storage_path"),
+        "cleaned_params": dataset.get("cleaned_params"),
         "cleaned_target_column": dataset.get("cleaned_target_column"),
         "engineered_at": dataset.get("engineered_at"),
         "engineered_storage_path": dataset.get("engineered_storage_path"),
@@ -779,40 +780,39 @@ def _build_preprocessor(
     *,
     numeric_cols: list[str],
     categorical_cols: list[str],
-    missing_strategy: Literal["mean", "median", "drop"],
-    encoding: Literal["label", "one-hot"],
-    scaling: Literal["standard", "min-max"],
+    missing_strategy: Literal["none", "mean", "median", "drop"],
+    encoding: Literal["none", "label", "one-hot"],
+    scaling: Literal["none", "standard", "min-max"],
 ) -> ColumnTransformer:
     # Strategy mapping (drop is handled by dropping rows earlier)
     numeric_impute = "median" if missing_strategy in ("median", "drop") else "mean"
 
+    numeric_steps: list[tuple[str, Any]] = []
+    if missing_strategy != "none":
+        numeric_steps.append(("imputer", SimpleImputer(strategy=numeric_impute)))
     if scaling == "standard":
-        scaler = StandardScaler()
-    else:
-        scaler = MinMaxScaler()
-
-    numeric_steps: list[tuple[str, Any]] = [("imputer", SimpleImputer(strategy=numeric_impute))]
-    numeric_steps.append(("scaler", scaler))
-    numeric_pipeline = Pipeline(numeric_steps)
+        numeric_steps.append(("scaler", StandardScaler()))
+    elif scaling == "min-max":
+        numeric_steps.append(("scaler", MinMaxScaler()))
+    numeric_pipeline: Any = Pipeline(numeric_steps) if numeric_steps else "passthrough"
 
     if encoding == "label":
         # OrdinalEncoder is robust to unknown categories.
-        cat_pipeline = Pipeline(
-            [
-                ("imputer", SimpleImputer(strategy="most_frequent")),
-                (
-                    "encoder",
-                    OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
-                ),
-            ]
-        )
+        cat_steps: list[tuple[str, Any]] = []
+        if missing_strategy != "none":
+            cat_steps.append(("imputer", SimpleImputer(strategy="most_frequent")))
+        cat_steps.append(("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)))
+        cat_pipeline: Any = Pipeline(cat_steps)
+    elif encoding == "one-hot":
+        cat_steps = []
+        if missing_strategy != "none":
+            cat_steps.append(("imputer", SimpleImputer(strategy="most_frequent")))
+        cat_steps.append(("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)))
+        cat_pipeline = Pipeline(cat_steps)
+    elif missing_strategy != "none":
+        cat_pipeline = Pipeline([("imputer", SimpleImputer(strategy="most_frequent"))])
     else:
-        cat_pipeline = Pipeline(
-            [
-                ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-            ]
-        )
+        cat_pipeline = "passthrough"
 
     transformers: list[tuple[str, Any, list[str]]] = []
     if numeric_cols:
@@ -890,10 +890,10 @@ async def clean_dataset(
     df = df.dropna(subset=[target_column])
 
     if payload.mode == "simple":
-        # One-click defaults: median imputation + one-hot + standard scaling.
-        missing_strategy: Literal["mean", "median", "drop"] = "median"
-        encoding: Literal["label", "one-hot"] = "one-hot"
-        scaling: Literal["standard", "min-max"] = "standard"
+        # Simple defaults: only fill missing values; leave encoding and scaling unchanged.
+        missing_strategy: Literal["none", "mean", "median", "drop"] = "mean"
+        encoding: Literal["none", "label", "one-hot"] = "none"
+        scaling: Literal["none", "standard", "min-max"] = "none"
     else:
         missing_strategy = payload.missing_strategy
         encoding = payload.encoding
@@ -1660,18 +1660,30 @@ KEEP_FEATURES = {keep_features_py}
 
 def build_preprocessor(numeric_cols, categorical_cols):
     numeric_impute = 'median' if MISSING_STRATEGY in ('median', 'drop') else 'mean'
-    scaler = StandardScaler() if SCALING == 'standard' else MinMaxScaler()
-    num_pipe = Pipeline([('imputer', SimpleImputer(strategy=numeric_impute)), ('scaler', scaler)])
+    num_steps = []
+    if MISSING_STRATEGY != 'none':
+        num_steps.append(('imputer', SimpleImputer(strategy=numeric_impute)))
+    if SCALING == 'standard':
+        num_steps.append(('scaler', StandardScaler()))
+    elif SCALING == 'min-max':
+        num_steps.append(('scaler', MinMaxScaler()))
+    num_pipe = Pipeline(num_steps) if num_steps else 'passthrough'
     if ENCODING == 'label':
-        cat_pipe = Pipeline([
-            ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)),
-        ])
+        cat_steps = []
+        if MISSING_STRATEGY != 'none':
+            cat_steps.append(('imputer', SimpleImputer(strategy='most_frequent')))
+        cat_steps.append(('encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)))
+        cat_pipe = Pipeline(cat_steps)
+    elif ENCODING == 'one-hot':
+        cat_steps = []
+        if MISSING_STRATEGY != 'none':
+            cat_steps.append(('imputer', SimpleImputer(strategy='most_frequent')))
+        cat_steps.append(('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False)))
+        cat_pipe = Pipeline(cat_steps)
+    elif MISSING_STRATEGY != 'none':
+        cat_pipe = Pipeline([('imputer', SimpleImputer(strategy='most_frequent'))])
     else:
-        cat_pipe = Pipeline([
-            ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False)),
-        ])
+        cat_pipe = 'passthrough'
     transformers = []
     if numeric_cols:
         transformers.append(('num', num_pipe, numeric_cols))
@@ -2202,4 +2214,3 @@ async def recommend_models(
         suggestions=suggestions,
         notes=extra_notes,
     )
-
