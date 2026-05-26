@@ -98,6 +98,29 @@ def _same_plan_subscription_is_current(profile: dict[str, Any], requested_plan: 
     return False
 
 
+def _interval_for_price_id(price_id: str) -> str | None:
+    settings = get_settings()
+    if price_id in {settings.paddle_price_id_pro_yearly, settings.paddle_price_id_business_yearly}:
+        return "yearly"
+    if price_id in {settings.paddle_price_id_pro, settings.paddle_price_id_business}:
+        return "monthly"
+    return None
+
+
+def _same_price_subscription_is_current(profile: dict[str, Any], requested_price_id: str) -> bool:
+    requested_plan = plan_from_paddle_price_id(requested_price_id).value
+    requested_interval = _interval_for_price_id(requested_price_id)
+    current_price_id = str(profile.get("paddle_price_id") or "").strip()
+    if current_price_id:
+        return current_price_id == requested_price_id and _same_plan_subscription_is_current(profile, requested_plan)
+
+    current_interval = str(profile.get("billing_interval") or "").strip().lower()
+    if current_interval and requested_interval and current_interval != requested_interval:
+        return False
+
+    return _same_plan_subscription_is_current(profile, requested_plan)
+
+
 async def create_checkout(
     *,
     user_id: str,
@@ -111,11 +134,11 @@ async def create_checkout(
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     profile = profiles[0] if profiles else {}
     customer_id = profile.get("paddle_customer_id")
-    if _same_plan_subscription_is_current(profile, plan):
+    if _same_price_subscription_is_current(profile, price_id):
         raise HTTPException(
             status_code=409,
             detail=(
-                f"You are already subscribed to the {plan} plan. "
+                f"You are already subscribed to this {plan} {interval} plan. "
                 "You can change plans from billing settings when you want to upgrade or downgrade."
             ),
         )
@@ -223,6 +246,8 @@ async def apply_subscription_update(subscription: dict[str, Any]) -> None:
     payload: dict[str, Any] = {
         "paddle_customer_id": customer_id,
         "paddle_subscription_id": subscription_id,
+        "paddle_price_id": price_id,
+        "billing_interval": _interval_for_price_id(price_id),
         "plan": plan.value,
         "subscription_status": sub_status,
         "cancel_at_period_end": bool(subscription.get("scheduled_change")),
@@ -266,5 +291,15 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
     if plan_hint in ("pro", "business"):
         patch["plan"] = plan_hint
         patch["subscription_status"] = "active"
+
+    items = transaction.get("items") or []
+    if items:
+        first = items[0]
+        price_id = (first.get("price") or {}).get("id") or first.get("price_id")
+        if price_id:
+            patch["paddle_price_id"] = price_id
+            interval = _interval_for_price_id(price_id)
+            if interval:
+                patch["billing_interval"] = interval
 
     await rest_patch("profiles", f"id=eq.{user_id}", patch)
