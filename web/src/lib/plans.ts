@@ -29,7 +29,7 @@ export interface PlanDefinition {
 }
 
 /** Generative path: suggest only; save + CSV download are free */
-export const GENERATIVE_PIPELINE_CREDITS = 2 + 3 + 4 + 8 + 2; // analyze+clean+suggest+train+recommend ≈ 19
+export const GENERATIVE_PIPELINE_CREDITS = 2 + 3 + 4 + 8 + 2; // analyze + clean + suggest + train + recommend = 19
 
 export const YEARLY_DISCOUNT_PERCENT = 17;
 
@@ -39,15 +39,15 @@ export const PLANS: PlanDefinition[] = [
     name: "Free",
     priceMonthly: 0,
     priceYearly: 0,
-    description: "Explore the pipeline with a monthly credit allowance.",
+    description: "Try Acutize with starter credits before choosing a paid plan.",
     monthlyCredits: 60,
     maxFileMb: 10,
     datasetsLabel: "Up to 3 active datasets",
     features: [
       "60 credits one-time (until you upgrade)",
-      "≈3 full pipeline runs on your starter pack",
-      "10 MB max file size · up to 20,000 rows per step",
-      "Instant profile, EDA & quality views (free to browse)",
+      "About 3 full pipeline runs on your starter pack",
+      "10 MB max file size, up to 20,000 rows per step",
+      "Instant profile, EDA and quality views (free to browse)",
       "Pay credits only when you run a step (clean, suggest, train, etc.)",
       "Community support",
     ],
@@ -66,12 +66,12 @@ export const PLANS: PlanDefinition[] = [
     datasetsLabel: "Up to 12 active datasets",
     features: [
       "450 credits per month",
-      "≈23 generative pipeline runs per month",
-      "30 MB max file size · full file on pipeline steps",
+      "About 23 generative pipeline runs per month",
+      "30 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows (all plans)",
       "All instant-preview models",
-      "Generate features (save & CSV download included)",
-      "PDF/ZIP export & model ideas on demand",
+      "Generate features (save and CSV download included)",
+      "PDF/ZIP export and model ideas on demand",
       "Priority email support",
     ],
     buttonText: "Upgrade to Pro",
@@ -89,12 +89,12 @@ export const PLANS: PlanDefinition[] = [
     datasetsLabel: "Unlimited active datasets",
     features: [
       "2,500 credits per month",
-      "≈130+ generative pipeline runs per month",
-      "75 MB max file size · full file on pipeline steps",
+      "About 130+ generative pipeline runs per month",
+      "75 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows (all plans)",
       "Unlimited concurrent datasets",
       "Everything in Pro + Python full-training export script",
-      "Priority support via Paddle billing portal",
+      "Priority support through the billing portal",
     ],
     buttonText: "Upgrade to Business",
     badge: null,
@@ -119,7 +119,7 @@ export function formatPlanPrice(plan: PlanDefinition, interval: BillingInterval)
 
 export const CREDIT_USAGE_ROWS = [
   { action: "Analyze / profile", credits: 2 },
-  { action: "Clean & encode", credits: 3 },
+  { action: "Clean and encode", credits: 3 },
   { action: "Generate features", credits: 4 },
   { action: "Instant model preview", credits: 8 },
   { action: "Model ideas", credits: 2 },

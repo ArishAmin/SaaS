@@ -11,11 +11,12 @@ const PLANS = [
     id: "hobby",
     name: "Free",
     price: "$0",
-    description: "Explore the pipeline with a monthly credit allowance.",
+    description: "Try Acutize with starter credits before choosing a paid plan.",
     features: [
       "60 credits one-time (until you upgrade)",
-      "10 MB max file size · up to 20,000 rows per step",
-      "Instant profile, EDA & quality views",
+      "10 MB max file size, up to 20,000 rows per step",
+      "Up to 3 active datasets",
+      "Instant profile, EDA and quality views",
       "Pay credits only when you run a step",
       "Community support",
     ],
@@ -32,9 +33,11 @@ const PLANS = [
     description: "For practitioners running multiple datasets each month.",
     features: [
       "450 credits per month",
-      "30 MB max file size · full file on pipeline steps",
+      "About 23 generative pipeline runs per month",
+      "30 MB max file size, full file on pipeline steps",
+      "Up to 12 active datasets",
       "All instant-preview models",
-      "Generate features & export tools",
+      "PDF reports, ZIP export, and feature tools",
       "Priority email support",
     ],
     buttonText: "Get Pro Now",
@@ -50,10 +53,12 @@ const PLANS = [
     description: "Unlimited datasets and larger files within server-safe limits.",
     features: [
       "2,500 credits per month",
-      "75 MB max file size · full file on pipeline steps",
+      "About 130+ generative pipeline runs per month",
+      "75 MB max file size, full file on pipeline steps",
       "Unlimited concurrent datasets",
+      "Everything in Pro",
       "Python full-training export script",
-      "Priority support via Paddle",
+      "Priority support through the billing portal",
     ],
     buttonText: "Scale with Business",
     badge: null,
@@ -75,11 +80,11 @@ export function PricingSection({ hideCTA = false }: PricingSectionProps) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-20">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
-            {hideCTA ? "Choose Your Path" : "Simple, Transparent Pricing"}
+            {hideCTA ? "Start free, upgrade when you need more" : "Simple, Transparent Pricing"}
           </h2>
           <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-            {hideCTA 
-              ? "Explore our comprehensive plans tailored for every data journey." 
+            {hideCTA
+              ? "Free credits are enough to test the workflow. Paid plans add monthly credits, larger files, and more active datasets."
               : "Choose the plan that's right for your data journey. Start free, upgrade as you grow."}
           </p>
         </div>
