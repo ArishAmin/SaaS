@@ -59,6 +59,21 @@ def _user_id_from_auth_header(request: Request) -> str | None:
         return None
 
 
+def _should_log_request(method: str, path: str, status_code: int) -> bool:
+    # Always keep failures, even for otherwise noisy endpoints.
+    if status_code >= 400:
+        return True
+    if method.upper() == "OPTIONS":
+        return False
+    if path in {
+        "/health",
+        "/profiles/me",
+        "/telemetry/client-log",
+    }:
+        return False
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize connection pool
@@ -114,7 +129,7 @@ async def request_logging_middleware(request: Request, call_next):
             await refund_tracked_credits(reason=f"http_{response.status_code}")
         duration_ms = int((time.perf_counter() - start) * 1000)
         response.headers["X-Request-ID"] = request_id
-        if request.url.path != "/health":
+        if _should_log_request(request.method, request.url.path, response.status_code):
             asyncio.create_task(
                 log_to_supabase(
                     level="info",
