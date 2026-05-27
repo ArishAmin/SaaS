@@ -4,6 +4,17 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const defaultApiBaseUrl = "http://127.0.0.1:8001";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl;
+const sessionStorageKey = "acutize_session_id";
+
+function getClientSessionId() {
+  if (typeof window === "undefined") return undefined;
+  let id = window.sessionStorage.getItem(sessionStorageKey);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.sessionStorage.setItem(sessionStorageKey, id);
+  }
+  return id;
+}
 
 export type InsufficientCreditsDetail = {
   code: "insufficient_credits";
@@ -83,6 +94,7 @@ async function sendApiErrorLog(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
+        "X-Acutize-Session-ID": getClientSessionId() ?? "",
       },
       body: JSON.stringify({
         level: "error",
@@ -115,6 +127,10 @@ export async function apiRequest<T>(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  const clientSessionId = getClientSessionId();
+  if (clientSessionId) {
+    headers["X-Acutize-Session-ID"] = clientSessionId;
+  }
 
   if (session?.access_token) {
     headers["Authorization"] = `Bearer ${session.access_token}`;

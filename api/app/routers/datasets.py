@@ -1578,11 +1578,11 @@ async def suggest_generative_features(
     user_id = user["user_id"]
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    await require_credits(user_id, CreditAction.FEATURE_SUGGEST, dataset_id=str(dataset_id))
 
     cleaned_path = dataset.get("cleaned_storage_path")
     if not cleaned_path:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dataset must be cleaned first")
+    await require_credits(user_id, CreditAction.FEATURE_SUGGEST, dataset_id=str(dataset_id))
     
     raw = await storage_download("datasets", cleaned_path)
     df = await _load_dataset_bytes(user_id, raw, "csv", LoadMode.PIPELINE)

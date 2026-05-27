@@ -231,6 +231,13 @@ create table if not exists public.app_logs (
   status_code integer,
   duration_ms integer,
   request_id text,
+  source text not null default 'api',
+  action text,
+  dataset_id uuid,
+  session_id text,
+  user_agent text,
+  ip_hash text,
+  path_template text,
   metadata jsonb,
   error jsonb,
   created_at timestamptz not null default now()
@@ -239,6 +246,13 @@ create table if not exists public.app_logs (
 create index if not exists app_logs_created_at_idx on public.app_logs (created_at desc);
 create index if not exists app_logs_event_idx on public.app_logs (event);
 create index if not exists app_logs_user_id_idx on public.app_logs (user_id);
+create index if not exists app_logs_request_id_idx on public.app_logs (request_id);
+create index if not exists app_logs_source_created_at_idx on public.app_logs (source, created_at desc);
+create index if not exists app_logs_action_created_at_idx on public.app_logs (action, created_at desc);
+create index if not exists app_logs_dataset_id_created_at_idx on public.app_logs (dataset_id, created_at desc);
+create index if not exists app_logs_session_id_created_at_idx on public.app_logs (session_id, created_at desc);
+create index if not exists app_logs_status_created_at_idx on public.app_logs (status_code, created_at desc);
+create index if not exists app_logs_path_template_created_at_idx on public.app_logs (path_template, created_at desc);
 
 alter table public.app_logs enable row level security;
 
@@ -248,4 +262,3 @@ create policy "app_logs_select_own"
 on public.app_logs
 for select
 using (auth.uid() = user_id);
-

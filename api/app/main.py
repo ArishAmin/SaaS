@@ -1,10 +1,12 @@
 import logging
+import hashlib
 import time
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from jose import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -25,10 +27,36 @@ from .core.config import get_settings
 from .core.rate_limit import limiter
 from .core.http_client import HTTPClient
 from .middleware.security import SecurityHeadersMiddleware
-from .services.app_logs import log_to_supabase
+from .services.app_logs import log_to_supabase, reset_log_context, set_log_context
 from .services.credits import begin_credit_tracking, end_credit_tracking, refund_tracked_credits
 
 logger = logging.getLogger(__name__)
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else None
+
+
+def _hash_ip(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    return hashlib.sha256(ip.encode("utf-8")).hexdigest()[:32]
+
+
+def _user_id_from_auth_header(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization") or ""
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        claims = jwt.get_unverified_claims(token)
+        sub = claims.get("sub")
+        return str(sub) if sub else None
+    except Exception:
+        return None
 
 
 @asynccontextmanager
@@ -63,30 +91,56 @@ async def request_logging_middleware(request: Request, call_next):
     request_id = str(uuid4())
     start = time.perf_counter()
     credit_token = begin_credit_tracking()
+    user_id = _user_id_from_auth_header(request)
+    user_agent = request.headers.get("user-agent")
+    ip_hash = _hash_ip(_client_ip(request))
+    session_id = request.headers.get("x-acutize-session-id")
+    log_token = set_log_context(
+        request_id=request_id,
+        source="api",
+        method=request.method,
+        path=request.url.path,
+        user_id=user_id,
+        user_agent=user_agent,
+        ip_hash=ip_hash,
+        session_id=session_id,
+    )
 
     try:
         response = await call_next(request)
+        route = request.scope.get("route")
+        path_template = getattr(route, "path", None)
         if response.status_code >= 400:
             await refund_tracked_credits(reason=f"http_{response.status_code}")
         duration_ms = int((time.perf_counter() - start) * 1000)
         response.headers["X-Request-ID"] = request_id
-        asyncio.create_task(
-            log_to_supabase(
-                level="info",
-                event="http_request",
-                message="Request completed",
-                method=request.method,
-                path=request.url.path,
-                status_code=response.status_code,
-                duration_ms=duration_ms,
-                request_id=request_id,
-                metadata={"query": request.url.query},
+        if request.url.path != "/health":
+            asyncio.create_task(
+                log_to_supabase(
+                    level="info",
+                    event="http_request",
+                    message="Request completed",
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                    user_id=user_id,
+                    user_agent=user_agent,
+                    ip_hash=ip_hash,
+                    session_id=session_id,
+                    path_template=path_template,
+                    metadata={
+                        "query": request.url.query,
+                    },
+                )
             )
-        )
         return response
     except Exception as exc:
         await refund_tracked_credits(reason="unhandled_exception")
         duration_ms = int((time.perf_counter() - start) * 1000)
+        route = request.scope.get("route")
+        path_template = getattr(route, "path", None)
         logger.exception(
             "Unhandled API error request_id=%s method=%s path=%s duration_ms=%s",
             request_id,
@@ -104,7 +158,12 @@ async def request_logging_middleware(request: Request, call_next):
                 status_code=500,
                 duration_ms=duration_ms,
                 request_id=request_id,
+                user_id=user_id,
+                user_agent=user_agent,
+                ip_hash=ip_hash,
+                session_id=session_id,
                 error={"type": exc.__class__.__name__, "detail": str(exc)},
+                path_template=path_template,
                 metadata={"query": request.url.query},
             )
         )
@@ -122,6 +181,7 @@ async def request_logging_middleware(request: Request, call_next):
             },
         )
     finally:
+        reset_log_context(log_token)
         end_credit_tracking(credit_token)
 
 # 3. Rate Limiting layer (Middle)

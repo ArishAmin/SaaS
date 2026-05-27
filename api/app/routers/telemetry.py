@@ -18,6 +18,7 @@ class ClientLogRequest(BaseModel):
     message: str = Field(default="", max_length=5000)
     stack: str | None = Field(default=None, max_length=15000)
     page: str | None = Field(default=None, max_length=2000)
+    component: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/client-log", status_code=status.HTTP_202_ACCEPTED)
@@ -34,6 +35,9 @@ async def client_log(
         user_id=str(user["user_id"]),
         method=request.method,
         path=request.url.path,
-        metadata={"page": payload.page, "stack": payload.stack},
+        source="client",
+        session_id=request.headers.get("x-acutize-session-id"),
+        user_agent=request.headers.get("user-agent"),
+        metadata={"page": payload.page, "stack": payload.stack, "component": payload.component},
     )
     return {"accepted": True}

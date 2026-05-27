@@ -21,5 +21,7 @@ async def log_user_activity(
         event="user_activity",
         user_id=user_id,
         message=action,
+        action=action,
+        dataset_id=dataset_id,
         metadata=payload_meta,
     )

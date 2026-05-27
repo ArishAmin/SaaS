@@ -6,6 +6,16 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const defaultApiBaseUrl = "http://127.0.0.1:8001";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl;
+const sessionStorageKey = "acutize_session_id";
+
+function getClientSessionId() {
+  let id = window.sessionStorage.getItem(sessionStorageKey);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.sessionStorage.setItem(sessionStorageKey, id);
+  }
+  return id;
+}
 
 async function sendClientLog(payload: {
   level: string;
@@ -25,6 +35,7 @@ async function sendClientLog(payload: {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
+        "X-Acutize-Session-ID": getClientSessionId(),
       },
       body: JSON.stringify(payload),
     });

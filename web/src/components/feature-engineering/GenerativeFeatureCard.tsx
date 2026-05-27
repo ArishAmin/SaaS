@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { DatasetNameDisplay } from "@/components/datasets/DatasetNameDisplay";
 import { apiGetBlob } from "@/lib/apiDownload";
-import { hasEngineeredDataset, type DatasetPipelineMeta } from "@/lib/datasetPipeline";
+import { hasCleanedDataset, hasEngineeredDataset, type DatasetPipelineMeta } from "@/lib/datasetPipeline";
 
 type GenerativeFeature = {
   name: string;
@@ -59,6 +59,7 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
   const [isFinalized, setIsFinalized] = useState(false);
   const [savedFeatureKey, setSavedFeatureKey] = useState("");
   const [engineeredAt, setEngineeredAt] = useState<string | null>(null);
+  const [needsCleaning, setNeedsCleaning] = useState(false);
 
   const hasUnsavedChanges = useMemo(() => {
     if (!isFinalized) return selectedFeatures.length > 0;
@@ -77,6 +78,7 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
         }
       >(`/datasets/${datasetId}`, { method: "GET" });
 
+      setNeedsCleaning(!(hasCleanedDataset(meta) || hasEngineeredDataset(meta)));
       const saved = meta.engineered_params?.generative_features;
       if (hasEngineeredDataset(meta) && Array.isArray(saved) && saved.length > 0) {
         setSelectedFeatures(saved);
@@ -92,6 +94,7 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
       return [];
     } catch {
       setIsFinalized(false);
+      setNeedsCleaning(false);
       return [];
     } finally {
       setMetaLoading(false);
@@ -100,6 +103,10 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
 
   async function onSuggestFeatures(alreadySelected?: GenerativeFeature[]) {
     if (!datasetId) return;
+    if (needsCleaning) {
+      toast.message("Clean this dataset before generating features.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiRequest<SuggestResponse>(`/datasets/${datasetId}/feature-generation/suggest`, {
@@ -110,7 +117,13 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
       setSuggestions(res.suggested_features.filter((s) => !currentlySelectedNames.has(s.name)));
       setHasSuggestedOnce(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to fetch feature suggestions");
+      const message = err instanceof Error ? err.message : "Failed to fetch feature suggestions";
+      if (message.toLowerCase().includes("dataset must be cleaned")) {
+        setNeedsCleaning(true);
+        toast.message("Clean this dataset before generating features.");
+      } else {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -185,9 +198,34 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
   const recommendHref = datasetId
     ? `/dashboard/recommendation?datasetId=${encodeURIComponent(datasetId)}`
     : "/dashboard/recommendation";
+  const cleanHref = datasetId
+    ? `/dashboard/cleaning?datasetId=${encodeURIComponent(datasetId)}`
+    : "/dashboard/cleaning";
 
   return (
     <div className="flex flex-col gap-6">
+      {!metaLoading && needsCleaning ? (
+        <Card className="border-amber-500/35 bg-amber-500/8">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="space-y-1">
+                <CardTitle className="text-lg">Clean dataset first</CardTitle>
+                <CardDescription>
+                  Clean this dataset before generating features so Acutize can use stable columns, missing-value handling,
+                  and your selected target.
+                </CardDescription>
+              </div>
+              <Button asChild className="gap-2 shrink-0">
+                <Link href={cleanHref}>
+                  Clean dataset
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -200,7 +238,7 @@ export function GenerativeFeatureCard({ datasetId }: { datasetId?: string }) {
             </div>
             <Button
               onClick={() => onSuggestFeatures()}
-              disabled={loading || !datasetId}
+              disabled={loading || !datasetId || needsCleaning}
               className="gap-2 shrink-0"
             >
               <Sparkles className="h-4 w-4" />
