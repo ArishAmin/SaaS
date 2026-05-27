@@ -42,15 +42,15 @@ from ..services.supabase import (
     storage_list,
 )
 from ..core.billing import get_user_plan_limits
-from ..core.data_limits import LoadMode, PREVIEW_MAX_ROWS, get_user_data_limits
-from ..services.credits import CreditAction, check_dataset_slot, require_credits
+from ..core.data_limits import LoadMode, PREVIEW_MAX_ROWS, enforce_file_size, get_user_data_limits
+from ..services.credits import CreditAction, check_dataset_slot, refund_credits, require_credits
 from ..services.dataframe_io import load_for_user, read_tabular_bytes, sample_for_preview
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 _rate = get_settings().rate_limit_per_minute
 
 
-AllowedExtension = Literal["csv", "json", "xls", "xlsx"]
+AllowedExtension = Literal["csv", "json", "xls", "xlsx", "parquet"]
 
 
 class CreateDatasetRequest(BaseModel):
@@ -58,6 +58,7 @@ class CreateDatasetRequest(BaseModel):
     storage_path: str = Field(min_length=1)
     original_file_name: str = Field(min_length=1)
     original_extension: AllowedExtension
+    file_size_bytes: int = Field(ge=0)
     mime_type: str | None = None
 
 
@@ -200,6 +201,18 @@ def _analyze_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _schema_dataframe(df: pd.DataFrame) -> dict[str, Any]:
+    from ..core.data_limits import MAX_COLUMNS
+
+    df = df.iloc[:, :MAX_COLUMNS]
+    return {
+        "column_types": [
+            {"column": str(col), "type": _detect_column_type(df[col])}
+            for col in df.columns
+        ]
+    }
+
+
 def _parse_file_bytes(data: bytes, extension: AllowedExtension, max_rows: int) -> pd.DataFrame:
     """Backward-compatible wrapper; prefer load_for_user() for plan-aware caps."""
     return read_tabular_bytes(data, extension, max_rows)
@@ -233,7 +246,7 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
 
 
 def _quick_evaluation_is_displayable(quick: Any) -> bool:
-    """Reject stale/placeholder quick evaluations (e.g. all-zero metrics, no models)."""
+    """Reject stale/placeholder quick evaluations that have no usable model metrics."""
     if not quick or not isinstance(quick, dict):
         return False
     models = quick.get("models")
@@ -246,7 +259,7 @@ def _quick_evaluation_is_displayable(quick: Any) -> bool:
             continue
         for key in metric_keys:
             val = metrics.get(key)
-            if isinstance(val, (int, float)) and val > 0:
+            if isinstance(val, (int, float)) and not np.isnan(float(val)) and not np.isinf(float(val)):
                 return True
     return False
 
@@ -336,6 +349,49 @@ def _safe_train_test_split(X, y, test_size=0.25, random_state=42, stratify=None)
     return train_test_split(X, y, test_size=eff_test_size, random_state=random_state, stratify=None)
 
 
+def _prepare_training_matrix(df: pd.DataFrame, target_column: str) -> tuple[pd.DataFrame, pd.Series]:
+    if target_column not in df.columns:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found")
+
+    df = df.dropna(subset=[target_column]).copy()
+    if df.empty:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column contains all missing rows.")
+
+    y = df[target_column]
+    X = df.drop(columns=[target_column])
+    if X.empty:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No feature columns available for training.")
+
+    bool_cols = X.select_dtypes(include=["bool"]).columns.tolist()
+    if bool_cols:
+        X[bool_cols] = X[bool_cols].astype(int)
+
+    datetime_cols = [c for c in X.columns if pd.api.types.is_datetime64_any_dtype(X[c])]
+    for col in datetime_cols:
+        X[col] = X[col].view("int64") / 1e9
+
+    numeric_cols = X.select_dtypes(include=["number"]).columns.tolist()
+    categorical_cols = [c for c in X.columns if c not in numeric_cols]
+
+    from sklearn.impute import SimpleImputer
+
+    if numeric_cols:
+        X[numeric_cols] = SimpleImputer(strategy="median").fit_transform(X[numeric_cols])
+    if categorical_cols:
+        X[categorical_cols] = SimpleImputer(strategy="most_frequent").fit_transform(X[categorical_cols].astype(str))
+        X = pd.get_dummies(X, columns=categorical_cols, drop_first=True, dummy_na=False)
+
+    X = X.apply(pd.to_numeric, errors="coerce")
+    if X.isna().any().any():
+        X = pd.DataFrame(
+            SimpleImputer(strategy="median").fit_transform(X),
+            columns=X.columns,
+            index=X.index,
+        )
+
+    return X, y
+
+
 @router.post("")
 @limiter.limit(_rate)
 async def create_dataset_record(request: Request, 
@@ -354,8 +410,11 @@ async def create_dataset_record(request: Request,
     _validate_storage_path(user_id, storage_path)
 
     # Strictly avoid trusting client-provided mime types; only extension is used to parse.
-    if req.original_extension not in ("csv", "json", "xls", "xlsx"):
+    if req.original_extension not in ("csv", "json", "xls", "xlsx", "parquet"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file extension")
+
+    data_limits = await get_user_data_limits(user_id)
+    enforce_file_size(req.file_size_bytes, data_limits)
 
     try:
         created = await rest_insert(
@@ -597,6 +656,35 @@ async def get_analysis(
     }
 
 
+@router.get("/{dataset_id}/schema")
+@limiter.limit(_rate)
+async def get_dataset_schema(
+    request: Request,
+    dataset_id: UUID,
+    user=Depends(get_current_user),
+) -> dict[str, Any]:
+    dataset = await _get_dataset(dataset_id)
+    user_id = user["user_id"]
+    if str(dataset["user_id"]) != str(user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    analysis_json = dataset.get("analysis_json")
+    if isinstance(analysis_json, dict) and analysis_json.get("column_types"):
+        return {
+            "dataset_id": str(dataset_id),
+            "columns": {"column_types": analysis_json.get("column_types") or []},
+            "source": "analysis",
+        }
+
+    raw = await storage_download("datasets", dataset["storage_path"])
+    df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
+    return {
+        "dataset_id": str(dataset_id),
+        "columns": _schema_dataframe(df),
+        "source": "raw",
+    }
+
+
 @router.post("/{dataset_id}/eda")
 @limiter.limit(_rate)
 async def get_eda_report(
@@ -771,7 +859,7 @@ async def get_dataset_quality(
 
 def _get_dataset_extension(dataset: dict[str, Any]) -> AllowedExtension:
     ext = dataset.get("original_extension")
-    if ext not in ("csv", "json", "xls", "xlsx"):
+    if ext not in ("csv", "json", "xls", "xlsx", "parquet"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid dataset extension")
     return ext  # type: ignore[return-value]
 
@@ -1082,9 +1170,7 @@ async def train_quick(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found in cleaned data")
 
     df = sample_for_preview(df, PREVIEW_MAX_ROWS)
-
-    y = df[target_column]
-    X = df.drop(columns=[target_column])
+    X, y = _prepare_training_matrix(df, target_column)
     feature_names = list(X.columns)
 
     is_numeric = pd.api.types.is_numeric_dtype(y)
@@ -1658,6 +1744,21 @@ ENCODING = {encoding!r}
 SCALING = {scaling!r}
 KEEP_FEATURES = {keep_features_py}
 
+def load_dataset(path: str) -> pd.DataFrame:
+    lower = path.lower()
+    if lower.endswith('.csv'):
+        return pd.read_csv(path)
+    if lower.endswith('.json'):
+        try:
+            return pd.read_json(path)
+        except ValueError:
+            return pd.read_json(path, lines=True)
+    if lower.endswith(('.xls', '.xlsx')):
+        return pd.read_excel(path)
+    if lower.endswith('.parquet'):
+        return pd.read_parquet(path)
+    raise ValueError('Unsupported file type. Use CSV, JSON, XLS, XLSX, or Parquet.')
+
 def build_preprocessor(numeric_cols, categorical_cols):
     numeric_impute = 'median' if MISSING_STRATEGY in ('median', 'drop') else 'mean'
     num_steps = []
@@ -1699,7 +1800,7 @@ def metrics(y_true, y_pred):
         'f1': float(f1_score(y_true, y_pred, average='weighted', zero_division=0)),
     }}
 
-df = pd.read_csv(RAW_DATA_PATH)
+df = load_dataset(RAW_DATA_PATH)
 df = df.dropna(subset=[TARGET_COLUMN])
 feature_cols = [c for c in df.columns if c != TARGET_COLUMN]
 if MISSING_STRATEGY == 'drop':

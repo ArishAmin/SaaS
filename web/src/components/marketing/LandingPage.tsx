@@ -24,7 +24,7 @@ const features = [
   {
     icon: Sparkles,
     title: "Instant Data Clarity",
-    description: "Profile your CSV, spot quality issues, and understand key columns before you spend credits.",
+    description: "Profile CSV, JSON, Excel, or Parquet data, spot quality issues, and understand key columns before you spend credits.",
   },
   {
     icon: Wand2,
@@ -71,10 +71,10 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
             <div className="text-center">
               <h1 className="mx-auto max-w-5xl text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl leading-[1.1] bg-clip-text text-transparent bg-linear-to-b from-zinc-900 via-zinc-800 to-zinc-600 dark:from-white dark:via-zinc-200 dark:to-zinc-500">
-                Turn messy CSVs <br className="hidden md:block" /> into clean, useful model insights.
+                Turn messy datasets <br className="hidden md:block" /> into clean, useful model insights.
               </h1>
               <p className="mx-auto mt-8 max-w-2xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Acutize helps you upload a dataset, clean it with guided controls, preview model performance, and export reports without writing scripts.
+                Acutize helps you upload tabular data, clean it with guided controls, preview model performance, and export reports without writing scripts.
               </p>
               <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Button size="lg" className="h-14 min-w-[220px] rounded-full text-base font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95" asChild>
@@ -142,7 +142,7 @@ export function LandingPage() {
                     {
                       step: "01",
                       title: "Secure Upload & Validation",
-                      content: "Upload your CSV to your account workspace. Acutize reads the structure and prepares it for analysis."
+                      content: "Upload a tabular dataset to your account workspace. Acutize reads the structure and prepares it for analysis."
                     },
                     {
                       step: "02",

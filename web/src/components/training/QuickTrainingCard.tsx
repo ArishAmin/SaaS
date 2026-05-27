@@ -63,7 +63,7 @@ function formatMetric(taskType: string, key: string, value: number) {
 
 function hasMeaningfulMetrics(evaluation: QuickEvaluation) {
   return evaluation.models.some((m) =>
-    Object.values(m.metrics ?? {}).some((v) => typeof v === "number" && v > 0)
+    Object.values(m.metrics ?? {}).some((v) => typeof v === "number" && Number.isFinite(v))
   );
 }
 
@@ -188,8 +188,8 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
     setFetchingCols(true);
     try {
       const res = await apiRequest<{ columns?: { column_types?: Array<{ column: string }> } }>(
-        `/datasets/${datasetId}/analysis`,
-        { method: "POST", body: { mode: "instant" } }
+        `/datasets/${datasetId}/schema`,
+        { method: "GET" }
       );
       const types = res.columns?.column_types || [];
       setColumns(types.map((c) => c.column));

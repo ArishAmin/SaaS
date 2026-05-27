@@ -16,6 +16,8 @@ pandas==2.3.3
 scikit-learn==1.7.2
 numpy==2.2.6
 openpyxl==3.1.5
+xlrd==2.0.2
+pyarrow==22.0.0
 
 # Auth & Security
 python-jose==3.5.0

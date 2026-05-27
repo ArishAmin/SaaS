@@ -13,6 +13,9 @@ pandas>=2.0
 numpy>=1.24
 scikit-learn>=1.3
 joblib>=1.3
+openpyxl>=3.1
+xlrd>=2.0
+pyarrow>=14.0
 # Optional (only if XGBoost was your best model):
 # xgboost>=2.0
 """
@@ -31,7 +34,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
         "  README.txt                          — This file",
         "  report/acutize-report.pdf         — Full project report (analysis, cleaning, models)",
         "  scripts/requirements-train.txt      — Python packages for training script",
-        "  scripts/cleaning_pipeline.py        — Reproduce cleaning on a NEW raw CSV (optional)",
+        "  scripts/cleaning_pipeline.py        — Reproduce cleaning on a new raw tabular file (optional)",
     ]
     if has_train_script:
         quick = dataset.get("quick_evaluation_json") or {}
@@ -56,7 +59,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
             "   Recommended:",
             "     • data/engineered.csv  (if you added features in acutize)",
             "     • data/cleaned.csv     (if you only cleaned)",
-            "     • Or your own raw CSV — then set APPLY_acutize_CLEANING = True",
+            "     • Or your own raw CSV, JSON, Excel, or Parquet file — then set APPLY_acutize_CLEANING = True",
             "4. In a terminal:",
             "     pip install -r scripts/requirements-train.txt",
             "     python scripts/train_full_model.py",

@@ -1,22 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { StepHint } from "@/components/ui/step-hint";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 type UploadResult =
   | { kind: "idle" }
   | { kind: "uploading"; progress: number }
-  | { kind: "analyzing" }
   | { kind: "done"; datasetId: string };
 
-const allowedExtensions = new Set(["csv", "json", "xls", "xlsx"]);
+type BillingAccount = {
+  plan_limits?: {
+    max_dataset_size_mb?: number;
+    max_concurrent_datasets?: number | null;
+  };
+  dataset_usage?: {
+    active_count?: number;
+    max_concurrent_datasets?: number | null;
+    can_upload_more?: boolean;
+  };
+};
+
+const allowedExtensions = new Set(["csv", "json", "xls", "xlsx", "parquet"]);
 
 function getFileExtension(name: string) {
   const parts = name.split(".");
@@ -62,23 +72,103 @@ function uploadToSignedUrl(opts: {
 export function DatasetUploadCard() {
   const [result, setResult] = useState<UploadResult>({ kind: "idle" });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [planMaxMb, setPlanMaxMb] = useState<number | null>(null);
+  const [datasetUsage, setDatasetUsage] = useState<BillingAccount["dataset_usage"] | null>(null);
+  const [checkingLimits, setCheckingLimits] = useState(false);
 
-  const maxMb = useMemo(() => {
-    const v = Number(process.env.NEXT_PUBLIC_DATASET_MAX_MB ?? 50);
-    return Number.isFinite(v) ? v : 50;
+  const fallbackMaxMb = useMemo(() => {
+    const v = Number(process.env.NEXT_PUBLIC_DATASET_MAX_MB ?? 10);
+    return Number.isFinite(v) ? v : 10;
   }, []);
+  const maxMb = planMaxMb ?? fallbackMaxMb;
   const maxBytes = maxMb * 1024 * 1024;
 
-  async function startUploadAndAnalyze(file: File) {
+  async function refreshAccount(mounted = true) {
+    return apiRequest<BillingAccount>("/billing/account")
+      .then((account) => {
+        const limit = account.plan_limits?.max_dataset_size_mb;
+        if (mounted && typeof limit === "number" && Number.isFinite(limit)) {
+          setPlanMaxMb(limit);
+        }
+        if (mounted) {
+          setDatasetUsage(account.dataset_usage ?? null);
+        }
+        return account;
+      })
+      .catch(() => {
+        if (mounted) {
+          setPlanMaxMb(null);
+          setDatasetUsage(null);
+        }
+        return null;
+      });
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    refreshAccount(mounted);
+    const handleDatasetChange = () => {
+      refreshAccount(mounted);
+    };
+    window.addEventListener("datasetDeleted", handleDatasetChange);
+    window.addEventListener("datasetUploaded", handleDatasetChange);
+    return () => {
+      mounted = false;
+      window.removeEventListener("datasetDeleted", handleDatasetChange);
+      window.removeEventListener("datasetUploaded", handleDatasetChange);
+    };
+  }, []);
+
+  function validateDatasetSlot(usage = datasetUsage): boolean {
+    if (usage?.can_upload_more === false) {
+      const max = usage.max_concurrent_datasets ?? usage.active_count;
+      toast.error(`Your plan allows up to ${max} active datasets. Delete one or upgrade for higher limits.`);
+      setSelectedFile(null);
+      return false;
+    }
+    return true;
+  }
+
+  function validateFile(file: File): boolean {
+    if (!validateDatasetSlot()) return false;
+    if (planMaxMb === null) {
+      toast.error("Checking your plan upload limit. Please try again in a moment.");
+      return false;
+    }
     const ext = getFileExtension(file.name);
     if (!allowedExtensions.has(ext)) {
-      toast.error("Unsupported file type. Use CSV, JSON, or Excel (XLS/XLSX).");
-      return;
+      setSelectedFile(null);
+      toast.error("Unsupported file type. Use CSV, JSON, Excel (XLS/XLSX), or Parquet.");
+      return false;
     }
     if (file.size > maxBytes) {
+      setSelectedFile(null);
       toast.error(`File too large (${formatBytes(file.size)}). Max for this plan is ${maxMb}MB.`);
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function chooseFile(file: File) {
+    if (!validateFile(file)) return;
+    setSelectedFile(file);
+  }
+
+  async function openFilePicker() {
+    if (checkingLimits || result.kind !== "idle") return;
+    setCheckingLimits(true);
+    const account = await refreshAccount();
+    try {
+      if (!validateDatasetSlot(account?.dataset_usage ?? datasetUsage)) return;
+      document.getElementById("file-upload")?.click();
+    } finally {
+      setCheckingLimits(false);
+    }
+  }
+
+  async function startUpload(file: File) {
+    if (!validateFile(file)) return;
+    const ext = getFileExtension(file.name);
 
     const supabase = getSupabaseBrowserClient();
     const { data, error: userErr } = await supabase.auth.getUser();
@@ -93,10 +183,12 @@ export function DatasetUploadCard() {
       return;
     }
 
+    let datasetId: string | null = null;
+
     try {
       setResult({ kind: "uploading", progress: 0 });
 
-      const datasetId = crypto.randomUUID();
+      datasetId = crypto.randomUUID();
       const storagePath = `${user.id}/datasets/${datasetId}/${file.name}`;
 
       // 1) Create dataset record server-side (for later analysis + RLS isolation).
@@ -107,6 +199,7 @@ export function DatasetUploadCard() {
           storage_path: storagePath,
           original_file_name: file.name,
           original_extension: ext,
+          file_size_bytes: file.size,
           mime_type: file.type,
         },
       });
@@ -124,19 +217,20 @@ export function DatasetUploadCard() {
         onProgress: (p) => setResult({ kind: "uploading", progress: p }),
       });
 
-      // 3) Trigger instant analyzer synchronously (backend will read from storage).
-      setResult({ kind: "analyzing" });
-      await apiRequest(`/datasets/${datasetId}/analyze`, { method: "POST", body: { mode: "instant" } });
-
-      toast.success("Dataset saved successfully!");
+      toast.success("Dataset saved. Choose Analyze, Clean, or Train when you're ready.");
       window.dispatchEvent(new CustomEvent("datasetUploaded"));
+      refreshAccount();
 
       // Instantly reset uploader state so the div disappears
       setSelectedFile(null);
       setResult({ kind: "idle" });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Upload/analyze failed";
+      const message = err instanceof Error ? err.message : "Upload failed";
       toast.error(message);
+      if (datasetId) {
+        apiRequest(`/datasets/${datasetId}`, { method: "DELETE" }).catch(() => undefined);
+      }
+      setSelectedFile(null);
       setResult({ kind: "idle" });
     }
   }
@@ -153,10 +247,11 @@ export function DatasetUploadCard() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
+            if (!validateDatasetSlot()) return;
             const f = e.dataTransfer.files?.[0];
-            if (f) setSelectedFile(f);
+            if (f) chooseFile(f);
           }}
-          onClick={() => document.getElementById("file-upload")?.click()}
+          onClick={openFilePicker}
         >
           <div className="rounded-full bg-primary/10 p-4 transition-transform group-hover:scale-105">
             <svg
@@ -177,7 +272,7 @@ export function DatasetUploadCard() {
           <div>
             <p className="text-base font-medium text-foreground">Click to choose a file or drag & drop</p>
             <p className="text-sm text-foreground/60 mt-1">
-              Supports CSV, JSON, XLS or XLSX up to {maxMb}MB
+              Supports CSV, JSON, XLS, XLSX, or Parquet up to {planMaxMb === null ? "your plan limit" : `${maxMb}MB`}
             </p>
           </div>
 
@@ -185,10 +280,12 @@ export function DatasetUploadCard() {
             id="file-upload"
             type="file"
             className="hidden"
-            accept=".csv,.json,.xls,.xlsx"
+            accept=".csv,.json,.xls,.xlsx,.parquet"
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) setSelectedFile(f);
+              if (f) chooseFile(f);
+              e.currentTarget.value = "";
             }}
           />
         </div>
@@ -201,7 +298,7 @@ export function DatasetUploadCard() {
                 <p className="text-xs text-foreground/70">{formatBytes(selectedFile.size)}</p>
               </div>
               {result.kind === "idle" ? (
-                <Button onClick={() => startUploadAndAnalyze(selectedFile)}>Save</Button>
+                <Button onClick={() => startUpload(selectedFile)}>Save</Button>
               ) : null}
             </div>
 
@@ -223,4 +320,3 @@ export function DatasetUploadCard() {
     </Card>
   );
 }
-

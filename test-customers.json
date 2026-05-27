@@ -1,0 +1,98 @@
+[
+  {
+    "customer_id": 1001,
+    "age": 25,
+    "income": 52000,
+    "city": "Austin",
+    "plan": "free",
+    "signup_channel": "organic",
+    "monthly_usage_hours": 12.5,
+    "support_tickets": 1,
+    "is_active": true,
+    "churned": false
+  },
+  {
+    "customer_id": 1002,
+    "age": 34,
+    "income": 83000,
+    "city": "Seattle",
+    "plan": "pro",
+    "signup_channel": "ads",
+    "monthly_usage_hours": 41.2,
+    "support_tickets": 0,
+    "is_active": true,
+    "churned": false
+  },
+  {
+    "customer_id": 1003,
+    "age": 42,
+    "income": 61000,
+    "city": "Chicago",
+    "plan": "free",
+    "signup_channel": "referral",
+    "monthly_usage_hours": 6.8,
+    "support_tickets": 3,
+    "is_active": false,
+    "churned": true
+  },
+  {
+    "customer_id": 1004,
+    "age": 29,
+    "income": null,
+    "city": "Miami",
+    "plan": "business",
+    "signup_channel": "organic",
+    "monthly_usage_hours": 55.1,
+    "support_tickets": 2,
+    "is_active": true,
+    "churned": false
+  },
+  {
+    "customer_id": 1005,
+    "age": 51,
+    "income": 124000,
+    "city": "New York",
+    "plan": "business",
+    "signup_channel": "partner",
+    "monthly_usage_hours": 72.4,
+    "support_tickets": 0,
+    "is_active": true,
+    "churned": false
+  },
+  {
+    "customer_id": 1006,
+    "age": 23,
+    "income": 41000,
+    "city": "Denver",
+    "plan": "free",
+    "signup_channel": "ads",
+    "monthly_usage_hours": null,
+    "support_tickets": 4,
+    "is_active": false,
+    "churned": true
+  },
+  {
+    "customer_id": 1007,
+    "age": 37,
+    "income": 96000,
+    "city": "Boston",
+    "plan": "pro",
+    "signup_channel": "referral",
+    "monthly_usage_hours": 38.7,
+    "support_tickets": 1,
+    "is_active": true,
+    "churned": false
+  },
+  {
+    "customer_id": 1008,
+    "age": 46,
+    "income": 72000,
+    "city": "Phoenix",
+    "plan": "free",
+    "signup_channel": "organic",
+    "monthly_usage_hours": 9.4,
+    "support_tickets": 2,
+    "is_active": true,
+    "churned": true
+  }
+]

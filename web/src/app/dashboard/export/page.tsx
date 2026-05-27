@@ -267,7 +267,7 @@ export default function ExportPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <InstructionList>
-              <li>Does not include raw CSV data — pair with the ZIP or individual CSV downloads.</li>
+              <li>Does not include raw uploaded data - pair with the ZIP or individual CSV downloads.</li>
               <li>Sections you have not run yet appear as &quot;Not run&quot;.</li>
               <li>For local full training steps, use the ZIP README and <code>train_full_model.py</code>.</li>
             </InstructionList>
@@ -289,7 +289,7 @@ export default function ExportPage() {
           <CardContent className="space-y-3">
             <InstructionList>
               <li>
-                Edit only <code>DATA_PATH</code> at the top of the script — path to the CSV you want to train on.
+                Edit only <code>DATA_PATH</code> at the top of the script - path to the tabular file you want to train on.
               </li>
               <li>
                 Recommended: <code>data/engineered.csv</code> or <code>data/cleaned.csv</code> from the ZIP (matches
@@ -352,7 +352,7 @@ export default function ExportPage() {
               <DownloadButton
                 label="Python cleaning script"
                 icon={Code}
-                description="Re-run imputation, encoding, and scaling on a new raw CSV outside Acutize."
+                description="Re-run imputation, encoding, and scaling on a new raw CSV, JSON, Excel, or Parquet file outside Acutize."
                 onClick={() => dl("python-code", "cleaning_pipeline.py")}
                 disabled={!hasCleaned}
                 loading={downloading === "python-code"}

@@ -59,7 +59,7 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
     if (!datasetId) return;
     setFetching(true);
     Promise.all([
-      apiRequest<AnalysisResponse>(`/datasets/${datasetId}/analysis`, { method: "POST", body: { mode: "instant" } }),
+      apiRequest<AnalysisResponse>(`/datasets/${datasetId}/schema`, { method: "GET" }),
       apiRequest<DatasetMeta>(`/datasets/${datasetId}`, { method: "GET" }).catch(() => null),
     ])
       .then(([res, meta]) => {
@@ -280,7 +280,7 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
 
               <div className="flex items-center gap-3 flex-wrap">
                 <Button onClick={onClean} disabled={loading || !analysis}>
-                  {loading ? "Cleaning..." : cleaned ? "✓ Cleaned" : "Run cleaning"}
+                  {loading ? "Cleaning..." : cleaned ? "Run cleaning again" : "Run cleaning"}
                 </Button>
                 {cleaned && !loading ? (
                   <p className="text-xs text-foreground/60">Running again will replace the latest cleaned version.</p>

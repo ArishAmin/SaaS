@@ -5,7 +5,7 @@ from ..core.auth import get_current_user
 from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled
 from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
-from ..core.billing import get_plan_limits
+from ..core.billing import get_user_plan_limits
 from ..services.credits import (
     CREDIT_ACTION_LABELS,
     CREDIT_COSTS,
@@ -75,7 +75,8 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
     profile = profiles[0] if profiles else {"plan": "hobby", "subscription_status": "none"}
     plan_name = profile.get("plan", "hobby")
     data_limits = await get_user_data_limits(user_id)
-    limits = get_plan_limits(plan_name)
+    limits = await get_user_plan_limits(user_id)
+    dataset_rows = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
 
     credit_rows = [
         {
@@ -94,13 +95,21 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
         "subscription_status": profile.get("subscription_status", "none"),
         "credits": await get_credits_summary(user_id),
         "plan_limits": {
-            "max_dataset_size_mb": limits.max_dataset_size_mb,
+            "max_dataset_size_mb": data_limits.max_dataset_size_mb,
             "max_concurrent_datasets": limits.max_concurrent_datasets,
             "monthly_credits": limits.monthly_credits,
             "allowed_models": limits.allowed_models,
             "max_compute_seconds": limits.max_compute_seconds,
             "support_priority": limits.support_priority,
             "credits_refresh_mode": credits_refresh_mode(plan_name),
+        },
+        "dataset_usage": {
+            "active_count": len(dataset_rows),
+            "max_concurrent_datasets": limits.max_concurrent_datasets,
+            "can_upload_more": (
+                limits.max_concurrent_datasets is None
+                or len(dataset_rows) < limits.max_concurrent_datasets
+            ),
         },
         "data_limits": {
             "pipeline_max_rows": data_limits.pipeline_max_rows,

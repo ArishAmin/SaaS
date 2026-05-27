@@ -13,6 +13,19 @@ from typing import Any
 from fpdf import FPDF
 
 
+def _break_long_tokens(text: str, chunk: int = 56) -> str:
+    lines: list[str] = []
+    for line in text.split("\n"):
+        tokens: list[str] = []
+        for token in line.split(" "):
+            if len(token) <= chunk:
+                tokens.append(token)
+                continue
+            tokens.extend(token[i : i + chunk] for i in range(0, len(token), chunk))
+        lines.append(" ".join(tokens))
+    return "\n".join(lines)
+
+
 def _pdf_safe(text: str, max_len: int = 24_000) -> str:
     if text is None:
         return ""
@@ -22,7 +35,12 @@ def _pdf_safe(text: str, max_len: int = 24_000) -> str:
     # fpdf core fonts are Latin-1 only; strip other characters (filenames, metrics, etc.)
     s = unicodedata.normalize("NFKD", s)
     s = s.encode("ascii", "ignore").decode("ascii")
-    return s.replace("\r", " ").strip() or "-"
+    return _break_long_tokens(s.replace("\r", " ").strip()) or "-"
+
+
+def _fit_cell_text(text: Any, max_chars: int) -> str:
+    safe = _pdf_safe(str(text), max_len=max_chars + 20).replace("\n", " ")
+    return safe if len(safe) <= max_chars else safe[: max_chars - 3] + "..."
 
 
 def _now_iso() -> str:
@@ -77,10 +95,12 @@ class _ReportPDF(FPDF):
     def body_text(self, text: str) -> None:
         self.set_font("helvetica", "", 10)
         self.set_text_color(40, 40, 40)
+        self.set_x(self.l_margin)
         self.multi_cell(0, 5, _pdf_safe(text))
 
     def bullet(self, text: str) -> None:
         self.set_font("helvetica", "", 9)
+        self.set_x(self.l_margin)
         safe = _pdf_safe(text)
         if len(safe) > 110:
             safe = safe[:107] + "..."
@@ -90,10 +110,11 @@ class _ReportPDF(FPDF):
         self.set_font("helvetica", "", 9)
         col_w = (self.w - self.l_margin - self.r_margin) / 2
         for label, value in rows:
+            self.set_x(self.l_margin)
             self.set_font("helvetica", "B", 9)
-            self.cell(col_w, 6, _pdf_safe(label), border=0)
+            self.cell(col_w, 6, _fit_cell_text(label, 36), border=0)
             self.set_font("helvetica", "", 9)
-            self.cell(col_w, 6, _pdf_safe(value), new_x="LMARGIN", new_y="NEXT")
+            self.cell(col_w, 6, _fit_cell_text(value, 68), new_x="LMARGIN", new_y="NEXT")
 
 
 def build_dataset_report_pdf(

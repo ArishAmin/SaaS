@@ -75,6 +75,7 @@ export function DatasetsTable() {
       await apiRequest(`/datasets/${deletingDatasetId}`, { method: "DELETE" });
       toast.success("Dataset deleted.");
       setRows((prev) => prev.filter((r) => r.dataset_id !== deletingDatasetId));
+      window.dispatchEvent(new CustomEvent("datasetDeleted"));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Delete failed";
       toast.error(message);

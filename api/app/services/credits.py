@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar, Token
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
@@ -45,6 +46,11 @@ CREDIT_ACTION_LABELS: dict[str, str] = {
     CreditAction.EXPORT_BUNDLE.value: "ZIP export bundle",
     CreditAction.FEATURE_ENGINEER.value: "Feature selection (apply)",
 }
+
+_request_credit_charges: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "request_credit_charges",
+    default=None,
+)
 
 
 def _utcnow() -> datetime:
@@ -258,7 +264,74 @@ async def require_credits(
         balance_after=new_balance,
         dataset_id=dataset_id,
     )
+    charges = _request_credit_charges.get()
+    if charges is not None:
+        charges.append(
+            {
+                "user_id": user_id,
+                "action": action,
+                "credits": cost,
+                "dataset_id": dataset_id,
+            }
+        )
     return cost
+
+
+async def refund_credits(
+    user_id: str,
+    action: CreditAction,
+    credits: int,
+    *,
+    dataset_id: str | None = None,
+    reason: str = "action_failed",
+) -> None:
+    if not is_billing_enforcement_enabled() or credits <= 0:
+        return
+
+    try:
+        profile = await _get_profile(user_id)
+        balance = int(profile.get("credits_balance") or 0)
+        new_balance = balance + credits
+        await rest_patch(
+            "profiles",
+            f"id=eq.{user_id}",
+            {
+                "credits_balance": new_balance,
+                "updated_at": _utcnow().isoformat(),
+            },
+        )
+        await _log_transaction(
+            user_id=user_id,
+            action=f"{action.value}_refund",
+            credits_delta=credits,
+            balance_after=new_balance,
+            dataset_id=dataset_id,
+            metadata={"reason": reason},
+        )
+    except Exception:
+        # Refund logging must never hide the original action error.
+        pass
+
+
+def begin_credit_tracking() -> Token[list[dict[str, Any]] | None]:
+    return _request_credit_charges.set([])
+
+
+async def refund_tracked_credits(*, reason: str) -> None:
+    charges = _request_credit_charges.get() or []
+    while charges:
+        charge = charges.pop()
+        await refund_credits(
+            str(charge["user_id"]),
+            charge["action"],
+            int(charge["credits"]),
+            dataset_id=charge.get("dataset_id"),
+            reason=reason,
+        )
+
+
+def end_credit_tracking(token: Token[list[dict[str, Any]] | None]) -> None:
+    _request_credit_charges.reset(token)
 
 
 async def check_dataset_slot(user_id: str, current_count: int) -> None:
@@ -276,7 +349,7 @@ async def check_dataset_slot(user_id: str, current_count: int) -> None:
                 "code": "dataset_limit",
                 "message": (
                     f"Your plan allows up to {limits.max_concurrent_datasets} active datasets. "
-                    "Delete one or upgrade to Business for unlimited datasets."
+                    "Delete one or upgrade for higher limits."
                 ),
             },
         )

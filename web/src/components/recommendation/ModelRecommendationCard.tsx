@@ -55,10 +55,7 @@ export function ModelRecommendationCard({ datasetId }: { datasetId?: string }) {
     setColumnsLoading(true);
 
     Promise.all([
-      apiRequest<AnalysisResponse>(`/datasets/${datasetId}/analysis`, {
-        method: "POST",
-        body: { mode: "instant" },
-      }).catch(() => null),
+      apiRequest<AnalysisResponse>(`/datasets/${datasetId}/schema`, { method: "GET" }).catch(() => null),
       apiRequest<DatasetMeta>(`/datasets/${datasetId}`, { method: "GET" }).catch(() => null),
     ])
       .then(([analysis, meta]) => {

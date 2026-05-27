@@ -25,6 +25,7 @@ from .core.rate_limit import limiter
 from .core.http_client import HTTPClient
 from .middleware.security import SecurityHeadersMiddleware
 from .services.app_logs import log_to_supabase
+from .services.credits import begin_credit_tracking, end_credit_tracking, refund_tracked_credits
 
 
 @asynccontextmanager
@@ -58,9 +59,12 @@ def rate_limit_handler(_request, _exc):
 async def request_logging_middleware(request: Request, call_next):
     request_id = str(uuid4())
     start = time.perf_counter()
+    credit_token = begin_credit_tracking()
 
     try:
         response = await call_next(request)
+        if response.status_code >= 400:
+            await refund_tracked_credits(reason=f"http_{response.status_code}")
         duration_ms = int((time.perf_counter() - start) * 1000)
         response.headers["X-Request-ID"] = request_id
         asyncio.create_task(
@@ -78,6 +82,7 @@ async def request_logging_middleware(request: Request, call_next):
         )
         return response
     except Exception as exc:
+        await refund_tracked_credits(reason="unhandled_exception")
         duration_ms = int((time.perf_counter() - start) * 1000)
         asyncio.create_task(
             log_to_supabase(
@@ -106,6 +111,8 @@ async def request_logging_middleware(request: Request, call_next):
                 "request_id": request_id,
             },
         )
+    finally:
+        end_credit_tracking(credit_token)
 
 # 3. Rate Limiting layer (Middle)
 app.state.limiter = limiter

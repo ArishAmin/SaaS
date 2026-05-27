@@ -35,7 +35,7 @@ export default function PrivacyPage() {
             <p className="mb-2">We collect the following categories of information:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li><strong>Account Information:</strong> Your name and email address when you register.</li>
-              <li><strong>Uploaded Data:</strong> Files (CSV, Excel, JSON) that you upload to use our analysis and training features. These files are stored in a private, encrypted cloud partition linked exclusively to your account.</li>
+              <li><strong>Uploaded Data:</strong> Files (CSV, Excel, JSON, Parquet) that you upload to use our analysis and training features. These files are stored in a private, encrypted cloud partition linked exclusively to your account.</li>
               <li><strong>Usage Data:</strong> Anonymised platform interactions (e.g., features used, session duration) to help us improve the product. We do not sell this data.</li>
               <li><strong>Communication:</strong> If you contact us via our support form or email, we retain those messages to respond and improve our service quality.</li>
             </ul>

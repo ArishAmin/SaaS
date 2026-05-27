@@ -152,7 +152,7 @@ Acutize — Full local training script
 Generated for: {dataset.get("original_file_name", "your dataset")}
 
 WHAT TO DO (only one required edit):
-  1. Set DATA_PATH below to the CSV you want to train on.
+  1. Set DATA_PATH below to the tabular file you want to train on.
   2. Run:  pip install -r requirements-train.txt
   3. Run:  python train_full_model.py
 
@@ -205,6 +205,22 @@ SCALING = {scaling!r}
 
 # Preview snapshot (sample-based; this script uses the full file)
 PREVIEW_SUMMARY = {preview_json!r}
+
+
+def load_dataset(path: str) -> pd.DataFrame:
+    lower = path.lower()
+    if lower.endswith(".csv"):
+        return pd.read_csv(path)
+    if lower.endswith(".json"):
+        try:
+            return pd.read_json(path)
+        except ValueError:
+            return pd.read_json(path, lines=True)
+    if lower.endswith((".xls", ".xlsx")):
+        return pd.read_excel(path)
+    if lower.endswith(".parquet"):
+        return pd.read_parquet(path)
+    raise ValueError("Unsupported file type. Use CSV, JSON, XLS, XLSX, or Parquet.")
 
 
 def apply_acutize_cleaning(df: pd.DataFrame) -> pd.DataFrame:
@@ -261,7 +277,7 @@ def apply_acutize_cleaning(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     print("Loading:", DATA_PATH)
-    df = pd.read_csv(DATA_PATH)
+    df = load_dataset(DATA_PATH)
     if TARGET_COLUMN not in df.columns:
         raise ValueError(f"Target {{TARGET_COLUMN}} not in columns: {{list(df.columns)[:20]}}...")
 

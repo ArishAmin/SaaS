@@ -11,7 +11,6 @@ import { AnalysisCharts } from "@/components/analyzer/AnalysisCharts";
 import { AutoEdaReport } from "@/components/analyzer/AutoEdaReport";
 import { DatasetQualityCard } from "@/components/analyzer/DatasetQualityCard";
 import { PdfReportButton } from "@/components/reports/PdfReportButton";
-import { StepHint } from "@/components/ui/step-hint";
 import { DatasetNameDisplay } from "@/components/datasets/DatasetNameDisplay";
 
 type ColumnType = { column: string; type: string };
@@ -40,6 +39,7 @@ export type InstantAnalysis = {
 
 export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
   const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
   const [analysis, setAnalysis] = useState<InstantAnalysis | null>(null);
 
   const empty = useMemo(() => !datasetId, [datasetId]);
@@ -59,7 +59,11 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
       } catch (err: unknown) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : "Failed to load analysis";
-        toast.error(message);
+        if (message.toLowerCase().includes("analysis not ready")) {
+          setAnalysis(null);
+        } else {
+          toast.error(message);
+        }
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -70,6 +74,27 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
       mounted = false;
     };
   }, [datasetId]);
+
+  async function runAnalysis() {
+    if (!datasetId) return;
+    setRunning(true);
+    try {
+      const data = await apiRequest<{ dataset_id: string; status: string; analysis: InstantAnalysis["columns"] }>(
+        `/datasets/${datasetId}/analyze`,
+        { method: "POST", body: { mode: "instant" } }
+      );
+      setAnalysis({
+        dataset_id: data.dataset_id,
+        columns: data.analysis,
+      });
+      toast.success("Analysis complete.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Analysis failed";
+      toast.error(message);
+    } finally {
+      setRunning(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,6 +154,31 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {!loading && !analysis && !empty ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Analysis has not been run yet</CardTitle>
+            <CardDescription>
+              Run analysis when you want the full profile, charts, quality score, and report-ready summary. You can still
+              go directly to cleaning, model ideas, or training from the dataset actions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button onClick={runAnalysis} disabled={running || !datasetId}>
+              {running ? "Running analysis..." : "Run analysis"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                (window.location.href = `/dashboard/cleaning?datasetId=${encodeURIComponent(datasetId ?? "")}`)
+              }
+            >
+              Go to cleaning
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       {analysis ? (
@@ -244,4 +294,3 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
     </div>
   );
 }
-
