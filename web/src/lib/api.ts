@@ -134,7 +134,16 @@ export async function apiRequest<T>(
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
-      timeout: timeout ?? (path.includes("/analyze") || path.includes("/clean") ? 120000 : 30000),
+      timeout:
+        timeout ??
+        (path.includes("/analyze") ||
+        path.includes("/clean") ||
+        path.includes("/train-quick") ||
+        path.includes("/recommend") ||
+        path.includes("/report/pdf") ||
+        path.includes("/export")
+          ? 120000
+          : 30000),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Check if backend is running on 8001";
