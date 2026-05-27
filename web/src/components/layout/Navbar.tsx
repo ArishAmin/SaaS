@@ -17,12 +17,18 @@ export function Navbar() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then((res: any) => {
-      setIsLoggedIn(!!res?.data?.session);
-    });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      setIsLoggedIn(!!session);
+    const refreshLoginState = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsLoggedIn(!!user);
+    };
+
+    refreshLoginState();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      refreshLoginState();
     });
 
     return () => subscription.unsubscribe();

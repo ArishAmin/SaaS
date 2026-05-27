@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!data.session) {
+  if (!user) {
     redirect("/login");
   }
 
   return <DashboardShell>{children}</DashboardShell>;
 }
-
