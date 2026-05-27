@@ -108,11 +108,13 @@ async def storage_upload(
     if not settings.supabase_service_role_key or not settings.supabase_url:
         raise RuntimeError("Supabase configuration missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
 
+    api_key = settings.supabase_service_role_key.split("\n")[0].strip()
+    supabase_url = settings.supabase_url.split("\n")[0].strip().rstrip("/")
     encoded_path = urllib.parse.quote(object_path, safe="")
-    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{bucket}/{encoded_path}"
+    url = f"{supabase_url}/storage/v1/object/{bucket}/{encoded_path}"
     headers = {
-        "apikey": settings.supabase_service_role_key,
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+        "apikey": api_key,
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": content_type,
         "x-upsert": "true",
     }
