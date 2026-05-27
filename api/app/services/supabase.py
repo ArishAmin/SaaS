@@ -114,8 +114,11 @@ async def storage_upload(
         "apikey": settings.supabase_service_role_key,
         "Authorization": f"Bearer {settings.supabase_service_role_key}",
         "Content-Type": content_type,
+        "x-upsert": "true",
     }
     client = HTTPClient.get_client()
     res = await client.put(url, headers=headers, content=content)
-    res.raise_for_status()
-
+    if res.status_code >= 400:
+        raise RuntimeError(
+            f"Supabase storage upload failed ({res.status_code}) for {bucket}/{object_path}: {res.text[:500]}"
+        )

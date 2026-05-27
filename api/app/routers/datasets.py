@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import time
 import asyncio
 from typing import Any, Literal
@@ -48,6 +49,7 @@ from ..services.dataframe_io import load_for_user, read_tabular_bytes, sample_fo
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 _rate = get_settings().rate_limit_per_minute
+logger = logging.getLogger(__name__)
 
 
 AllowedExtension = Literal["csv", "json", "xls", "xlsx", "parquet"]
@@ -943,12 +945,14 @@ async def clean_dataset(
     user_id = user["user_id"]
     await require_credits(user_id, CreditAction.CLEAN, dataset_id=str(dataset_id))
 
+    logger.info("clean_dataset start dataset_id=%s user_id=%s", dataset_id, user_id)
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     target_column = payload.target_column
 
+    logger.info("clean_dataset download_raw dataset_id=%s storage_path=%s", dataset_id, dataset.get("storage_path"))
     raw = await storage_download("datasets", dataset["storage_path"])
     udl = await get_user_data_limits(user_id)
     if len(raw) > udl.max_file_bytes:
@@ -956,7 +960,14 @@ async def clean_dataset(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large for cleaning (max {udl.max_dataset_size_mb} MB on your plan).",
         )
+    logger.info(
+        "clean_dataset parse_raw dataset_id=%s extension=%s raw_bytes=%s",
+        dataset_id,
+        dataset.get("original_extension"),
+        len(raw),
+    )
     df = await _load_dataset_bytes(user_id, raw, _get_dataset_extension(dataset), LoadMode.PIPELINE)
+    logger.info("clean_dataset parsed dataset_id=%s rows=%s cols=%s", dataset_id, len(df), len(df.columns))
 
     if target_column not in df.columns:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found")
@@ -1017,6 +1028,17 @@ async def clean_dataset(
         scaling=scaling,
     )
 
+    logger.info(
+        "clean_dataset transform dataset_id=%s rows=%s numeric_cols=%s categorical_cols=%s mode=%s missing=%s encoding=%s scaling=%s",
+        dataset_id,
+        len(df),
+        len(numeric_cols),
+        len(categorical_cols),
+        payload.mode,
+        missing_strategy,
+        encoding,
+        scaling,
+    )
     X_transformed = await asyncio.to_thread(preprocessor.fit_transform, X)
     X_df, _ = _extract_cleaned_features_and_names(
         preprocessor, X_transformed, numeric_cols, categorical_cols
@@ -1029,6 +1051,7 @@ async def clean_dataset(
         return df.to_csv(index=False).encode("utf-8")
 
     csv_bytes = await asyncio.to_thread(_to_csv_bytes, cleaned_df)
+    logger.info("clean_dataset csv_ready dataset_id=%s cleaned_bytes=%s", dataset_id, len(csv_bytes))
     if len(csv_bytes) > settings.cleaned_max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -1038,6 +1061,7 @@ async def clean_dataset(
     cleaned_storage_path = f"{user_id}/datasets/{dataset_id}/cleaned.csv"
 
     # Upload cleaned dataset to private storage (service role).
+    logger.info("clean_dataset upload_cleaned dataset_id=%s cleaned_path=%s", dataset_id, cleaned_storage_path)
     await storage_upload(
         "datasets",
         cleaned_storage_path,
@@ -1045,6 +1069,7 @@ async def clean_dataset(
         content_type="text/csv",
     )
 
+    logger.info("clean_dataset patch_metadata dataset_id=%s", dataset_id)
     await rest_patch(
         "datasets",
         where_query=f"dataset_id=eq.{dataset_id}&select=dataset_id",
@@ -1071,6 +1096,7 @@ async def clean_dataset(
             # Auto-delete is best-effort and should not fail cleaning response.
             pass
 
+    logger.info("clean_dataset completed dataset_id=%s", dataset_id)
     await log_user_activity(
         user_id=str(user_id),
         action="dataset_cleaned",

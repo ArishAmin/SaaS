@@ -1,3 +1,4 @@
+import logging
 import time
 from uuid import uuid4
 
@@ -26,6 +27,8 @@ from .core.http_client import HTTPClient
 from .middleware.security import SecurityHeadersMiddleware
 from .services.app_logs import log_to_supabase
 from .services.credits import begin_credit_tracking, end_credit_tracking, refund_tracked_credits
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -84,6 +87,13 @@ async def request_logging_middleware(request: Request, call_next):
     except Exception as exc:
         await refund_tracked_credits(reason="unhandled_exception")
         duration_ms = int((time.perf_counter() - start) * 1000)
+        logger.exception(
+            "Unhandled API error request_id=%s method=%s path=%s duration_ms=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
         asyncio.create_task(
             log_to_supabase(
                 level="error",
