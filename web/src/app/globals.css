@@ -38,3 +38,29 @@ body {
   font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+select,
+.theme-select {
+  color-scheme: light;
+  background-color: #ffffff;
+  color: #111111;
+}
+
+select option,
+.theme-select option {
+  background-color: #ffffff;
+  color: #111111;
+}
+
+html.dark select,
+html.dark .theme-select {
+  color-scheme: dark;
+  background-color: #111113;
+  color: #fafafa;
+}
+
+html.dark select option,
+html.dark .theme-select option {
+  background-color: #111113;
+  color: #fafafa;
+}

@@ -120,7 +120,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
   return (
     <div
       className={cn(
-        "absolute z-50 mt-1 w-full min-w-[8rem] overflow-hidden rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-md animate-in fade-in-0 zoom-in-95",
+        "absolute z-50 mt-1 w-full min-w-[8rem] overflow-hidden rounded-md border border-black/10 bg-white text-zinc-950 shadow-md animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50",
         className
       )}
     >
@@ -149,8 +149,8 @@ export function SelectItem({ value, children, className, disabled }: SelectItemP
       className={cn(
         "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-3 pr-8 text-sm outline-none",
         selected
-          ? "bg-foreground/10 font-medium"
-          : "hover:bg-foreground/5",
+          ? "bg-zinc-100 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
+          : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800",
         disabled && "pointer-events-none opacity-50",
         className
       )}

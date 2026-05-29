@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DatasetNameDisplay } from "@/components/datasets/DatasetNameDisplay";
 import { cn } from "@/lib/utils";
 
-const selectCls = "flex h-9 w-full rounded-md border border-black/10 bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-black/20";
+const selectCls = "theme-select flex h-9 w-full rounded-md border border-black/10 px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10";
 
 type AnalysisResponse = {
   dataset_id: string;

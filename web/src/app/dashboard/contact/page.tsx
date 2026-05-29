@@ -133,7 +133,7 @@ export default function ContactPage() {
 
               <div className="space-y-1.5">
                 <label htmlFor="subject" className="text-sm font-medium">Topic</label>
-                <select id="subject" className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
+                <select id="subject" className="theme-select flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50">
                   <option value="enterprise" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Enterprise Sales</option>
                   <option value="support" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Technical Support</option>
                   <option value="bug" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Bug Report</option>

@@ -37,7 +37,7 @@ type DatasetMeta = {
 };
 
 const selectCls =
-  "flex h-9 w-full rounded-md border border-black/10 bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-black/20";
+  "theme-select flex h-9 w-full rounded-md border border-black/10 px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10";
 
 export function ModelRecommendationCard({ datasetId }: { datasetId?: string }) {
   const [loading, setLoading] = useState(false);
