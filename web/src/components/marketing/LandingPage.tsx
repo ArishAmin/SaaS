@@ -23,33 +23,33 @@ import { Navbar } from "@/components/layout/Navbar";
 const features = [
   {
     icon: Sparkles,
-    title: "Instant Data Clarity",
-    description: "Profile CSV, JSON, Excel, or Parquet data, spot quality issues, and understand key columns before you spend credits.",
+    title: "Preview Any Tabular File",
+    description: "Upload CSV, Excel, JSON, or Parquet files and quickly understand rows, columns, data types, and quality issues.",
   },
   {
     icon: Wand2,
-    title: "Flexible No-Code Cleaning",
-    description: "Fix missing values, choose encoding and scaling options, or leave steps as none when you only need one change.",
+    title: "Clean Data Without Scripts",
+    description: "Handle missing values, duplicates, encoding, and scaling with guided controls instead of writing cleaning code.",
   },
   {
     icon: Zap,
-    title: "Fast Model Preview",
-    description: "Compare instant model results on your dataset and quickly see which direction is worth exploring.",
+    title: "Test Model Direction",
+    description: "Run quick model previews on your dataset to see useful metrics before investing time in a deeper workflow.",
   },
   {
     icon: BarChart3,
-    title: "Reports You Can Share",
-    description: "Generate clear PDF reports and export bundles for stakeholders, teammates, or your own records.",
+    title: "Export Files and Reports",
+    description: "Download cleaned datasets, PDF reports, and export bundles you can share, archive, or review later.",
   },
   {
     icon: ShieldCheck,
-    title: "Private Workspaces",
-    description: "Keep datasets tied to each account with authenticated access and secure file handling.",
+    title: "Private Dataset Workspace",
+    description: "Keep uploaded datasets tied to your account with authenticated access and secure file handling.",
   },
   {
     icon: Rocket,
-    title: "Built for Momentum",
-    description: "Clean, preview, export, and revisit your latest cleaned version without rebuilding the workflow from scratch.",
+    title: "Continue Where You Left Off",
+    description: "Return to cleaned versions, run another cleaning pass, train again, or export results without starting over.",
   },
 ];
 
@@ -71,10 +71,10 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
             <div className="text-center">
               <h1 className="mx-auto max-w-5xl text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl leading-[1.1] bg-clip-text text-transparent bg-linear-to-b from-zinc-900 via-zinc-800 to-zinc-600 dark:from-white dark:via-zinc-200 dark:to-zinc-500">
-                Turn messy datasets <br className="hidden md:block" /> into clean, useful model insights.
+                Clean, analyze, and test models on your datasets.
               </h1>
               <p className="mx-auto mt-8 max-w-2xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Acutize helps you upload tabular data, clean it with guided controls, preview model performance, and export reports without writing scripts.
+                Upload CSV, Excel, JSON, or Parquet files. Preview your data, fix common issues, run quick model tests, and export clean files or reports without writing scripts.
               </p>
               <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Button size="lg" className="h-14 min-w-[220px] rounded-full text-base font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95" asChild>
@@ -84,15 +84,15 @@ export function LandingPage() {
                   <Link href="#how-it-works">See How It Works</Link>
                 </Button>
               </div>
-              <div className="mt-10 flex items-center justify-center gap-8 text-sm font-medium text-zinc-400 dark:text-zinc-500">
+              <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No credit card to start
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> 60 starter credits
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> CSV, Excel, JSON, Parquet
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Reports & exports
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Cleaned files and reports
                 </div>
               </div>
             </div>
@@ -104,10 +104,10 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-3xl mx-auto mb-20">
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
-                Everything you need to move from raw data to answers
+                From messy file to clean output in minutes
               </h2>
               <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-                A focused workflow for cleaning datasets, testing model direction, and packaging results for the next step.
+                A no-code data workflow for inspecting, cleaning, analyzing, testing models, and exporting datasets from one browser workspace.
               </p>
             </div>
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -135,29 +135,29 @@ export function LandingPage() {
             <div className="lg:flex lg:items-center lg:gap-16">
               <div className="lg:w-1/2">
                 <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white mb-8">
-                  A simple path from <br /> upload to export.
+                  A simple dataset workflow from upload to export.
                 </h2>
                 <div className="space-y-12">
                   {[
                     {
                       step: "01",
-                      title: "Secure Upload & Validation",
-                      content: "Upload a tabular dataset to your account workspace. Acutize reads the structure and prepares it for analysis."
+                      title: "Upload Your Dataset",
+                      content: "Start with CSV, Excel, JSON, or Parquet files. Acutize reads the structure so you can inspect the data before changing it."
                     },
                     {
                       step: "02",
-                      title: "Profile Before Spending Credits",
-                      content: "Review dataset shape, columns, and quality signals first so you know what needs attention."
+                      title: "Preview Data Quality",
+                      content: "Review rows, columns, data types, missing values, duplicates, and quality signals before running analysis or models."
                     },
                     {
                       step: "03",
-                      title: "Guided Cleaning Controls",
-                      content: "Choose only the cleaning steps you need, then download the cleaned CSV or generate a report."
+                      title: "Clean Only What You Need",
+                      content: "Fill missing values, handle duplicates, choose encoding or scaling, or leave steps as none when you only need one fix."
                     },
                     {
                       step: "04",
-                      title: "Model Preview & Export",
-                      content: "Run an instant model preview, compare useful metrics, and export PDF or ZIP assets when you are ready."
+                      title: "Analyze, Test, and Export",
+                      content: "Run quick model previews, review useful metrics, then export cleaned files, PDF reports, or ZIP bundles when you are ready."
                     },
                   ].map((item) => (
                     <div key={item.step} className="flex gap-6">
@@ -198,19 +198,19 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-8 relative z-10">
             <div className="max-w-3xl">
               <h2 className="text-4xl font-extrabold tracking-tight mb-8">
-                Spend less time preparing data, <br /> more time deciding what to do with it.
+                Stop switching between spreadsheets, notebooks, and reporting tools.
               </h2>
               <div className="grid gap-10 sm:grid-cols-2">
                 <div>
-                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Make cleaner decisions</h4>
+                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Built for real data prep</h4>
                   <p className="text-zinc-400 dark:text-zinc-500 text-sm leading-relaxed">
-                    See dataset issues early, clean with transparent settings, and keep the latest cleaned version available when you return.
+                    See dataset issues early, clean with transparent settings, and keep the latest cleaned version available when you come back.
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Ready to share</h4>
+                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Useful for more than one task</h4>
                   <p className="text-zinc-400 dark:text-zinc-500 text-sm leading-relaxed">
-                    Turn analysis into professional reports and export bundles that are easy to send, archive, or review later.
+                    Use the same workspace for data cleaning, no-code analysis, quick ML model testing, exports, and reports.
                   </p>
                 </div>
               </div>
@@ -227,10 +227,10 @@ export function LandingPage() {
         <section className="py-32">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center">
             <h2 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6">
-              Ready to clean your first dataset?
+              Ready to try Acutize with your first dataset?
             </h2>
             <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10">
-              Start with 60 free credits, then upgrade only when your data work grows.
+              Start free, upload a file, preview the workflow, and see whether it fits the way you work with data.
             </p>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button size="lg" className="h-14 min-w-[240px] rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/25 transition-all hover:scale-105" asChild>

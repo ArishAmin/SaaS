@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Acutize",
-  description: "AI-powered dataset preparation and model testing",
+  title: "Acutize | Clean, Analyze, and Train Models on Datasets Online",
+  description:
+    "Upload CSV, Excel, JSON, or Parquet files to clean data, analyze patterns, preview ML models, and export reports from your browser.",
   icons: {
     icon: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
     apple: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
