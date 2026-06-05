@@ -42,8 +42,7 @@ export default function RootLayout({
               (function() {
                 try {
                   var stored = localStorage.getItem('acutize:theme');
-                  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                  var theme = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
+                  var theme = stored === 'dark' || stored === 'light' ? stored : 'dark';
                   if (theme === 'dark') document.documentElement.classList.add('dark');
                 } catch(e) {}
               })();

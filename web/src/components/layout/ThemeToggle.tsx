@@ -11,7 +11,7 @@ const STORAGE_KEY = "acutize:theme";
 
 export function ThemeToggle() {
   // Render deterministically on first paint to avoid hydration mismatch.
-  const [mode, setMode] = useState<ThemeMode>("light");
+  const [mode, setMode] = useState<ThemeMode>("dark");
 
   useLayoutEffect(() => {
     document.documentElement.classList.toggle("dark", mode === "dark");
@@ -19,8 +19,7 @@ export function ThemeToggle() {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial: ThemeMode = stored === "dark" || stored === "light" ? stored : prefersDark ? "dark" : "light";
+    const initial: ThemeMode = stored === "dark" || stored === "light" ? stored : "dark";
     queueMicrotask(() => {
       setMode(initial);
     });
@@ -30,19 +29,9 @@ export function ThemeToggle() {
       if (nextStored === "dark" || nextStored === "light") setMode(nextStored);
     };
 
-    // Only follow system changes when user hasn't explicitly selected a theme yet.
-    const shouldFollowSystem = stored !== "dark" && stored !== "light";
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onMediaChange = () => {
-      if (!shouldFollowSystem) return;
-      setMode(media.matches ? "dark" : "light");
-    };
-
     window.addEventListener("storage", onStorage);
-    media.addEventListener("change", onMediaChange);
     return () => {
       window.removeEventListener("storage", onStorage);
-      media.removeEventListener("change", onMediaChange);
     };
   }, []);
 
