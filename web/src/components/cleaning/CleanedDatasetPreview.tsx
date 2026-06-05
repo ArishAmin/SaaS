@@ -66,11 +66,16 @@ export function CleanedDatasetPreview({ datasetId }: { datasetId: string }) {
         <p className="text-sm font-medium">Cleaned Dataset Preview (First 10 rows)</p>
       </div>
       <div className="overflow-auto max-h-[350px]">
-        <table className="w-full text-xs text-left whitespace-nowrap">
-          <thead className="bg-black/5 dark:bg-white/5 sticky top-0 z-10 shadow-sm shadow-black/5">
+        <table className="w-full text-xs text-left whitespace-nowrap border-separate border-spacing-0">
+          <thead>
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="px-4 py-2 font-medium">{h}</th>
+                <th
+                  key={i}
+                  className="sticky top-0 z-20 bg-zinc-100 px-4 py-2 font-medium shadow-sm shadow-black/10 dark:bg-zinc-900"
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>

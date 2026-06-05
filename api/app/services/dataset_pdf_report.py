@@ -50,7 +50,15 @@ def _now_iso() -> str:
 def _fmt_ts(v: Any) -> str:
     if not v:
         return "Not completed"
-    return _pdf_safe(str(v))
+    raw = str(v).strip()
+    try:
+        normalized = raw.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return _pdf_safe(raw)
 
 
 def _best_from_run(results: Any) -> str:

@@ -305,6 +305,10 @@ export function DatasetUploadCard() {
               </div>
               {result.kind === "idle" ? (
                 <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={openFilePicker}>
+                    Update
+                  </Button>
+                  <Button onClick={() => startUpload(selectedFile)}>Save</Button>
                   <Button
                     variant="destructive"
                     size="icon"
@@ -313,10 +317,6 @@ export function DatasetUploadCard() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" onClick={openFilePicker}>
-                    Update
-                  </Button>
-                  <Button onClick={() => startUpload(selectedFile)}>Save</Button>
                 </div>
               ) : null}
             </div>
