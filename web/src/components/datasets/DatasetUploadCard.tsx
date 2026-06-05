@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,8 +12,12 @@ import { Input } from "@/components/ui/input";
 
 type UploadResult =
   | { kind: "idle" }
-  | { kind: "uploading"; progress: number }
-  | { kind: "done"; datasetId: string };
+  | { kind: "uploading"; fileId: string; progress: number };
+
+type PendingFile = {
+  id: string;
+  file: File;
+};
 
 type BillingAccount = {
   plan_limits?: {
@@ -72,7 +76,8 @@ function uploadToSignedUrl(opts: {
 
 export function DatasetUploadCard() {
   const [result, setResult] = useState<UploadResult>({ kind: "idle" });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<PendingFile[]>([]);
+  const replacingFileIdRef = useRef<string | null>(null);
   const [planMaxMb, setPlanMaxMb] = useState<number | null>(null);
   const [datasetUsage, setDatasetUsage] = useState<BillingAccount["dataset_usage"] | null>(null);
   const [checkingLimits, setCheckingLimits] = useState(false);
@@ -124,7 +129,7 @@ export function DatasetUploadCard() {
     if (usage?.can_upload_more === false) {
       const max = usage.max_concurrent_datasets ?? usage.active_count;
       toast.error(`Your plan allows up to ${max} active datasets. Delete one or upgrade for higher limits.`);
-      setSelectedFile(null);
+      setSelectedFiles([]);
       return false;
     }
     return true;
@@ -138,41 +143,60 @@ export function DatasetUploadCard() {
     }
     const ext = getFileExtension(file.name);
     if (!allowedExtensions.has(ext)) {
-      setSelectedFile(null);
       toast.error("Unsupported file type. Use CSV, JSON, Excel (XLS/XLSX), or Parquet.");
       return false;
     }
     if (file.size > maxBytes) {
-      setSelectedFile(null);
       toast.error(`File too large (${formatBytes(file.size)}). Max for this plan is ${maxMb}MB.`);
       return false;
     }
     return true;
   }
 
+  function newPendingFile(file: File): PendingFile {
+    return {
+      id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+      file,
+    };
+  }
+
   function chooseFile(file: File) {
     if (!validateFile(file)) return;
-    setSelectedFile(file);
+
+    setSelectedFiles((prev) => {
+      const replacingFileId = replacingFileIdRef.current;
+      if (replacingFileId) {
+        const replacement = newPendingFile(file);
+        return prev.map((pending) => (pending.id === replacingFileId ? replacement : pending));
+      }
+      return [...prev, newPendingFile(file)];
+    });
+    replacingFileIdRef.current = null;
   }
 
-  function clearSelectedFile() {
+  function clearSelectedFile(fileId: string) {
     if (result.kind !== "idle") return;
-    setSelectedFile(null);
+    setSelectedFiles((prev) => prev.filter((pending) => pending.id !== fileId));
   }
 
-  async function openFilePicker() {
+  async function openFilePicker(replaceFileId?: string) {
     if (checkingLimits || result.kind !== "idle") return;
+    replacingFileIdRef.current = replaceFileId ?? null;
     setCheckingLimits(true);
     const account = await refreshAccount();
     try {
-      if (!validateDatasetSlot(account?.dataset_usage ?? datasetUsage)) return;
+      if (!validateDatasetSlot(account?.dataset_usage ?? datasetUsage)) {
+        replacingFileIdRef.current = null;
+        return;
+      }
       document.getElementById("file-upload")?.click();
     } finally {
       setCheckingLimits(false);
     }
   }
 
-  async function startUpload(file: File) {
+  async function startUpload(pendingFile: PendingFile) {
+    const { file } = pendingFile;
     if (!validateFile(file)) return;
     const ext = getFileExtension(file.name);
 
@@ -192,7 +216,7 @@ export function DatasetUploadCard() {
     let datasetId: string | null = null;
 
     try {
-      setResult({ kind: "uploading", progress: 0 });
+      setResult({ kind: "uploading", fileId: pendingFile.id, progress: 0 });
 
       datasetId = crypto.randomUUID();
       const storagePath = `${user.id}/datasets/${datasetId}/${file.name}`;
@@ -220,15 +244,14 @@ export function DatasetUploadCard() {
       await uploadToSignedUrl({
         signedUrl: signedData.signedUrl,
         file,
-        onProgress: (p) => setResult({ kind: "uploading", progress: p }),
+        onProgress: (p) => setResult({ kind: "uploading", fileId: pendingFile.id, progress: p }),
       });
 
       toast.success("Dataset saved. Choose Analyze, Clean, or Train when you're ready.");
       window.dispatchEvent(new CustomEvent("datasetUploaded"));
       refreshAccount();
 
-      // Instantly reset uploader state so the div disappears
-      setSelectedFile(null);
+      setSelectedFiles((prev) => prev.filter((pending) => pending.id !== pendingFile.id));
       setResult({ kind: "idle" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -236,7 +259,7 @@ export function DatasetUploadCard() {
       if (datasetId) {
         apiRequest(`/datasets/${datasetId}`, { method: "DELETE" }).catch(() => undefined);
       }
-      setSelectedFile(null);
+      setSelectedFiles((prev) => prev.filter((pending) => pending.id !== pendingFile.id));
       setResult({ kind: "idle" });
     }
   }
@@ -254,10 +277,11 @@ export function DatasetUploadCard() {
           onDrop={(e) => {
             e.preventDefault();
             if (!validateDatasetSlot()) return;
-            const f = e.dataTransfer.files?.[0];
-            if (f) chooseFile(f);
+            const files = e.dataTransfer.files;
+            const file = files?.[0];
+            if (file) chooseFile(file);
           }}
-          onClick={openFilePicker}
+          onClick={() => openFilePicker()}
         >
           <div className="rounded-full bg-primary/10 p-4 transition-transform group-hover:scale-105">
             <svg
@@ -289,50 +313,50 @@ export function DatasetUploadCard() {
             accept=".csv,.json,.xls,.xlsx,.parquet"
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) chooseFile(f);
+              const file = e.target.files?.[0];
+              if (file) chooseFile(file);
               e.currentTarget.value = "";
             }}
           />
         </div>
 
-        {selectedFile ? (
+        {selectedFiles.length ? (
           <div className="flex flex-col gap-3 mt-4 border border-border p-4 rounded-lg">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                <p className="text-xs text-foreground/70">{formatBytes(selectedFile.size)}</p>
-              </div>
-              {result.kind === "idle" ? (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={openFilePicker}>
-                    Update
-                  </Button>
-                  <Button onClick={() => startUpload(selectedFile)}>Save</Button>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    aria-label="Clear selected dataset"
-                    onClick={clearSelectedFile}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+            {selectedFiles.map((pendingFile) => (
+              <div key={pendingFile.id} className="border-b border-border/70 pb-3 last:border-b-0 last:pb-0">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{pendingFile.file.name}</p>
+                    <p className="text-xs text-foreground/70">{formatBytes(pendingFile.file.size)}</p>
+                  </div>
+                  {result.kind === "idle" ? (
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" onClick={() => openFilePicker(pendingFile.id)}>
+                        Update
+                      </Button>
+                      <Button onClick={() => startUpload(pendingFile)}>Save</Button>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        aria-label={`Clear ${pendingFile.file.name}`}
+                        onClick={() => clearSelectedFile(pendingFile.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            {result.kind === "uploading" ? (
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-foreground transition-[width]" style={{ width: `${result.progress}%` }} />
-                </div>
-                <p className="text-sm font-medium">{result.progress}%</p>
+                {result.kind === "uploading" && result.fileId === pendingFile.id ? (
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="flex-1 h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-foreground transition-[width]" style={{ width: `${result.progress}%` }} />
+                    </div>
+                    <p className="text-sm font-medium">{result.progress}%</p>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-
-
-
-
+            ))}
           </div>
         ) : null}
       </CardContent>

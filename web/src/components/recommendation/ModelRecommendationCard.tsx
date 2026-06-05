@@ -38,13 +38,13 @@ type DatasetMeta = {
 
 const selectCls =
   "theme-select flex h-9 w-full rounded-md border border-black/10 px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10";
+const FIXED_SAMPLE_ROWS = 20000;
 
 export function ModelRecommendationCard({ datasetId }: { datasetId?: string }) {
   const [loading, setLoading] = useState(false);
   const [columnsLoading, setColumnsLoading] = useState(false);
   const [rec, setRec] = useState<RecommendationResponse | null>(null);
   const [targetColumn, setTargetColumn] = useState<string>("");
-  const [sampleRows, setSampleRows] = useState<number>(20000);
   const [columns, setColumns] = useState<Array<{ column: string; type: string }>>([]);
 
   const notes = useMemo(() => rec?.notes ?? rec?.mvp_notes ?? [], [rec]);
@@ -78,7 +78,6 @@ export function ModelRecommendationCard({ datasetId }: { datasetId?: string }) {
     try {
       const body = {
         target_column: targetColumn.trim() ? targetColumn.trim() : undefined,
-        sample_max_rows: sampleRows,
       };
       const res = await apiRequest<RecommendationResponse>(`/datasets/${datasetId}/recommend`, {
         method: "POST",
@@ -138,13 +137,13 @@ export function ModelRecommendationCard({ datasetId }: { datasetId?: string }) {
             <Label htmlFor="sample-rows">Sample rows (max)</Label>
             <Input
               id="sample-rows"
-              type="number"
+              type="text"
               className="mt-1"
-              min={1000}
-              max={20000}
-              value={sampleRows}
-              onChange={(e) => setSampleRows(Number(e.target.value) || 20000)}
+              value={FIXED_SAMPLE_ROWS.toLocaleString()}
+              readOnly
+              disabled
             />
+            <p className="mt-1 text-xs text-muted-foreground">Fixed for consistent previews.</p>
           </div>
         </div>
 

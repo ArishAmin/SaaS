@@ -2223,10 +2223,7 @@ async def recommend_models(
 
     raw = await storage_download("datasets", dataset["storage_path"])
     udl = await get_user_data_limits(user_id)
-    cap = min(payload.sample_max_rows or udl.pipeline_max_rows, udl.pipeline_max_rows)
-    df = load_for_user(udl, raw, dataset["original_extension"], LoadMode.PIPELINE)
-    if len(df) > cap:
-        df = df.head(cap)
+    df = load_for_user(udl, raw, dataset["original_extension"], LoadMode.PREVIEW)
 
     # Determine target column (prefer cleaned_target_column from cleaning step)
     target_column = payload.target_column or dataset.get("cleaned_target_column")
