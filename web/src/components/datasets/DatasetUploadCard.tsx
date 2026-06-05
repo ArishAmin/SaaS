@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -154,7 +155,7 @@ export function DatasetUploadCard() {
     setSelectedFile(file);
   }
 
-  function cancelSelectedFile() {
+  function clearSelectedFile() {
     if (result.kind !== "idle") return;
     setSelectedFile(null);
   }
@@ -304,8 +305,16 @@ export function DatasetUploadCard() {
               </div>
               {result.kind === "idle" ? (
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={cancelSelectedFile}>
-                    Cancel
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    aria-label="Clear selected dataset"
+                    onClick={clearSelectedFile}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" onClick={openFilePicker}>
+                    Update
                   </Button>
                   <Button onClick={() => startUpload(selectedFile)}>Save</Button>
                 </div>
