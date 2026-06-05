@@ -154,6 +154,11 @@ export function DatasetUploadCard() {
     setSelectedFile(file);
   }
 
+  function cancelSelectedFile() {
+    if (result.kind !== "idle") return;
+    setSelectedFile(null);
+  }
+
   async function openFilePicker() {
     if (checkingLimits || result.kind !== "idle") return;
     setCheckingLimits(true);
@@ -298,7 +303,12 @@ export function DatasetUploadCard() {
                 <p className="text-xs text-foreground/70">{formatBytes(selectedFile.size)}</p>
               </div>
               {result.kind === "idle" ? (
-                <Button onClick={() => startUpload(selectedFile)}>Save</Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={cancelSelectedFile}>
+                    Cancel
+                  </Button>
+                  <Button onClick={() => startUpload(selectedFile)}>Save</Button>
+                </div>
               ) : null}
             </div>
 
