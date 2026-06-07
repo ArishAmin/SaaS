@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from ..core.billing import PlanType, plan_from_paddle_price_id
+from ..core.billing import PlanType, get_custom_credit_price_ids, plan_from_paddle_price_id
 from .credits import reset_credits_for_plan
 from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
@@ -53,10 +53,17 @@ async def _paddle_request(method: str, path: str, payload: dict | None = None) -
     return body.get("data", body)
 
 
-def _price_id_for_plan(plan: str, interval: str = "monthly") -> str:
+def _price_id_for_plan(plan: str, interval: str = "monthly", custom_credits: int | None = None) -> str:
     settings = get_settings()
     yearly = interval == "yearly"
-    if plan == PlanType.BUSINESS.value:
+    if plan == "custom":
+        if not custom_credits or custom_credits >= 100_000:
+            raise HTTPException(status_code=400, detail="Contact support for custom credit tiers at 100,000+ credits.")
+        intervals = get_custom_credit_price_ids().get(custom_credits)
+        if not intervals:
+            raise HTTPException(status_code=500, detail=f"Custom credit tier is not configured: {custom_credits}")
+        pid = intervals.get("yearly" if yearly else "monthly")
+    elif plan == PlanType.BUSINESS.value:
         pid = settings.paddle_price_id_business_yearly if yearly else settings.paddle_price_id_business
     elif plan == PlanType.PRO.value:
         pid = settings.paddle_price_id_pro_yearly if yearly else settings.paddle_price_id_pro
@@ -100,10 +107,22 @@ def _same_plan_subscription_is_current(profile: dict[str, Any], requested_plan: 
 
 def _interval_for_price_id(price_id: str) -> str | None:
     settings = get_settings()
+    for intervals in get_custom_credit_price_ids().values():
+        if price_id == intervals.get("yearly"):
+            return "yearly"
+        if price_id == intervals.get("monthly"):
+            return "monthly"
     if price_id in {settings.paddle_price_id_pro_yearly, settings.paddle_price_id_business_yearly}:
         return "yearly"
     if price_id in {settings.paddle_price_id_pro, settings.paddle_price_id_business}:
         return "monthly"
+    return None
+
+
+def _custom_credits_for_price_id(price_id: str) -> int | None:
+    for credits, intervals in get_custom_credit_price_ids().items():
+        if price_id in {x for x in intervals.values() if x}:
+            return credits
     return None
 
 
@@ -127,10 +146,11 @@ async def create_checkout(
     email: str | None,
     plan: str,
     interval: str = "monthly",
+    custom_credits: int | None = None,
     success_url: str,
 ) -> str:
     settings = get_settings()
-    price_id = _price_id_for_plan(plan, interval)
+    price_id = _price_id_for_plan(plan, interval, custom_credits)
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     profile = profiles[0] if profiles else {}
     customer_id = profile.get("paddle_customer_id")
@@ -145,10 +165,15 @@ async def create_checkout(
 
     checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
 
+    plan_for_profile = PlanType.BUSINESS.value if plan == "custom" else plan
+    custom_data: dict[str, Any] = {"user_id": user_id, "plan": plan_for_profile, "interval": interval}
+    if custom_credits:
+        custom_data["custom_credits"] = custom_credits
+
     payload: dict[str, Any] = {
         "collection_mode": "automatic",
         "items": [{"price_id": price_id, "quantity": 1}],
-        "custom_data": {"user_id": user_id, "plan": plan, "interval": interval},
+        "custom_data": custom_data,
         "checkout": {"url": checkout_url},
     }
     if customer_id:
@@ -223,6 +248,7 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str | None) -> d
 async def apply_subscription_update(subscription: dict[str, Any]) -> None:
     custom = subscription.get("custom_data") or {}
     user_id = custom.get("user_id")
+    custom_credits = custom.get("custom_credits")
     customer_id = subscription.get("customer_id", "")
     subscription_id = subscription.get("id", "")
     sub_status = subscription.get("status", "inactive")
@@ -234,6 +260,8 @@ async def apply_subscription_update(subscription: dict[str, Any]) -> None:
         price_id = (first.get("price") or {}).get("id") or first.get("price_id") or ""
 
     plan = plan_from_paddle_price_id(price_id)
+    if not custom_credits:
+        custom_credits = _custom_credits_for_price_id(price_id)
     if sub_status in ("canceled", "deleted"):
         plan = PlanType.HOBBY
 
@@ -263,7 +291,7 @@ async def apply_subscription_update(subscription: dict[str, Any]) -> None:
     await rest_patch("profiles", where_query, payload)
 
     if user_id and sub_status in ("active", "trialing", "past_due"):
-        await reset_credits_for_plan(str(user_id), plan.value)
+        await reset_credits_for_plan(str(user_id), plan.value, int(custom_credits) if custom_credits else None)
 
     await log_to_supabase(
         level="info",
@@ -291,6 +319,9 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
     if plan_hint in ("pro", "business"):
         patch["plan"] = plan_hint
         patch["subscription_status"] = "active"
+    custom_credits = custom.get("custom_credits")
+    if custom_credits:
+        patch["credits_monthly_quota"] = int(custom_credits)
 
     items = transaction.get("items") or []
     if items:
@@ -301,5 +332,7 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
             interval = _interval_for_price_id(price_id)
             if interval:
                 patch["billing_interval"] = interval
+            if not custom_credits:
+                custom_credits = _custom_credits_for_price_id(price_id)
 
     await rest_patch("profiles", f"id=eq.{user_id}", patch)

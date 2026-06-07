@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from enum import Enum
 
 from pydantic import BaseModel
@@ -76,6 +77,31 @@ UNRESTRICTED_PLAN_LIMITS = PlanLimits(
 )
 
 
+def get_custom_credit_price_ids() -> dict[int, dict[str, str]]:
+    raw = get_settings().paddle_custom_credit_price_ids
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+
+    out: dict[int, dict[str, str]] = {}
+    if not isinstance(parsed, dict):
+        return out
+    for credits, intervals in parsed.items():
+        try:
+            credit_count = int(credits)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(intervals, dict):
+            out[credit_count] = {
+                "monthly": str(intervals.get("monthly") or ""),
+                "yearly": str(intervals.get("yearly") or ""),
+            }
+    return out
+
+
 def is_billing_enforcement_enabled() -> bool:
     return get_settings().billing_enforcement_enabled
 
@@ -107,6 +133,9 @@ def plan_from_paddle_price_id(price_id: str) -> PlanType:
     }
     if price_id and price_id in {x for x in business_ids if x}:
         return PlanType.BUSINESS
+    for intervals in get_custom_credit_price_ids().values():
+        if price_id and price_id in {x for x in intervals.values() if x}:
+            return PlanType.BUSINESS
     if price_id and price_id in {x for x in pro_ids if x}:
         return PlanType.PRO
     return PlanType.HOBBY

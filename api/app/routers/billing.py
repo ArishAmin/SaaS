@@ -26,8 +26,9 @@ settings = get_settings()
 
 
 class CheckoutRequest(BaseModel):
-    plan: str = Field(..., pattern="^(pro|business)$")
+    plan: str = Field(..., pattern="^(pro|business|custom)$")
     interval: str = Field("monthly", pattern="^(monthly|yearly)$")
+    custom_credits: int | None = None
     success_url: str
     cancel_url: str | None = None
 
@@ -77,6 +78,7 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
     data_limits = await get_user_data_limits(user_id)
     limits = await get_user_plan_limits(user_id)
     dataset_rows = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
+    credits_summary = await get_credits_summary(user_id)
 
     credit_rows = [
         {
@@ -93,11 +95,11 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
     return {
         "plan": plan_name,
         "subscription_status": profile.get("subscription_status", "none"),
-        "credits": await get_credits_summary(user_id),
+        "credits": credits_summary,
         "plan_limits": {
             "max_dataset_size_mb": data_limits.max_dataset_size_mb,
             "max_concurrent_datasets": limits.max_concurrent_datasets,
-            "monthly_credits": limits.monthly_credits,
+            "monthly_credits": credits_summary.get("credits_quota", limits.monthly_credits),
             "allowed_models": limits.allowed_models,
             "max_compute_seconds": limits.max_compute_seconds,
             "support_priority": limits.support_priority,
@@ -134,6 +136,7 @@ async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current
         email=email,
         plan=req.plan,
         interval=req.interval,
+        custom_credits=req.custom_credits,
         success_url=success,
     )
     return {"url": url}

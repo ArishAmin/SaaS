@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     paddle_price_id_pro_yearly: str | None = None
     paddle_price_id_business: str | None = None
     paddle_price_id_business_yearly: str | None = None
+    # JSON: {"5000":{"monthly":"pri_...","yearly":"pri_..."}}
+    paddle_custom_credit_price_ids: str | None = None
     paddle_checkout_url: str | None = None
     app_public_url: str = "http://localhost:3000"
 

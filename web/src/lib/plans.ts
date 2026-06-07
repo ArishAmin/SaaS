@@ -28,10 +28,25 @@ export interface PlanDefinition {
   popular: boolean;
 }
 
+export interface CustomCreditTier {
+  credits: number;
+  priceMonthly: number | null;
+  priceYearly: number | null;
+  contactSupport: boolean;
+}
+
 /** Generative path: suggest only; save + CSV download are free */
 export const GENERATIVE_PIPELINE_CREDITS = 2 + 3 + 4 + 8 + 2; // analyze + clean + suggest + train + recommend = 19
 
 export const YEARLY_DISCOUNT_PERCENT = 17;
+
+export const CUSTOM_CREDIT_TIERS: CustomCreditTier[] = [
+  { credits: 5_000, priceMonthly: 125, priceYearly: 1245, contactSupport: false },
+  { credits: 10_000, priceMonthly: 225, priceYearly: 2241, contactSupport: false },
+  { credits: 25_000, priceMonthly: 500, priceYearly: 4980, contactSupport: false },
+  { credits: 50_000, priceMonthly: 900, priceYearly: 8964, contactSupport: false },
+  { credits: 100_000, priceMonthly: null, priceYearly: null, contactSupport: true },
+];
 
 export const PLANS: PlanDefinition[] = [
   {

@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/api";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
 import {
   CREDIT_USAGE_ROWS,
+  CUSTOM_CREDIT_TIERS,
   GENERATIVE_PIPELINE_CREDITS,
   PLANS,
   YEARLY_DISCOUNT_PERCENT,
@@ -29,7 +30,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export default function PricingPage() {
-  const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const router = useRouter();
 
@@ -45,6 +46,37 @@ export default function PricingPage() {
         method: "POST",
         body: {
           plan: planId,
+          interval,
+          success_url: `${window.location.origin}/dashboard?checkout=success`,
+          cancel_url: `${window.location.origin}/pricing`,
+        },
+      });
+
+      if (res.url) {
+        window.location.href = res.url;
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to start checkout";
+      toast.error(message);
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleSelectCustomTier = async (credits: number) => {
+    if (credits >= 100_000) {
+      router.push("/dashboard/contact?topic=custom-credits");
+      return;
+    }
+
+    const loadingKey = `custom-${credits}`;
+    setLoadingPlan(loadingKey);
+    try {
+      const res = await apiRequest<{ url: string }>("/billing/checkout", {
+        method: "POST",
+        body: {
+          plan: "custom",
+          custom_credits: credits,
           interval,
           success_url: `${window.location.origin}/dashboard?checkout=success`,
           cancel_url: `${window.location.origin}/pricing`,
@@ -113,7 +145,7 @@ export default function PricingPage() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-16">
             {PLANS.map((plan) => {
               const priced = formatPlanPrice(plan, interval);
               return (
@@ -202,6 +234,87 @@ export default function PricingPage() {
                 </div>
               );
             })}
+
+            <div className="relative flex flex-col p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 transition-all duration-300 hover:translate-y-[-4px]">
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Custom credits</h3>
+                <div className="flex items-baseline gap-1 flex-wrap">
+                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">5k+</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">credits/month</span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400">
+                  For higher-volume teams
+                </p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Add more monthly credits on Business-level infrastructure without changing the core workflow.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                    <FileSpreadsheet className="w-3 h-3" />
+                    75 MB max file
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                    <Database className="w-3 h-3" />
+                    Unlimited active datasets
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-grow space-y-3 mb-8">
+                {[
+                  "Starts at 5,000 credits per month",
+                  "Monthly and yearly billing options",
+                  "Business plan limits and priority support",
+                  "100k+ credits are handled with support-assisted setup",
+                ].map((feature) => (
+                  <div key={feature} className="flex items-start gap-3">
+                    <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                {CUSTOM_CREDIT_TIERS.map((tier) => {
+                  const yearly = interval === "yearly";
+                  const price = yearly ? tier.priceYearly : tier.priceMonthly;
+                  const loadingKey = `custom-${tier.credits}`;
+                  return (
+                    <button
+                      key={tier.credits}
+                      type="button"
+                      onClick={() => handleSelectCustomTier(tier.credits)}
+                      disabled={!!loadingPlan}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span>
+                          <span className="block text-sm font-bold text-slate-900 dark:text-white">
+                            {tier.credits.toLocaleString()} credits
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {tier.contactSupport
+                              ? "Contact support for volume pricing"
+                              : yearly
+                                ? `$${price}/year`
+                                : `$${price}/month`}
+                          </span>
+                        </span>
+                        {loadingPlan === loadingKey ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                        ) : tier.contactSupport ? (
+                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Contact</span>
+                        ) : (
+                          <ArrowRight className="w-4 h-4 text-slate-400" />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="max-w-3xl mx-auto mb-16 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 md:p-8">

@@ -29,7 +29,7 @@ Add Paddle fees (~5% + $0.50 per transaction, varies by region) and OpenAI usage
 
 1. [Render](https://render.com/) account  
 2. [Supabase](https://supabase.com/) project (Auth + DB + Storage bucket `datasets`)  
-3. [Paddle](https://www.paddle.com/) catalog: recurring prices for **Pro ($25/mo)** and **Business ($70/mo)**  
+3. [Paddle](https://www.paddle.com/) catalog: recurring prices for **Pro ($25/mo)**, **Business ($70/mo)**, and any custom credit tiers you want to sell directly  
 4. Git repo connected to Render  
 
 ---
@@ -66,6 +66,7 @@ Set when prompted (or in each service → **Environment**):
 | `PADDLE_PRICE_ID_PRO_YEARLY` | If billing on | Paddle Price ID for $249/yr Pro (17% off) |
 | `PADDLE_PRICE_ID_BUSINESS` | If billing on | Paddle Price ID for $70/mo Business |
 | `PADDLE_PRICE_ID_BUSINESS_YEARLY` | If billing on | Paddle Price ID for $697/yr Business (17% off) |
+| `PADDLE_CUSTOM_CREDIT_PRICE_IDS` | If custom tiers are live | JSON mapping for custom tiers, e.g. `{"5000":{"monthly":"pri_x","yearly":"pri_y"},"10000":{"monthly":"pri_x","yearly":"pri_y"}}` |
 | `PADDLE_CHECKOUT_URL` | Optional | Leave blank to use Paddle's default payment link; if set, use an approved checkout/payment-link page, not the post-payment dashboard URL |
 | `APP_PUBLIC_URL` | Yes | Your live web URL, e.g. `https://acutize-web.onrender.com` |
 | `BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (real limits + credits) |
@@ -96,7 +97,8 @@ Keep the same env var **names**. Only change values:
 1. `PADDLE_ENVIRONMENT` → `production`
 2. Replace `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` with live dashboard values
 3. Replace all four `PADDLE_PRICE_ID_*` with production catalog price IDs
-4. Re-register webhook URL on the **live** Paddle notification destination
+4. Replace `PADDLE_CUSTOM_CREDIT_PRICE_IDS` with production custom tier price IDs
+5. Re-register webhook URL on the **live** Paddle notification destination
 
 With `PADDLE_ENVIRONMENT=sandbox` and sandbox keys, the site behaves like production (limits, credits, checkout) — payments are test-only until you swap credentials.
 

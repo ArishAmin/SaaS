@@ -129,9 +129,11 @@ async def ensure_credits_period(user_id: str) -> dict:
         return profile
 
     limits = get_plan_limits(plan_name)
+    monthly_quota = int(profile.get("credits_monthly_quota") or limits.monthly_credits)
     new_period_end = (now + timedelta(days=30)).isoformat()
     payload = {
-        "credits_balance": limits.monthly_credits,
+        "credits_balance": monthly_quota,
+        "credits_monthly_quota": monthly_quota,
         "credits_period_end": new_period_end,
         "updated_at": now.isoformat(),
     }
@@ -139,22 +141,24 @@ async def ensure_credits_period(user_id: str) -> dict:
     await _log_transaction(
         user_id=user_id,
         action="monthly_refresh",
-        credits_delta=limits.monthly_credits - int(profile.get("credits_balance") or 0),
-        balance_after=limits.monthly_credits,
-        metadata={"plan": plan_name},
+        credits_delta=monthly_quota - int(profile.get("credits_balance") or 0),
+        balance_after=monthly_quota,
+        metadata={"plan": plan_name, "credits_monthly_quota": monthly_quota},
     )
     return {**profile, **payload}
 
 
-async def reset_credits_for_plan(user_id: str, plan_name: str) -> None:
+async def reset_credits_for_plan(user_id: str, plan_name: str, monthly_credits: int | None = None) -> None:
     limits = get_plan_limits(plan_name)
+    quota = monthly_credits or limits.monthly_credits
     now = _utcnow()
     period_end = None if plan_name == PlanType.HOBBY.value else (now + timedelta(days=30)).isoformat()
     await rest_patch(
         "profiles",
         f"id=eq.{user_id}",
         {
-            "credits_balance": limits.monthly_credits,
+            "credits_balance": quota,
+            "credits_monthly_quota": quota,
             "credits_period_end": period_end,
             "updated_at": now.isoformat(),
         },
@@ -162,9 +166,9 @@ async def reset_credits_for_plan(user_id: str, plan_name: str) -> None:
     await _log_transaction(
         user_id=user_id,
         action="plan_upgrade",
-        credits_delta=limits.monthly_credits,
-        balance_after=limits.monthly_credits,
-        metadata={"plan": plan_name},
+        credits_delta=quota,
+        balance_after=quota,
+        metadata={"plan": plan_name, "credits_monthly_quota": quota},
     )
 
 
@@ -183,10 +187,11 @@ async def get_credits_summary(user_id: str) -> dict:
     profile = await ensure_credits_period(user_id)
     plan_name = _effective_plan(profile)
     limits = get_plan_limits(plan_name)
+    monthly_quota = int(profile.get("credits_monthly_quota") or limits.monthly_credits)
     mode = credits_refresh_mode(plan_name)
     return {
         "credits_balance": int(profile.get("credits_balance") or 0),
-        "credits_quota": limits.monthly_credits,
+        "credits_quota": monthly_quota,
         "credits_refresh_mode": mode,
         "credits_period_end": profile.get("credits_period_end") if mode == "monthly" else None,
         "credit_costs": {k.value: v for k, v in CREDIT_COSTS.items()},
