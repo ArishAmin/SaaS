@@ -53,17 +53,10 @@ async def _paddle_request(method: str, path: str, payload: dict | None = None) -
     return body.get("data", body)
 
 
-def _price_id_for_plan(plan: str, interval: str = "monthly", custom_credits: int | None = None) -> str:
+def _price_id_for_plan(plan: str, interval: str = "monthly") -> str:
     settings = get_settings()
     yearly = interval == "yearly"
-    if plan == "custom":
-        if not custom_credits or custom_credits >= 100_000:
-            raise HTTPException(status_code=400, detail="Contact support for custom credit tiers at 100,000+ credits.")
-        intervals = get_custom_credit_price_ids().get(custom_credits)
-        if not intervals:
-            raise HTTPException(status_code=500, detail=f"Custom credit tier is not configured: {custom_credits}")
-        pid = intervals.get("yearly" if yearly else "monthly")
-    elif plan == PlanType.BUSINESS.value:
+    if plan == PlanType.BUSINESS.value:
         pid = settings.paddle_price_id_business_yearly if yearly else settings.paddle_price_id_business
     elif plan == PlanType.PRO.value:
         pid = settings.paddle_price_id_pro_yearly if yearly else settings.paddle_price_id_pro
@@ -73,6 +66,21 @@ def _price_id_for_plan(plan: str, interval: str = "monthly", custom_credits: int
         raise HTTPException(
             status_code=500,
             detail=f"Paddle price ID not configured for {plan} ({interval})",
+        )
+    return pid
+
+
+def _price_id_for_custom_credits(custom_credits: int | None, interval: str = "monthly") -> str:
+    if not custom_credits or custom_credits >= 100_000:
+        raise HTTPException(status_code=400, detail="Contact support for custom credit tiers at 100,000+ credits.")
+    intervals = get_custom_credit_price_ids().get(custom_credits)
+    if not intervals:
+        raise HTTPException(status_code=500, detail=f"Custom credit tier is not configured: {custom_credits}")
+    pid = intervals.get("yearly" if interval == "yearly" else "monthly")
+    if not pid:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Paddle price ID not configured for custom credits {custom_credits} ({interval})",
         )
     return pid
 
@@ -150,7 +158,12 @@ async def create_checkout(
     success_url: str,
 ) -> str:
     settings = get_settings()
-    price_id = _price_id_for_plan(plan, interval, custom_credits)
+    is_custom_tier = plan == "custom"
+    price_id = (
+        _price_id_for_custom_credits(custom_credits, interval)
+        if is_custom_tier
+        else _price_id_for_plan(plan, interval)
+    )
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     profile = profiles[0] if profiles else {}
     customer_id = profile.get("paddle_customer_id")
@@ -165,9 +178,9 @@ async def create_checkout(
 
     checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
 
-    plan_for_profile = PlanType.BUSINESS.value if plan == "custom" else plan
+    plan_for_profile = PlanType.BUSINESS.value if is_custom_tier else plan
     custom_data: dict[str, Any] = {"user_id": user_id, "plan": plan_for_profile, "interval": interval}
-    if custom_credits:
+    if is_custom_tier and custom_credits:
         custom_data["custom_credits"] = custom_credits
 
     payload: dict[str, Any] = {

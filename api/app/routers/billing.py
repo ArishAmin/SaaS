@@ -131,12 +131,13 @@ async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current
     user_id = user["user_id"]
     email = user.get("claims", {}).get("email") if isinstance(user.get("claims"), dict) else None
     success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
+    custom_credits = req.custom_credits if req.plan == "custom" else None
     url = await create_checkout(
         user_id=str(user_id),
         email=email,
         plan=req.plan,
         interval=req.interval,
-        custom_credits=req.custom_credits,
+        custom_credits=custom_credits,
         success_url=success,
     )
     return {"url": url}
