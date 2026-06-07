@@ -33,6 +33,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("monthly");
+  const [selectedCustomCredits, setSelectedCustomCredits] = useState(CUSTOM_CREDIT_TIERS[0].credits);
   const router = useRouter();
 
   const ensureAuthenticated = async () => {
@@ -106,6 +107,11 @@ export default function PricingPage() {
       setLoadingPlan(null);
     }
   };
+
+  const selectedCustomTier =
+    CUSTOM_CREDIT_TIERS.find((tier) => tier.credits === selectedCustomCredits) ?? CUSTOM_CREDIT_TIERS[0];
+  const selectedCustomPrice =
+    interval === "yearly" ? selectedCustomTier.priceYearly : selectedCustomTier.priceMonthly;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
@@ -277,7 +283,7 @@ export default function PricingPage() {
                 </div>
               </div>
 
-              <div className="flex-grow space-y-3 mb-8">
+              <div className="flex-grow space-y-3 mb-6">
                 {[
                   "Starts at 5,000 credits per month",
                   "Monthly and yearly billing options",
@@ -293,44 +299,75 @@ export default function PricingPage() {
                 ))}
               </div>
 
-              <div className="space-y-2">
-                {CUSTOM_CREDIT_TIERS.map((tier) => {
-                  const yearly = interval === "yearly";
-                  const price = yearly ? tier.priceYearly : tier.priceMonthly;
-                  const loadingKey = `custom-${tier.credits}`;
-                  return (
-                    <button
-                      key={tier.credits}
-                      type="button"
-                      onClick={() => handleSelectCustomTier(tier.credits)}
-                      disabled={!!loadingPlan}
-                      className="w-full rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span className="flex items-center justify-between gap-3">
-                        <span>
-                          <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                            {tier.credits.toLocaleString()} credits
-                          </span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {tier.contactSupport
-                              ? "Contact support for volume pricing"
-                              : yearly
-                                ? `$${price}/year`
-                                : `$${price}/month`}
-                          </span>
-                        </span>
-                        {loadingPlan === loadingKey ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                        ) : tier.contactSupport ? (
-                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Contact</span>
-                        ) : (
-                          <ArrowRight className="w-4 h-4 text-slate-400" />
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+                  Monthly credit package
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {CUSTOM_CREDIT_TIERS.map((tier) => {
+                    const selected = selectedCustomTier.credits === tier.credits;
+                    return (
+                      <button
+                        key={tier.credits}
+                        type="button"
+                        onClick={() => setSelectedCustomCredits(tier.credits)}
+                        disabled={!!loadingPlan}
+                        className={cn(
+                          "rounded-xl border px-3 py-2 text-left transition disabled:opacity-50 disabled:cursor-not-allowed",
+                          selected
+                            ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                            : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
                         )}
-                      </span>
-                    </button>
-                  );
-                })}
+                      >
+                        <span className="block text-sm font-bold">{tier.credits.toLocaleString()}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                          {tier.contactSupport ? "Support" : "credits/mo"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 p-4 mb-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Selected package</p>
+                <div className="mt-1 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                      {selectedCustomTier.credits.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">credits per month</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {selectedCustomTier.contactSupport
+                        ? "Custom"
+                        : interval === "yearly"
+                          ? `$${selectedCustomPrice}/yr`
+                          : `$${selectedCustomPrice}/mo`}
+                    </p>
+                    {!selectedCustomTier.contactSupport && interval === "yearly" ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">17% yearly discount</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSelectCustomTier(selectedCustomTier.credits)}
+                disabled={!!loadingPlan}
+                className="w-full py-4 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingPlan === `custom-${selectedCustomTier.credits}` ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    {selectedCustomTier.contactSupport ? "Contact support" : "Continue with custom credits"}
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </>
+                )}
+              </button>
             </div>
           </div>
 

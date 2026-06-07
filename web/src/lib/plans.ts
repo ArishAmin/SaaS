@@ -109,7 +109,7 @@ export const PLANS: PlanDefinition[] = [
       "Instant preview trains on 20k rows (all plans)",
       "Unlimited concurrent datasets",
       "Everything in Pro + Python full-training export script",
-      "Priority support through the billing portal",
+      "Priority support",
     ],
     buttonText: "Upgrade to Business",
     badge: null,
