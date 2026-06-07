@@ -23,7 +23,7 @@ const PLANS = [
     buttonText: "Start for Free",
     badge: null,
     popular: false,
-    href: "/signup",
+    href: "/login?next=/pricing",
   },
   {
     id: "pro",
@@ -43,7 +43,7 @@ const PLANS = [
     buttonText: "Get Pro Now",
     badge: "Most Popular",
     popular: true,
-    href: "/signup?plan=pro",
+    href: "/login?next=/pricing",
   },
   {
     id: "business",
@@ -63,7 +63,7 @@ const PLANS = [
     buttonText: "Scale with Business",
     badge: null,
     popular: false,
-    href: "/signup?plan=business",
+    href: "/login?next=/pricing",
   },
 ];
 
@@ -152,6 +152,12 @@ export function PricingSection({ hideCTA = false }: PricingSectionProps) {
             </div>
           ))}
         </div>
+        {!hideCTA && (
+          <p className="mt-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+            Prices exclude applicable taxes. Sales tax, VAT, or similar charges may be added at checkout based on your
+            region.
+          </p>
+        )}
       </div>
     </section>
   );

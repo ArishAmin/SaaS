@@ -23,7 +23,7 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-export function LoginForm() {
+export function LoginForm({ next = "/dashboard" }: { next?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -44,7 +44,8 @@ export function LoginForm() {
         return;
       }
       toast.success("Welcome back!");
-      router.push("/dashboard");
+      const safeNext = next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+      router.push(safeNext);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Login failed";

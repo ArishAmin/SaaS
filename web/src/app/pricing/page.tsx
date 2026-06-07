@@ -28,17 +28,29 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const router = useRouter();
 
+  const ensureAuthenticated = async () => {
+    const supabase = getSupabaseBrowserClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) return true;
+    router.push("/login?next=/pricing");
+    return false;
+  };
+
   const handleSelectPlan = async (planId: PlanId) => {
     if (!isBillingEnforcementEnabled() || planId === "hobby") {
       router.push("/dashboard");
       return;
     }
+    if (!(await ensureAuthenticated())) return;
 
     setLoadingPlan(planId);
     try {
@@ -68,6 +80,7 @@ export default function PricingPage() {
       router.push("/dashboard/contact?topic=custom-credits");
       return;
     }
+    if (!(await ensureAuthenticated())) return;
 
     const loadingKey = `custom-${credits}`;
     setLoadingPlan(loadingKey);
@@ -143,6 +156,10 @@ export default function PricingPage() {
                 Yearly ({YEARLY_DISCOUNT_PERCENT}% off)
               </button>
             </div>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              Prices exclude applicable taxes. Sales tax, VAT, or similar charges may be added at checkout based on
+              your region.
+            </p>
           </div>
 
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-8 mb-16">
