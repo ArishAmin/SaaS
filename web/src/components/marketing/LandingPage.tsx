@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import {
-  ArrowRight,
   BarChart3,
-  Database,
-  Lock,
   Sparkles,
   Wand2,
   Zap,
@@ -14,7 +11,6 @@ import {
   Rocket,
 } from "lucide-react";
 
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/layout/Footer";
 import { PricingSection } from "@/components/marketing/PricingSection";
@@ -111,7 +107,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((f, i) => (
+              {features.map((f) => (
                 <div
                   key={f.title}
                   className="group relative rounded-3xl border border-zinc-200/50 bg-white p-8 dark:border-white/5 dark:bg-zinc-900/50 hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10"

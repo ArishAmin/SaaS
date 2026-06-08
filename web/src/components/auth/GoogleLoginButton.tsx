@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -12,14 +12,51 @@ interface GoogleLoginButtonProps {
 
 declare global {
   interface Window {
-    google: any;
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: { client_id?: string; callback: (response: GoogleCredentialResponse) => void }) => void;
+          renderButton: (
+            element: HTMLElement,
+            options: { theme: string; size: string; width: number; text: string; shape: string }
+          ) => void;
+        };
+      };
+    };
   }
 }
 
-export function GoogleLoginButton({ onSuccess, text = "Continue with Google" }: GoogleLoginButtonProps) {
+type GoogleCredentialResponse = {
+  credential: string;
+};
+
+export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
   const [loading, setLoading] = useState(false);
   const buttonRef = useRef<HTMLDivElement>(null);
   const googleInitialized = useRef(false);
+
+  const handleCredentialResponse = useCallback(async (response: GoogleCredentialResponse) => {
+    setLoading(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: response.credential,
+      });
+
+      if (error) throw error;
+
+      toast.success("Signed in successfully!");
+      if (onSuccess) onSuccess();
+
+      window.location.href = "/dashboard";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Google sign-in failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [onSuccess]);
 
   useEffect(() => {
     const initializeGoogle = () => {
@@ -47,31 +84,7 @@ export function GoogleLoginButton({ onSuccess, text = "Continue with Google" }: 
     }, 100);
 
     return () => clearInterval(interval);
-  }, []);
-
-  const handleCredentialResponse = async (response: any) => {
-    setLoading(true);
-    try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: response.credential,
-      });
-
-      if (error) throw error;
-
-      toast.success("Signed in successfully!");
-      if (onSuccess) onSuccess();
-      
-      // Redirect to dashboard on success
-      window.location.href = "/dashboard";
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Google sign-in failed";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [handleCredentialResponse]);
 
   return (
     <div className="relative w-full min-h-[44px]">

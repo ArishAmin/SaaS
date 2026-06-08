@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import {
   BarChart3,
-  Database,
   Download,
   LayoutGrid,
   LogOut,
@@ -34,7 +33,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
-import { Logo, LogoLockup, LogoMark } from "@/components/brand/Logo";
+import { LogoLockup, LogoMark } from "@/components/brand/Logo";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Footer } from "@/components/layout/Footer";

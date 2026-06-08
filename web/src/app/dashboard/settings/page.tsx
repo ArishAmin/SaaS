@@ -10,6 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StepHint } from "@/components/ui/step-hint";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
+import { apiRequest } from "@/lib/api";
+
+type ProfileResponse = {
+  plan?: string | null;
+  subscription_status?: string | null;
+  credits_balance?: number | null;
+  credits_quota?: number | null;
+  credits_monthly_quota?: number | null;
+  credits_period_end?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean | null;
+};
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -201,15 +213,14 @@ export default function SettingsPage() {
 }
 
 function SubscriptionCard() {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const { apiRequest } = await import("@/lib/api");
-        const data = await apiRequest<any>("/profiles/me");
+        const data = await apiRequest<ProfileResponse>("/profiles/me");
         setProfile(data);
       } catch (err) {
         console.error("Failed to load profile", err);
@@ -223,7 +234,6 @@ function SubscriptionCard() {
   const handleManage = async () => {
     setPortalLoading(true);
     try {
-      const { apiRequest } = await import("@/lib/api");
       const res = await apiRequest<{ url: string }>("/billing/customer-portal", {
         method: "POST",
         body: { return_url: `${window.location.origin}/dashboard/settings` },
@@ -231,8 +241,9 @@ function SubscriptionCard() {
       if (res.url) {
         window.location.href = res.url;
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to open billing portal");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to open billing portal";
+      toast.error(message);
     } finally {
       setPortalLoading(false);
     }

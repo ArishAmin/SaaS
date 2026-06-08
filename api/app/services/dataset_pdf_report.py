@@ -61,6 +61,11 @@ def _fmt_ts(v: Any) -> str:
         return _pdf_safe(raw)
 
 
+def _short_dataset_id(value: Any) -> str:
+    raw = str(value or "").replace("-", "").upper()
+    return f"DS-{raw[:8]}" if raw else "-"
+
+
 def _best_from_run(results: Any) -> str:
     if isinstance(results, dict):
         return str(results.get("best_model") or "-")
@@ -114,6 +119,23 @@ class _ReportPDF(FPDF):
             safe = safe[:107] + "..."
         self.cell(0, 5, f"  - {safe}", new_x="LMARGIN", new_y="NEXT")
 
+    def prediction_block(self, title: str, summary: str, reasoning: str) -> None:
+        self.ln(1)
+        self.set_x(self.l_margin)
+        self.set_font("helvetica", "B", 9)
+        self.set_text_color(25, 25, 25)
+        self.multi_cell(0, 5, _pdf_safe(title, max_len=400))
+        self.set_x(self.l_margin)
+        self.set_font("helvetica", "", 9)
+        self.set_text_color(45, 45, 45)
+        self.multi_cell(0, 5, _pdf_safe(summary, max_len=1400))
+        if reasoning:
+            self.set_x(self.l_margin)
+            self.set_font("helvetica", "I", 8)
+            self.set_text_color(75, 75, 75)
+            self.multi_cell(0, 4.5, _pdf_safe(f"Why: {reasoning}", max_len=1800))
+        self.ln(1)
+
     def key_value_table(self, rows: list[tuple[str, str]]) -> None:
         self.set_font("helvetica", "", 9)
         col_w = (self.w - self.l_margin - self.r_margin) / 2
@@ -156,7 +178,7 @@ def build_dataset_report_pdf(
     pdf.set_font("helvetica", "", 10)
     pdf.set_text_color(60, 60, 60)
     pdf.cell(0, 6, _pdf_safe(f"Report generated: {_now_iso()}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, _pdf_safe(f"Dataset ID: {dataset.get('dataset_id', '')}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, _pdf_safe(f"Dataset ID: {_short_dataset_id(dataset.get('dataset_id'))}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
 
     pdf.set_font("helvetica", "I", 9)
@@ -398,7 +420,7 @@ def build_dataset_report_pdf(
                     title = str(item.get("title") or "Insight")
                     summary = str(item.get("summary") or "")
                     reasoning = str(item.get("reasoning") or "")
-                    pdf.bullet(f"{title}: {summary} Reasoning: {reasoning}")
+                    pdf.prediction_block(title, summary, reasoning)
 
             points = forecast.get("forecast") or []
             if points:

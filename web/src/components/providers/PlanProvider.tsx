@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { isBillingEnforcementEnabled } from "@/lib/billing";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { PlanId } from "@/lib/plans";
 

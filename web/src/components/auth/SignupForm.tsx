@@ -141,7 +141,7 @@ export function SignupForm() {
           </div>
           <CardTitle className="text-2xl">Verify your email</CardTitle>
           <CardDescription>
-            We've sent a link to <span className="font-semibold text-foreground">{awaitingEmail.email}</span>
+            We&apos;ve sent a link to <span className="font-semibold text-foreground">{awaitingEmail.email}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -30,8 +30,9 @@ export default function ContactPage() {
       toast.success("Thank you for reaching out! A member of our team will contact you shortly.");
       const form = e.target as HTMLFormElement;
       form.reset();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to send message. Please try again.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to send message. Please try again.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -42,7 +43,7 @@ export default function ContactPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight mb-2">Contact Support</h1>
         <p className="text-foreground/70 leading-relaxed text-lg max-w-2xl">
-          Questions about Acutize, custom plans, or onboarding integrations? Our AI data scientists and engineers are here to assist. Provide details below and we'll route it directly to our experts.
+          Questions about Acutize, custom plans, or onboarding integrations? Our AI data scientists and engineers are here to assist. Provide details below and we&apos;ll route it directly to our experts.
         </p>
       </div>
 

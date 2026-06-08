@@ -10,6 +10,7 @@ type SelectCtx = {
   onValueChange: (v: string) => void;
   open: boolean;
   setOpen: (o: boolean) => void;
+  contentId: string;
   disabled?: boolean;
 };
 
@@ -33,6 +34,7 @@ interface SelectProps {
 export function Select({ value, onValueChange, defaultValue = "", disabled = false, children }: SelectProps) {
   const [internalValue, setInternalValue] = React.useState(defaultValue);
   const [open, setOpen] = React.useState(false);
+  const contentId = React.useId();
 
   const controlled = value !== undefined;
   const currentValue = controlled ? value : internalValue;
@@ -58,7 +60,7 @@ export function Select({ value, onValueChange, defaultValue = "", disabled = fal
   }, [open]);
 
   return (
-    <SelectContext.Provider value={{ value: currentValue, onValueChange: handleChange, open, setOpen, disabled }}>
+    <SelectContext.Provider value={{ value: currentValue, onValueChange: handleChange, open, setOpen, contentId, disabled }}>
       <div data-select-root className={cn("relative w-full", open ? "z-[1100]" : "z-0")}>
         {children}
       </div>
@@ -73,12 +75,13 @@ interface SelectTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export function SelectTrigger({ className, children, ...props }: SelectTriggerProps) {
-  const { open, setOpen, disabled } = useSelect();
+  const { open, setOpen, disabled, contentId } = useSelect();
   return (
     <button
       type="button"
       role="combobox"
       aria-expanded={open}
+      aria-controls={contentId}
       disabled={disabled}
       onClick={() => !disabled && setOpen(!open)}
       className={cn(
@@ -115,10 +118,11 @@ interface SelectContentProps {
 }
 
 export function SelectContent({ className, children }: SelectContentProps) {
-  const { open } = useSelect();
+  const { open, contentId } = useSelect();
   if (!open) return null;
   return (
     <div
+      id={contentId}
       className={cn(
         "absolute left-0 top-full z-[1200] mt-1 max-h-72 w-full min-w-[8rem] overflow-auto rounded-md border border-black/10 bg-white text-zinc-950 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10",
         className

@@ -22,12 +22,14 @@ pyarrow>=14.0
 
 
 def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
+    raw_id = str(dataset.get("dataset_id") or "").replace("-", "").upper()
+    display_id = f"DS-{raw_id[:8]}" if raw_id else "-"
     lines = [
         "Project Export Bundle",
         "=====================",
         "",
         f"Dataset: {dataset.get('original_file_name')}",
-        f"Dataset ID: {dataset.get('dataset_id')}",
+        f"Dataset ID: {display_id}",
         "",
         "WHAT IS INSIDE THIS ZIP",
         "------------------------",

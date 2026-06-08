@@ -47,12 +47,11 @@ type BillingAccount = {
 
 export default function CreditsSettingsPage() {
   const [data, setData] = useState<BillingAccount | null>(null);
-  const [loading, setLoading] = useState(true);
   const enforcement = isBillingEnforcementEnabled();
+  const [loading, setLoading] = useState(enforcement);
 
   useEffect(() => {
     if (!enforcement) {
-      setLoading(false);
       return;
     }
     apiRequest<BillingAccount>("/billing/account")
