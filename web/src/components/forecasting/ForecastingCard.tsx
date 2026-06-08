@@ -42,6 +42,7 @@ type ForecastResult = {
 type ForecastSchema = {
   analysis_ready: boolean;
   analyzed_at?: string | null;
+  columns: { name: string }[];
   date_columns: SchemaColumn[];
   numeric_columns: SchemaColumn[];
   saved_forecast?: ForecastResult | null;
@@ -149,7 +150,7 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
         if (cancelled) return;
         setSchema(data);
         if (data.saved_forecast) setResult(data.saved_forecast);
-        const firstDate = data.date_columns[0]?.column ?? "";
+        const firstDate = data.date_columns.find((c) => c.valid_rows > 0)?.column ?? data.columns[0]?.name ?? "";
         const firstNumeric = data.numeric_columns.find((c) => c.column !== firstDate)?.column ?? data.numeric_columns[0]?.column ?? "";
         setDateColumn(firstDate);
         setTargetColumn((prev) => (prev && data.numeric_columns.some((c) => c.column === prev) ? prev : firstNumeric));
@@ -165,11 +166,23 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
     };
   }, [datasetId, source]);
 
-  const hasDateColumn = (schema?.date_columns.length ?? 0) > 0;
-  const hasMetricColumn = (schema?.numeric_columns.length ?? 0) > 0;
+  const dateOptions = useMemo(() => schema?.date_columns ?? [], [schema]);
+  const metricOptions = useMemo(
+    () => (schema?.numeric_columns ?? []).filter((c) => c.column !== dateColumn),
+    [schema, dateColumn]
+  );
+  const hasDateColumn = dateOptions.length > 0;
+  const hasMetricColumn = metricOptions.length > 0;
   const analysisReady = !!schema?.analysis_ready;
-  const selectedDateColumn = mode === "simple" ? schema?.date_columns[0]?.column ?? "" : dateColumn;
+  const selectedDateColumn = dateColumn;
+  const selectedDateProfile = dateOptions.find((c) => c.column === selectedDateColumn);
   const canRun = !!datasetId && analysisReady && hasDateColumn && hasMetricColumn && !!selectedDateColumn && !!targetColumn && selectedDateColumn !== targetColumn;
+
+  useEffect(() => {
+    if (!schema) return;
+    if (targetColumn && metricOptions.some((c) => c.column === targetColumn)) return;
+    setTargetColumn(metricOptions[0]?.column ?? "");
+  }, [schema, dateColumn, targetColumn, metricOptions]);
 
   async function onRun() {
     if (!datasetId || !canRun) return;
@@ -229,14 +242,30 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
-          <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3 text-sm text-foreground/75 leading-relaxed">
-            Forecasts are planning estimates, not guarantees. For best results, clean the dataset first so missing values,
-            duplicate rows, and messy number formats do not distort the projection.
-            {datasetId ? (
-              <Button asChild variant="outline" size="sm" className="ml-0 mt-3 sm:ml-3 sm:mt-0">
-                <Link href={`/dashboard/cleaning?datasetId=${encodeURIComponent(datasetId)}`}>Clean data first</Link>
-              </Button>
-            ) : null}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
+              <p className="text-sm font-medium">Use clean data</p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+                Cleaned data gives steadier forecasts because missing values, duplicate rows, and messy number formats are handled first.
+              </p>
+              {datasetId ? (
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                  <Link href={`/dashboard/cleaning?datasetId=${encodeURIComponent(datasetId)}`}>Clean data first</Link>
+                </Button>
+              ) : null}
+            </div>
+            <div className="rounded-md border border-black/10 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+              <p className="text-sm font-medium">Choose the timeline</p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+                Select the column that contains the date, month, timestamp, or period for each row. The column name can be anything.
+              </p>
+            </div>
+            <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
+              <p className="text-sm font-medium">Planning estimate</p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/65">
+                Forecasts are business planning estimates. Use the result with your market, inventory, sales, or operations context.
+              </p>
+            </div>
           </div>
 
           {loadingSchema ? (
@@ -256,13 +285,6 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                       <Link href={`/dashboard/analyzer?datasetId=${encodeURIComponent(datasetId)}`}>Analyze dataset</Link>
                     </Button>
                   ) : null}
-                </div>
-              ) : null}
-
-              {!hasDateColumn ? (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
-                  No reliable date or time column was detected, so forecasting is disabled. Add a column like order_date,
-                  invoice_time, created_at, month, or timestamp and upload the dataset again.
                 </div>
               ) : null}
 
@@ -288,29 +310,36 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Date or time column</Label>
-                      <Select value={dateColumn} onValueChange={setDateColumn} disabled={!hasDateColumn}>
-                        <SelectTrigger><SelectValue placeholder="Choose date column" /></SelectTrigger>
-                        <SelectContent>
-                          {(schema?.date_columns ?? []).map((c) => <SelectItem key={c.column} value={c.column}>{c.column}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </>
                 ) : null}
+
+                <div className="space-y-2">
+                  <Label>Date or time column</Label>
+                  <Select value={dateColumn} onValueChange={setDateColumn} disabled={!hasDateColumn}>
+                    <SelectTrigger><SelectValue placeholder="Choose timeline column" /></SelectTrigger>
+                    <SelectContent>
+                      {dateOptions.map((c) => <SelectItem key={c.column} value={c.column}>{c.column}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selectedDateProfile?.valid_rows ? (
+                    <p className="text-xs text-foreground/55">
+                      This column has {selectedDateProfile.valid_rows.toLocaleString()} date-like values ready for forecasting.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-foreground/55">
+                      Pick the column that represents the business timeline. The app will read the chosen field when you run the forecast.
+                    </p>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <Label>Value to forecast</Label>
                   <Select value={targetColumn} onValueChange={setTargetColumn} disabled={!hasMetricColumn}>
                     <SelectTrigger><SelectValue placeholder="Choose target metric" /></SelectTrigger>
                     <SelectContent>
-                      {(schema?.numeric_columns ?? []).map((c) => <SelectItem key={c.column} value={c.column}>{c.column}</SelectItem>)}
+                      {metricOptions.map((c) => <SelectItem key={c.column} value={c.column}>{c.column}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {mode === "simple" && selectedDateColumn ? (
-                    <p className="text-xs text-foreground/55">Timeline detected from {selectedDateColumn}.</p>
-                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -354,7 +383,6 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                   {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
                   {running ? "Generating forecast..." : "Generate forecast"}
                 </Button>
-                <p className="text-xs text-foreground/60">Costs 5 credits. The saved result is included in reports.</p>
               </div>
             </>
           )}

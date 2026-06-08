@@ -34,23 +34,20 @@ def detect_forecast_columns(df: pd.DataFrame) -> dict[str, Any]:
         if non_missing == 0:
             continue
 
-        is_numeric = pd.api.types.is_numeric_dtype(series)
         name_hint = _looks_like_date_name(str(col))
         parsed_dates = _parse_date_series(series, allow_numeric=name_hint)
         date_ratio = float(parsed_dates.notna().mean()) if len(parsed_dates) else 0.0
-        is_date_column = pd.api.types.is_datetime64_any_dtype(series) or (date_ratio >= 0.75 and name_hint)
-        if is_date_column:
-            date_columns.append(
-                {
-                    "column": str(col),
-                    "valid_ratio": round(date_ratio, 3),
-                    "valid_rows": int(parsed_dates.notna().sum()),
-                }
-            )
+        date_columns.append(
+            {
+                "column": str(col),
+                "valid_ratio": round(date_ratio, 3),
+                "valid_rows": int(parsed_dates.notna().sum()),
+            }
+        )
 
         numeric = pd.to_numeric(series, errors="coerce")
         numeric_ratio = float(numeric.notna().mean()) if len(numeric) else 0.0
-        if not is_date_column and (is_numeric or numeric_ratio >= 0.75):
+        if pd.api.types.is_numeric_dtype(series) or numeric_ratio >= 0.75:
             numeric_columns.append(
                 {
                     "column": str(col),
@@ -153,6 +150,38 @@ def _make_features(index: pd.DatetimeIndex) -> np.ndarray:
             np.array([d.minute for d in index], dtype=float),
         ]
     )
+
+
+def _linear_forecast(train_y: np.ndarray, train_index: pd.DatetimeIndex, predict_index: pd.DatetimeIndex) -> np.ndarray:
+    model = LinearRegression()
+    combined_index = pd.DatetimeIndex(list(train_index) + list(predict_index))
+    features = _make_features(combined_index)
+    model.fit(features[: len(train_y)], train_y)
+    return model.predict(features[len(train_y) :])
+
+
+def _recent_average_forecast(train_y: np.ndarray, horizon: int, *, window: int) -> np.ndarray:
+    window = min(max(1, window), len(train_y))
+    return np.full(horizon, float(np.mean(train_y[-window:])))
+
+
+def _exp_smoothing_forecast(train_y: np.ndarray, horizon: int, *, alpha: float) -> np.ndarray:
+    level = float(train_y[0])
+    for value in train_y[1:]:
+        level = alpha * float(value) + (1 - alpha) * level
+    return np.full(horizon, level)
+
+
+def _forecast_candidates(train_y: np.ndarray, train_index: pd.DatetimeIndex, predict_index: pd.DatetimeIndex) -> list[tuple[str, np.ndarray]]:
+    candidates = [
+        ("recent average", _recent_average_forecast(train_y, len(predict_index), window=3)),
+        ("wider recent average", _recent_average_forecast(train_y, len(predict_index), window=7)),
+        ("smooth recent pattern", _exp_smoothing_forecast(train_y, len(predict_index), alpha=0.35)),
+        ("responsive smoothing", _exp_smoothing_forecast(train_y, len(predict_index), alpha=0.65)),
+    ]
+    if len(train_y) >= 4:
+        candidates.append(("trend and seasonality", _linear_forecast(train_y, train_index, predict_index)))
+    return candidates
 
 
 def _fmt_num(value: float | int | None) -> str:
@@ -307,7 +336,7 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
     if options.date_column == options.target_column:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date column and value column must be different.")
 
-    dates = _parse_date_series(df[options.date_column], allow_numeric=_looks_like_date_name(options.date_column))
+    dates = _parse_date_series(df[options.date_column], allow_numeric=True)
     values = pd.to_numeric(df[options.target_column], errors="coerce")
     valid = pd.DataFrame({"date": dates, "value": values}).dropna()
 
@@ -370,37 +399,42 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
         train_end = len(y)
         test_size = 0
 
-    x_all = _make_features(series.index)
     future_index = pd.date_range(series.index[-1] + pd.tseries.frequencies.to_offset(freq_code), periods=horizon, freq=freq_code)
-    future_features = _make_features(pd.DatetimeIndex(list(series.index) + list(future_index)))[-horizon:]
 
-    model = LinearRegression()
     if test_size:
-        model.fit(x_all[:train_end], y[:train_end])
-        linear_test = model.predict(x_all[train_end:])
-        window = min(5, train_end)
-        naive_value = float(np.mean(y[train_end - window : train_end]))
-        naive_test = np.full(test_size, naive_value)
-        linear_mae = float(mean_absolute_error(y[train_end:], linear_test))
-        naive_mae = float(mean_absolute_error(y[train_end:], naive_test))
-        if naive_mae <= linear_mae:
-            model_name = "recent average"
-            forecast_values = [float(np.mean(y[-window:])) for _ in range(horizon)]
-            backtest_pred = naive_test
-            mae = naive_mae
-        else:
-            model_name = "trend and seasonality"
-            model.fit(x_all, y)
-            forecast_values = [float(v) for v in model.predict(future_features)]
-            backtest_pred = linear_test
-            mae = linear_mae
+        actual_test = y[train_end:]
+        test_candidates = _forecast_candidates(
+            y[:train_end],
+            pd.DatetimeIndex(series.index[:train_end]),
+            pd.DatetimeIndex(series.index[train_end:]),
+        )
+        model_name, backtest_pred = min(
+            test_candidates,
+            key=lambda item: float(mean_absolute_error(actual_test, item[1])),
+        )
+        mae = float(mean_absolute_error(actual_test, backtest_pred))
+        full_candidates = _forecast_candidates(y, pd.DatetimeIndex(series.index), future_index)
+        forecast_values = [
+            float(v)
+            for name, values_for_model in full_candidates
+            if name == model_name
+            for v in values_for_model
+        ]
         actual_test = y[train_end:]
         mape = float(np.mean(np.abs((actual_test - backtest_pred) / np.maximum(np.abs(actual_test), 1e-9))) * 100)
         residual_std = float(np.std(actual_test - backtest_pred, ddof=1)) if len(actual_test) > 1 else mae
     else:
-        model_name = "trend and seasonality"
-        model.fit(x_all, y)
-        forecast_values = [float(v) for v in model.predict(future_features)]
+        model_name = "trend and seasonality" if len(y) >= 4 else "recent average"
+        full_candidates = _forecast_candidates(y, pd.DatetimeIndex(series.index), future_index)
+        forecast_values = [
+            float(v)
+            for name, values_for_model in full_candidates
+            if name == model_name
+            for v in values_for_model
+        ]
+        if not forecast_values:
+            model_name = "recent average"
+            forecast_values = [float(v) for v in _recent_average_forecast(y, horizon, window=3)]
         mae = None
         mape = None
         residual_std = float(np.std(y, ddof=1)) if len(y) > 1 else 0.0

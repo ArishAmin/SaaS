@@ -13,9 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DatasetNameDisplay } from "@/components/datasets/DatasetNameDisplay";
-import { cn } from "@/lib/utils";
 
 const selectCls = "theme-select flex h-9 w-full rounded-md border border-black/10 px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10";
+type CleaningMode = "simple" | "advanced";
 
 type AnalysisResponse = {
   dataset_id: string;
@@ -39,6 +39,21 @@ type DatasetMeta = {
   } | null;
 };
 
+function ModeButton({ value, mode, setMode, children }: { value: CleaningMode; mode: CleaningMode; setMode: (m: CleaningMode) => void; children: React.ReactNode }) {
+  const active = value === mode;
+  return (
+    <button
+      type="button"
+      onClick={() => setMode(value)}
+      className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
+        active ? "bg-foreground text-background" : "text-foreground/70 hover:bg-black/5 dark:hover:bg-white/10"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -49,7 +64,7 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
 
   const columns = useMemo(() => analysis?.column_types ?? [], [analysis]);
 
-  const [mode, setMode] = useState<"simple" | "advanced">("simple");
+  const [mode, setMode] = useState<CleaningMode>("simple");
   const [targetColumn, setTargetColumn] = useState<string>("");
   const [missingStrategy, setMissingStrategy] = useState<MissingStrategy>("mean");
   const [encoding, setEncoding] = useState<EncodingStrategy>("none");
@@ -147,11 +162,19 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Data Cleaning</CardTitle>
-          <CardDescription>
-            Choose what to predict (target column) and how to fill gaps, encode categories, and scale numbers. Rows with a
-            missing target are removed so models train on valid labels.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle>Data Cleaning</CardTitle>
+              <CardDescription className="mt-1">
+                Choose what to predict (target column) and how to fill gaps, encode categories, and scale numbers. Rows with a
+                missing target are removed so models train on valid labels.
+              </CardDescription>
+            </div>
+            <div className="inline-flex rounded-lg border border-black/10 p-1 dark:border-white/10">
+              <ModeButton value="simple" mode={mode} setMode={setMode}>Simple</ModeButton>
+              <ModeButton value="advanced" mode={mode} setMode={setMode}>Advanced</ModeButton>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
 
@@ -167,39 +190,11 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
           {!fetching ? (
             <div className="flex flex-col gap-5">
               <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex flex-col gap-2">
-                  <div className="inline-flex rounded-lg border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
-                    {(["simple", "advanced"] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setMode(option)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                          mode === option
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-foreground/60 hover:text-foreground"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "h-2.5 w-2.5 rounded-full border",
-                            mode === option
-                              ? "border-blue-600 bg-blue-600"
-                              : "border-foreground/30 bg-transparent"
-                          )}
-                        />
-                        {option === "simple" ? "Simple" : "Advanced"}
-                      </button>
-                    ))}
-                  </div>
-                  {mode === "simple" ? (
-                    <p className="max-w-xl text-xs text-foreground/60">
-                      Simple only fills missing values with the mean. Use Advanced when you want encoding, scaling, or
-                      different missing-value handling.
-                    </p>
-                  ) : null}
-                </div>
+                <p className="max-w-xl text-xs leading-relaxed text-foreground/60">
+                  {mode === "simple"
+                    ? "Simple fills missing values with the mean and leaves encoding and scaling unchanged."
+                    : "Advanced lets you choose missing-value handling, category encoding, and scaling before saving the cleaned version."}
+                </p>
 
                 <div className="text-sm text-foreground/70">
                   Dataset: <DatasetNameDisplay datasetId={datasetId!} />
