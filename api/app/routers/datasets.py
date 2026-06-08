@@ -594,11 +594,12 @@ async def analyze_dataset(
     settings = get_settings()
     user_id = user["user_id"]
     limits = await get_user_plan_limits(user_id)
-    await require_credits(user_id, CreditAction.ANALYZE, dataset_id=str(dataset_id))
 
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    await require_credits(user_id, CreditAction.ANALYZE, dataset_id=str(dataset_id))
 
     raw = await storage_download("datasets", dataset["storage_path"])
     df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
@@ -647,7 +648,12 @@ async def get_analysis(
 
     analysis_json = dataset.get("analysis_json")
     if not analysis_json:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not ready yet")
+        return {
+            "dataset_id": str(dataset_id),
+            "status": "not_ready",
+            "analysis": None,
+            "columns": None,
+        }
 
     await log_user_activity(
         user_id=str(user_id),

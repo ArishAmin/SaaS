@@ -37,6 +37,13 @@ export type InstantAnalysis = {
   };
 };
 
+type AnalysisLookup = {
+  dataset_id: string;
+  status?: "not_ready" | "completed";
+  analysis?: InstantAnalysis["columns"] | null;
+  columns?: InstantAnalysis["columns"] | null;
+};
+
 export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
@@ -50,12 +57,13 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
     (async () => {
       setLoading(true);
       try {
-        const data = await apiRequest<InstantAnalysis>(`/datasets/${datasetId}/analysis`, {
+        const data = await apiRequest<AnalysisLookup>(`/datasets/${datasetId}/analysis`, {
           method: "POST",
           body: { mode: "instant" },
         });
         if (!mounted) return;
-        setAnalysis(data);
+        const columns = data.columns ?? data.analysis ?? null;
+        setAnalysis(columns ? { dataset_id: data.dataset_id, columns } : null);
       } catch (err: unknown) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : "Failed to load analysis";
