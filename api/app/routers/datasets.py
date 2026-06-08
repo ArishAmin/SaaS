@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import time
 import asyncio
@@ -158,6 +159,18 @@ def _detect_column_type(series: pd.Series) -> str:
     return "string"
 
 
+def _analysis_safe_series(series: pd.Series) -> pd.Series:
+    if series.dtype != "object":
+        return series
+
+    def normalize(value: Any) -> Any:
+        if isinstance(value, (dict, list, tuple, set)):
+            return json.dumps(value, sort_keys=True, default=str)
+        return value
+
+    return series.map(normalize)
+
+
 def _analyze_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     from ..core.data_limits import MAX_COLUMNS
 
@@ -170,7 +183,7 @@ def _analyze_dataframe(df: pd.DataFrame) -> dict[str, Any]:
     basic_stats: list[dict[str, Any]] = []
 
     for col in df.columns:
-        series = df[col]
+        series = _analysis_safe_series(df[col])
         missing_percent = float(series.isna().mean() * 100) if len(series) else 0.0
 
         col_type = _detect_column_type(series)
