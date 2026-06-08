@@ -195,6 +195,16 @@ def _fmt_num(value: float | int | None) -> str:
     return f"{v:,.2f}"
 
 
+def _period_phrase(frequency_label: str) -> str:
+    return {
+        "minute": "minute",
+        "hourly": "hour",
+        "daily": "day",
+        "weekly": "week",
+        "monthly": "month",
+    }.get(frequency_label, "time period")
+
+
 def _pct_change(start: float, end: float) -> float | None:
     if start == 0:
         return None
@@ -288,20 +298,6 @@ def _generate_insights(
             }
         )
 
-    mape = _safe_float(metrics.get("mape"))
-    if mape is not None:
-        confidence = "high" if mape <= 10 else "medium" if mape <= 25 else "limited"
-        insights.append(
-            {
-                "title": "Prediction confidence",
-                "summary": f"Prediction confidence is {confidence}.",
-                "reasoning": (
-                    f"The forecast was checked against recent history and was off by about {mape:.1f}% on average. "
-                    "Lower error means the future estimate is more useful for planning."
-                ),
-            }
-        )
-
     if filled_periods > 0:
         insights.append(
             {
@@ -317,9 +313,10 @@ def _generate_insights(
     insights.append(
         {
             "title": "Near-term planning level",
-            "summary": f"The average projected value is {_fmt_num(avg_forecast)} per {frequency_label.rstrip('ly')} period.",
+            "summary": f"The forecast averages about {_fmt_num(avg_forecast)} per {_period_phrase(frequency_label)}.",
             "reasoning": (
-                "This is the average of the future forecast points, useful for planning staffing, inventory, marketing, support, or revenue expectations."
+                f"This means the future points average around {_fmt_num(avg_forecast)} for each {_period_phrase(frequency_label)} in the forecast window. "
+                "Use it as a simple planning level for staffing, inventory, marketing, support, or revenue expectations."
             ),
         }
     )

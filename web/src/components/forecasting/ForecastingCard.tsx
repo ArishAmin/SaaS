@@ -178,6 +178,7 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
   const selectedDateColumn = dateColumn;
   const selectedDateProfile = dateOptions.find((c) => c.column === selectedDateColumn);
   const canRun = !!datasetId && analysisReady && hasDateColumn && hasTargetColumn && !!selectedDateColumn && !!targetColumn && selectedDateColumn !== targetColumn;
+  const hasGeneratedForecast = !!result;
 
   useEffect(() => {
     if (!schema) return;
@@ -290,7 +291,7 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
 
               {!hasTargetColumn ? (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
-                  Choose a target column different from the timeline. Numeric targets forecast the value; text or category targets forecast activity volume over time.
+                  Choose a target column different from the timeline.
                 </div>
               ) : null}
 
@@ -340,7 +341,7 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-foreground/55">
-                    Numeric targets forecast their value. Text or category targets forecast how much activity appears over time.
+                    Choose the business field you want to project over the selected timeline.
                   </p>
                 </div>
 
@@ -384,8 +385,11 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                 <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={onRun} disabled={!canRun || running}>
                     {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-                    {running ? "Generating forecast..." : "Generate forecast"}
+                    {running ? "Generating forecast..." : hasGeneratedForecast ? "Generate forecast again" : "Generate forecast"}
                   </Button>
+                  {hasGeneratedForecast && !running ? (
+                    <p className="text-xs text-foreground/60">Running again will replace the latest saved forecast.</p>
+                  ) : null}
                 </div>
                 <PdfReportButton
                   datasetId={datasetId}

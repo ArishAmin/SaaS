@@ -264,8 +264,8 @@ export default function ExportPage() {
               Full project report (PDF)
             </CardTitle>
             <CardDescription className="leading-relaxed">
-              Printable summary for managers or compliance: pipeline timeline, column profile, cleaning settings, and
-              model comparison tables, and forecast insights when available.
+              Printable summary for managers or compliance: pipeline timeline, column profile, cleaning settings,
+              model comparison tables, and forecast predictions when available.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

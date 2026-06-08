@@ -10,7 +10,7 @@ export const CREDIT_COST_LABELS: Record<string, number> = {
   recommend: 2,
   export_pdf: 2,
   export_bundle: 4,
-  forecast: 5,
+  forecast: 8,
   feature_engineer: 4,
 };
 
@@ -139,7 +139,7 @@ export const CREDIT_USAGE_ROWS = [
   { action: "Generate features", credits: 4 },
   { action: "Instant model preview", credits: 8 },
   { action: "Model ideas", credits: 2 },
-  { action: "Forecast future values", credits: 5 },
+  { action: "Forecast future values", credits: 8 },
   { action: "PDF report", credits: 2 },
   { action: "ZIP export bundle", credits: 4 },
 ];

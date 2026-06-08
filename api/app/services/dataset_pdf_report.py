@@ -366,24 +366,19 @@ def build_dataset_report_pdf(
             pdf.body_text("Forecasting has not been run for this dataset.")
         else:
             pdf.body_text(
-                "Forward-looking view of the selected business metric. Forecast values are intended for planning and "
+                "Forward-looking view of the selected business target. Forecast values are intended for planning and "
                 "prioritization, not as guaranteed outcomes."
             )
+            target_mode = forecast.get("target_mode")
             pdf.key_value_table(
                 [
-                    ("Metric forecasted", str(forecast.get("target_column") or "-")),
+                    ("Target forecasted", str(forecast.get("target_column") or "-")),
+                    ("Forecast type", "Activity volume" if target_mode == "count" else "Target value"),
                     ("Date column", str(forecast.get("date_column") or "-")),
                     ("Timeline", str(forecast.get("frequency") or "-")),
                     ("Future periods", str(forecast.get("horizon") or "-")),
-                    ("History periods used", str(forecast.get("history_periods") or "-")),
                     ("Generated", _fmt_ts(forecast.get("generated_at"))),
                 ]
-            )
-            metrics = forecast.get("metrics") or {}
-            pdf.ln(2)
-            pdf.body_text(
-                f"Back-test error: {metrics.get('mape', '-')}% average percentage miss over "
-                f"{metrics.get('backtest_periods', '-')} recent periods."
             )
             warnings = forecast.get("warnings") or []
             if warnings:
@@ -396,7 +391,7 @@ def build_dataset_report_pdf(
             if insights:
                 pdf.ln(2)
                 pdf.set_font("helvetica", "B", 10)
-                pdf.cell(0, 6, "Business insights", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, "Business predictions", new_x="LMARGIN", new_y="NEXT")
                 for item in insights[:7]:
                     if not isinstance(item, dict):
                         continue
@@ -411,8 +406,8 @@ def build_dataset_report_pdf(
                 pdf.set_font("helvetica", "B", 8)
                 pdf.cell(34, 6, "Date", border=1)
                 pdf.cell(34, 6, "Predicted", border=1)
-                pdf.cell(34, 6, "Lower", border=1)
-                pdf.cell(34, 6, "Upper", border=1)
+                pdf.cell(34, 6, "Low range", border=1)
+                pdf.cell(34, 6, "High range", border=1)
                 pdf.ln()
                 pdf.set_font("helvetica", "", 8)
                 for point in points[:18]:
