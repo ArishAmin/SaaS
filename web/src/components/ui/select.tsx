@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 
@@ -11,6 +12,7 @@ type SelectCtx = {
   open: boolean;
   setOpen: (o: boolean) => void;
   contentId: string;
+  rootRef: React.RefObject<HTMLDivElement | null>;
   disabled?: boolean;
 };
 
@@ -35,6 +37,7 @@ export function Select({ value, onValueChange, defaultValue = "", disabled = fal
   const [internalValue, setInternalValue] = React.useState(defaultValue);
   const [open, setOpen] = React.useState(false);
   const contentId = React.useId();
+  const rootRef = React.useRef<HTMLDivElement>(null);
 
   const controlled = value !== undefined;
   const currentValue = controlled ? value : internalValue;
@@ -60,8 +63,8 @@ export function Select({ value, onValueChange, defaultValue = "", disabled = fal
   }, [open]);
 
   return (
-    <SelectContext.Provider value={{ value: currentValue, onValueChange: handleChange, open, setOpen, contentId, disabled }}>
-      <div data-select-root className={cn("relative w-full", open ? "z-[1100]" : "z-0")}>
+    <SelectContext.Provider value={{ value: currentValue, onValueChange: handleChange, open, setOpen, contentId, rootRef, disabled }}>
+      <div ref={rootRef} data-select-root className={cn("relative w-full", open ? "z-[1100]" : "z-0")}>
         {children}
       </div>
     </SelectContext.Provider>
@@ -118,19 +121,48 @@ interface SelectContentProps {
 }
 
 export function SelectContent({ className, children }: SelectContentProps) {
-  const { open, contentId } = useSelect();
+  const { open, contentId, rootRef } = useSelect();
+  const [position, setPosition] = React.useState<React.CSSProperties | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!open || !rootRef.current) return;
+
+    function updatePosition() {
+      if (!rootRef.current) return;
+      const rect = rootRef.current.getBoundingClientRect();
+      setPosition({
+        left: rect.left + window.scrollX,
+        top: rect.bottom + window.scrollY + 4,
+        width: rect.width,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, rootRef]);
+
   if (!open) return null;
-  return (
+
+  const dropdown = (
     <div
       id={contentId}
+      data-select-root
+      style={position ?? undefined}
       className={cn(
-        "absolute left-0 top-full z-[1200] mt-1 max-h-72 w-full min-w-[8rem] overflow-auto rounded-md border border-black/10 bg-white text-zinc-950 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10",
+        "absolute z-[9999] max-h-72 min-w-[8rem] overflow-auto rounded-md border border-black/10 bg-white text-zinc-950 shadow-2xl ring-1 ring-black/5 animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10",
         className
       )}
     >
       <div className="p-1">{children}</div>
     </div>
   );
+
+  return typeof document === "undefined" ? dropdown : createPortal(dropdown, document.body);
 }
 
 // ─── Item ───────────────────────────────────────────────────────────────────
