@@ -15,6 +15,7 @@ import {
   canExportBundle,
   hasCleanedDataset,
   hasEngineeredDataset,
+  hasForecast,
   hasInstantPreview,
 } from "@/lib/datasetPipeline";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,7 @@ export default function ExportPage() {
   const hasCleaned = hasCleanedDataset(meta);
   const hasEngineered = hasEngineeredDataset(meta);
   const hasTrained = hasInstantPreview(meta);
+  const hasForecastResult = hasForecast(meta);
   const canBundle = canExportBundle(meta);
 
   async function downloadBundle() {
@@ -152,7 +154,7 @@ export default function ExportPage() {
       const { blob, headers } = await apiGetBlob(`/datasets/${datasetId}/export/bundle`);
       const cd = headers.get("content-disposition") ?? "";
       const match = cd.match(/filename="?([^"]+)"?/i);
-      const filename = match?.[1] ?? `acutize-export-${datasetId.slice(0, 8)}.zip`;
+      const filename = match?.[1] ?? `project-export-${datasetId.slice(0, 8)}.zip`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -191,6 +193,7 @@ export default function ExportPage() {
               {hasCleaned && <p>Cleaned: {fmtDate(meta.cleaned_at)}</p>}
               {hasEngineered && <p>Engineered: {fmtDate(meta.engineered_at)}</p>}
               {hasTrained && <p>Preview: {fmtDate(meta.quick_trained_at)}</p>}
+              {hasForecastResult && <p>Forecast: {fmtDate(meta.forecasted_at)}</p>}
             </div>
           )}
         </div>
@@ -213,7 +216,7 @@ export default function ExportPage() {
                   <strong>README.txt</strong> — Step-by-step guide (including how to set your dataset path for training)
                 </li>
                 <li>
-                  <strong>report/acutize-report.pdf</strong> — Full project report for presentations
+                  <strong>report/project-report.pdf</strong> — Full project report for presentations
                 </li>
                 <li>
                   <strong>data/cleaned.csv</strong> — After cleaning (if you ran Clean &amp; encode)
@@ -262,7 +265,7 @@ export default function ExportPage() {
             </CardTitle>
             <CardDescription className="leading-relaxed">
               Printable summary for managers or compliance: pipeline timeline, column profile, cleaning settings, and
-              model comparison tables.
+              model comparison tables, and forecast insights when available.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -301,7 +304,7 @@ export default function ExportPage() {
               <li>
                 Run <code>pip install -r requirements-train.txt</code> then <code>python train_full_model.py</code>.
               </li>
-              <li>Output: <code>acutize_model.pkl</code> saved next to the script.</li>
+              <li>Output: <code>trained_model.pkl</code> saved next to the script.</li>
             </InstructionList>
             <DownloadButton
               label="train_full_model.py"
@@ -352,7 +355,7 @@ export default function ExportPage() {
               <DownloadButton
                 label="Python cleaning script"
                 icon={Code}
-                description="Re-run imputation, encoding, and scaling on a new raw CSV, JSON, Excel, or Parquet file outside Acutize."
+                description="Re-run imputation, encoding, and scaling on a new raw CSV, JSON, Excel, or Parquet file."
                 onClick={() => dl("python-code", "cleaning_pipeline.py")}
                 disabled={!hasCleaned}
                 loading={downloading === "python-code"}

@@ -37,7 +37,7 @@ export function PdfReportButton({
       const { blob, headers } = await apiGetBlob(`/datasets/${datasetId}/report/pdf${qs}`);
       const cd = headers.get("content-disposition") ?? "";
       const match = cd.match(/filename="?([^"]+)"?/i);
-      const filename = match?.[1] ?? `acutize-report-${datasetId}.pdf`;
+      const filename = match?.[1] ?? `project-report-${datasetId}.pdf`;
       const objectUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;

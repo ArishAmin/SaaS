@@ -23,30 +23,28 @@ pyarrow>=14.0
 
 def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
     lines = [
-        "Acutize — Project Export Bundle",
-        "====================================",
+        "Project Export Bundle",
+        "=====================",
         "",
         f"Dataset: {dataset.get('original_file_name')}",
         f"Dataset ID: {dataset.get('dataset_id')}",
         "",
         "WHAT IS INSIDE THIS ZIP",
         "------------------------",
-        "  README.txt                          — This file",
-        "  report/acutize-report.pdf         — Full project report (analysis, cleaning, models)",
-        "  scripts/requirements-train.txt      — Python packages for training script",
-        "  scripts/cleaning_pipeline.py        — Reproduce cleaning on a new raw tabular file (optional)",
+        "  README.txt                     - This file",
+        "  report/project-report.pdf      - Full project report (analysis, cleaning, models, forecasts)",
+        "  scripts/requirements-train.txt - Python packages for training script",
+        "  scripts/cleaning_pipeline.py   - Reproduce cleaning on a new raw tabular file (optional)",
     ]
     if has_train_script:
         quick = dataset.get("quick_evaluation_json") or {}
-        best = quick.get("best_model", "—")
-        lines.append(
-            "  scripts/train_full_model.py         — Train the winning model on YOUR machine (see below)"
-        )
+        best = quick.get("best_model", "-")
+        lines.append("  scripts/train_full_model.py    - Train the winning model on your machine")
         lines.append(f"       Preview winner: {best}")
     if dataset.get("cleaned_storage_path"):
-        lines.append("  data/cleaned.csv                      — Cleaned & encoded dataset from acutize")
+        lines.append("  data/cleaned.csv               - Cleaned and encoded dataset")
     if dataset.get("engineered_storage_path"):
-        lines.append("  data/engineered.csv                   — With generated features applied")
+        lines.append("  data/engineered.csv            - Dataset with generated features applied")
     lines.extend(
         [
             "",
@@ -57,23 +55,24 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
             "3. Change ONLY this line near the top:",
             '     DATA_PATH = r"C:\\path\\to\\your\\dataset.csv"',
             "   Recommended:",
-            "     • data/engineered.csv  (if you added features in acutize)",
-            "     • data/cleaned.csv     (if you only cleaned)",
-            "     • Or your own raw CSV, JSON, Excel, or Parquet file — then set APPLY_acutize_CLEANING = True",
+            "     - data/engineered.csv  (if you added features)",
+            "     - data/cleaned.csv     (if you only cleaned)",
+            "     - Or your own raw CSV, JSON, Excel, or Parquet file",
             "4. In a terminal:",
             "     pip install -r scripts/requirements-train.txt",
             "     python scripts/train_full_model.py",
-            "5. Output: acutize_model.pkl next to the script.",
+            "5. Output: trained_model.pkl next to the script.",
             "",
             "PDF REPORT",
             "----------",
-            "Open report/acutize-report.pdf for an executive summary suitable for sharing.",
+            "Open report/project-report.pdf for an executive summary suitable for sharing.",
             "",
             "Pipeline timestamps:",
-            f"  Analyzed:    {dataset.get('analyzed_at') or '—'}",
-            f"  Cleaned:     {dataset.get('cleaned_at') or '—'}",
-            f"  Engineered:  {dataset.get('engineered_at') or '—'}",
-            f"  Preview run: {dataset.get('quick_trained_at') or '—'}",
+            f"  Analyzed:    {dataset.get('analyzed_at') or '-'}",
+            f"  Cleaned:     {dataset.get('cleaned_at') or '-'}",
+            f"  Engineered:  {dataset.get('engineered_at') or '-'}",
+            f"  Preview run: {dataset.get('quick_trained_at') or '-'}",
+            f"  Forecast:    {dataset.get('forecasted_at') or '-'}",
             "",
             "Note: Instant preview in the app used a sample; full training uses every row in DATA_PATH.",
         ]
@@ -93,7 +92,7 @@ def build_export_bundle_zip(
     with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("README.txt", _readme(dataset, has_train_script=bool(training_script)))
         pdf = build_dataset_report_pdf(dataset=dataset, training_runs=None, sections=None)
-        zf.writestr("report/acutize-report.pdf", pdf)
+        zf.writestr("report/project-report.pdf", pdf)
         zf.writestr("scripts/requirements-train.txt", TRAIN_REQUIREMENTS)
         if cleaned_csv:
             zf.writestr("data/cleaned.csv", cleaned_csv)

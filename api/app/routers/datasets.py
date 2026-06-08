@@ -239,7 +239,7 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
             f"analysis_json,status,created_at,updated_at,analyzed_at,error,"
             f"cleaned_storage_path,cleaned_params,cleaned_target_column,cleaned_at,"
             f"engineered_storage_path,engineered_params,engineered_at,"
-            f"quick_evaluation_json,quick_trained_at"
+            f"quick_evaluation_json,quick_trained_at,forecast_json,forecasted_at"
         ),
     )
     if not rows:
@@ -461,7 +461,7 @@ async def list_datasets(
         "datasets",
         query=(
             f"user_id=eq.{user_id}"
-            f"&select=dataset_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at"
+            f"&select=dataset_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at,forecasted_at"
             f"&order=updated_at.desc"
         ),
     )
@@ -501,6 +501,8 @@ async def get_single_dataset(
         "engineered_params": dataset.get("engineered_params"),
         "quick_trained_at": dataset.get("quick_trained_at"),
         "has_quick_evaluation": bool(_quick_evaluation_is_displayable(quick)),
+        "forecasted_at": dataset.get("forecasted_at"),
+        "has_forecast": bool(dataset.get("forecast_json")),
     }
 
 
@@ -1727,7 +1729,7 @@ async def download_dataset_pdf_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF generation failed: {exc}",
         ) from exc
-    filename = f"acutize-report-{dataset_id}.pdf"
+    filename = f"project-report-{dataset_id}.pdf"
     await log_user_activity(
         user_id=str(user_id),
         action="pdf_report_downloaded",
@@ -1971,7 +1973,7 @@ async def export_bundle(
         cleaning_script=cleaning_script,
         training_script=training_script,
     )
-    filename = f"acutize-export-{str(dataset_id)[:8]}.zip"
+    filename = f"project-export-{str(dataset_id)[:8]}.zip"
     await log_user_activity(
         user_id=str(user_id),
         action="export_bundle_downloaded",

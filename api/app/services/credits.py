@@ -21,6 +21,7 @@ class CreditAction(str, Enum):
     EXPORT_PDF = "export_pdf"
     EXPORT_BUNDLE = "export_bundle"
     FEATURE_ENGINEER = "feature_engineer"
+    FORECAST = "forecast"
 
 
 CREDIT_COSTS: dict[CreditAction, int] = {
@@ -33,6 +34,7 @@ CREDIT_COSTS: dict[CreditAction, int] = {
     CreditAction.EXPORT_PDF: 2,
     CreditAction.EXPORT_BUNDLE: 4,
     CreditAction.FEATURE_ENGINEER: 4,
+    CreditAction.FORECAST: 5,
 }
 
 CREDIT_ACTION_LABELS: dict[str, str] = {
@@ -45,6 +47,7 @@ CREDIT_ACTION_LABELS: dict[str, str] = {
     CreditAction.EXPORT_PDF.value: "PDF report",
     CreditAction.EXPORT_BUNDLE.value: "ZIP export bundle",
     CreditAction.FEATURE_ENGINEER.value: "Feature selection (apply)",
+    CreditAction.FORECAST.value: "Forecast future values",
 }
 
 _request_credit_charges: ContextVar[list[dict[str, Any]] | None] = ContextVar(

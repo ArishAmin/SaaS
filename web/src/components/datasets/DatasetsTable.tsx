@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BarChart3, Download, Lightbulb, Sparkles, Trash2, Wand2, Brain } from "lucide-react";
+import { BarChart3, CalendarClock, Download, Lightbulb, Sparkles, Trash2, Wand2, Brain } from "lucide-react";
 
 import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -186,6 +186,15 @@ export function DatasetsTable() {
                         >
                           <Brain className="h-3.5 w-3.5" />
                           Train Model
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2.5"
+                          onClick={() => (window.location.href = `/dashboard/forecasting?datasetId=${encodeURIComponent(r.dataset_id)}`)}
+                        >
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          Forecast
                         </Button>
                         <Button
                           variant="outline"

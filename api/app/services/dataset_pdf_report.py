@@ -88,7 +88,7 @@ class _ReportPDF(FPDF):
         self.set_y(-12)
         self.set_font("helvetica", "I", 8)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 8, _pdf_safe(f"Acutize  |  Page {self.page_no()}"), align="C")
+        self.cell(0, 8, _pdf_safe(f"Page {self.page_no()}"), align="C")
 
     def section_title(self, title: str, number: int | None = None) -> None:
         self.ln(4)
@@ -139,13 +139,15 @@ def build_dataset_report_pdf(
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.set_margins(left=16, top=16, right=16)
 
+    forecast = dataset.get("forecast_json") or {}
+
     # --- Cover ---
     pdf.add_page()
     pdf.set_font("helvetica", "B", 22)
     pdf.set_text_color(15, 15, 15)
-    pdf.cell(0, 12, "Acutize", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 12, "Data Project Report", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "", 14)
-    pdf.cell(0, 8, "Machine Learning Project Report", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, "Analysis, preparation, modeling, and forecasting summary", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
     pdf.set_font("helvetica", "B", 12)
     name = dataset.get("original_file_name") or "Dataset"
@@ -162,9 +164,9 @@ def build_dataset_report_pdf(
         0,
         5,
         _pdf_safe(
-            "This document summarizes the end-to-end workflow performed in Acutize: "
-            "data profiling, cleaning, optional feature engineering, and instant model comparison. "
-            "Metrics reflect a sample-based preview for directional guidance, not a production deployment."
+            "This document summarizes the end-to-end dataset workflow: data profiling, cleaning, optional feature "
+            "engineering, instant model comparison, and forecasting when available. Metrics and forecasts are "
+            "directional planning aids and should be reviewed against business context before production decisions."
         ),
     )
 
@@ -176,6 +178,7 @@ def build_dataset_report_pdf(
         ("Cleaning & encoding", dataset.get("cleaned_at")),
         ("Generated features applied", dataset.get("engineered_at")),
         ("Instant model preview", dataset.get("quick_trained_at")),
+        ("Forecasting", dataset.get("forecasted_at")),
     ]
     pdf.set_font("helvetica", "B", 9)
     pdf.cell(70, 7, "Pipeline step", border=1)
@@ -196,7 +199,7 @@ def build_dataset_report_pdf(
             f"Task: {quick.get('task_type', '-')}  |  Target: {quick.get('target_column', '-')}"
         )
 
-    if include("analysis") or include("cleaning") or include("training"):
+    if include("analysis") or include("cleaning") or include("training") or include("forecasting"):
         # --- Project metadata ---
         pdf.section_title("Project metadata", 2)
         pdf.key_value_table(
@@ -356,6 +359,70 @@ def build_dataset_report_pdf(
                         f"{rid}... {st} | source={ds} | rows={sr} | {ms}ms | best={best} | {_fmt_ts(r.get('created_at'))}"
                     )
                 )
+
+    if include("forecasting"):
+        pdf.section_title("Business forecast", 6)
+        if not isinstance(forecast, dict) or not forecast.get("forecast"):
+            pdf.body_text("Forecasting has not been run for this dataset.")
+        else:
+            pdf.body_text(
+                "Forward-looking view of the selected business metric. Forecast values are intended for planning and "
+                "prioritization, not as guaranteed outcomes."
+            )
+            pdf.key_value_table(
+                [
+                    ("Metric forecasted", str(forecast.get("target_column") or "-")),
+                    ("Date column", str(forecast.get("date_column") or "-")),
+                    ("Timeline", str(forecast.get("frequency") or "-")),
+                    ("Future periods", str(forecast.get("horizon") or "-")),
+                    ("History periods used", str(forecast.get("history_periods") or "-")),
+                    ("Generated", _fmt_ts(forecast.get("generated_at"))),
+                ]
+            )
+            metrics = forecast.get("metrics") or {}
+            pdf.ln(2)
+            pdf.body_text(
+                f"Back-test error: {metrics.get('mape', '-')}% average percentage miss over "
+                f"{metrics.get('backtest_periods', '-')} recent periods."
+            )
+            warnings = forecast.get("warnings") or []
+            if warnings:
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Warnings", new_x="LMARGIN", new_y="NEXT")
+                for warning in warnings[:6]:
+                    pdf.bullet(str(warning))
+
+            insights = forecast.get("insights") or []
+            if insights:
+                pdf.ln(2)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Business insights", new_x="LMARGIN", new_y="NEXT")
+                for item in insights[:7]:
+                    if not isinstance(item, dict):
+                        continue
+                    title = str(item.get("title") or "Insight")
+                    summary = str(item.get("summary") or "")
+                    reasoning = str(item.get("reasoning") or "")
+                    pdf.bullet(f"{title}: {summary} Reasoning: {reasoning}")
+
+            points = forecast.get("forecast") or []
+            if points:
+                pdf.ln(2)
+                pdf.set_font("helvetica", "B", 8)
+                pdf.cell(34, 6, "Date", border=1)
+                pdf.cell(34, 6, "Predicted", border=1)
+                pdf.cell(34, 6, "Lower", border=1)
+                pdf.cell(34, 6, "Upper", border=1)
+                pdf.ln()
+                pdf.set_font("helvetica", "", 8)
+                for point in points[:18]:
+                    if not isinstance(point, dict):
+                        continue
+                    pdf.cell(34, 5, _fit_cell_text(point.get("date", "-"), 18), border=1)
+                    pdf.cell(34, 5, _fit_cell_text(point.get("predicted", "-"), 18), border=1)
+                    pdf.cell(34, 5, _fit_cell_text(point.get("lower", "-"), 18), border=1)
+                    pdf.cell(34, 5, _fit_cell_text(point.get("upper", "-"), 18), border=1)
+                    pdf.ln()
 
     # --- Appendix (optional detail) ---
     if include("analysis"):

@@ -156,6 +156,7 @@ export async function apiRequest<T>(
         path.includes("/clean") ||
         path.includes("/train-quick") ||
         path.includes("/recommend") ||
+        path.includes("/forecasting") ||
         path.includes("/report/pdf") ||
         path.includes("/export")
           ? 120000

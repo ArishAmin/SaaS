@@ -1,0 +1,413 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import timezone
+from typing import Any, Literal
+
+import numpy as np
+import pandas as pd
+from fastapi import HTTPException, status
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+
+
+Frequency = Literal["auto", "daily", "weekly", "monthly"]
+Aggregation = Literal["sum", "average"]
+
+
+@dataclass
+class ForecastRequestOptions:
+    date_column: str
+    target_column: str
+    horizon: int
+    frequency: Frequency = "auto"
+    aggregation: Aggregation = "sum"
+
+
+def detect_forecast_columns(df: pd.DataFrame) -> dict[str, Any]:
+    date_columns: list[dict[str, Any]] = []
+    numeric_columns: list[dict[str, Any]] = []
+
+    for col in df.columns:
+        series = df[col]
+        non_missing = int(series.notna().sum())
+        if non_missing == 0:
+            continue
+
+        parsed_dates = pd.to_datetime(series, errors="coerce", utc=True)
+        date_ratio = float(parsed_dates.notna().mean()) if len(parsed_dates) else 0.0
+        if pd.api.types.is_datetime64_any_dtype(series) or date_ratio >= 0.75:
+            date_columns.append(
+                {
+                    "column": str(col),
+                    "valid_ratio": round(date_ratio, 3),
+                    "valid_rows": int(parsed_dates.notna().sum()),
+                }
+            )
+
+        numeric = pd.to_numeric(series, errors="coerce")
+        numeric_ratio = float(numeric.notna().mean()) if len(numeric) else 0.0
+        if pd.api.types.is_numeric_dtype(series) or numeric_ratio >= 0.75:
+            numeric_columns.append(
+                {
+                    "column": str(col),
+                    "valid_ratio": round(numeric_ratio, 3),
+                    "valid_rows": int(numeric.notna().sum()),
+                }
+            )
+
+    return {"date_columns": date_columns, "numeric_columns": numeric_columns}
+
+
+def _freq_to_pandas(freq: Frequency, dates: pd.Series) -> tuple[str, str, list[str]]:
+    warnings: list[str] = []
+    if freq == "daily":
+        return "D", "daily", warnings
+    if freq == "weekly":
+        return "W", "weekly", warnings
+    if freq == "monthly":
+        return "MS", "monthly", warnings
+
+    sorted_dates = dates.dropna().sort_values()
+    if len(sorted_dates) < 3:
+        warnings.append("There are too few dates to confidently detect a rhythm, so daily forecasting was used.")
+        return "D", "daily", warnings
+
+    gaps = sorted_dates.diff().dropna().dt.total_seconds() / 86400
+    median_gap = float(gaps[gaps > 0].median()) if len(gaps[gaps > 0]) else 1.0
+    if median_gap >= 25:
+        return "MS", "monthly", warnings
+    if median_gap >= 5:
+        return "W", "weekly", warnings
+    return "D", "daily", warnings
+
+
+def _horizon_cap(label: str) -> int:
+    if label == "monthly":
+        return 36
+    if label == "weekly":
+        return 104
+    return 365
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        f = float(value)
+        if np.isnan(f) or np.isinf(f):
+            return None
+        return f
+    except Exception:
+        return None
+
+
+def _make_features(index: pd.DatetimeIndex) -> np.ndarray:
+    t = np.arange(len(index), dtype=float)
+    day_of_year = np.array([d.timetuple().tm_yday for d in index], dtype=float)
+    month = np.array([d.month for d in index], dtype=float)
+    weekday = np.array([d.weekday() for d in index], dtype=float)
+    return np.column_stack(
+        [
+            t,
+            np.sin(2 * np.pi * day_of_year / 365.25),
+            np.cos(2 * np.pi * day_of_year / 365.25),
+            np.sin(2 * np.pi * month / 12),
+            np.cos(2 * np.pi * month / 12),
+            np.sin(2 * np.pi * weekday / 7),
+            np.cos(2 * np.pi * weekday / 7),
+        ]
+    )
+
+
+def _fmt_num(value: float | int | None) -> str:
+    if value is None:
+        return "-"
+    v = float(value)
+    if abs(v) >= 1_000_000:
+        return f"{v:,.0f}"
+    if abs(v) >= 100:
+        return f"{v:,.1f}"
+    return f"{v:,.2f}"
+
+
+def _pct_change(start: float, end: float) -> float | None:
+    if start == 0:
+        return None
+    return ((end - start) / abs(start)) * 100
+
+
+def _generate_insights(
+    *,
+    series: pd.Series,
+    forecast_values: list[float],
+    frequency_label: str,
+    target_column: str,
+    metrics: dict[str, Any],
+    filled_periods: int,
+    model_name: str,
+    horizon: int,
+) -> list[dict[str, str]]:
+    insights: list[dict[str, str]] = []
+    values = series.astype(float)
+    last_actual = float(values.iloc[-1])
+    first_actual = float(values.iloc[0])
+    final_forecast = float(forecast_values[-1]) if forecast_values else last_actual
+    avg_forecast = float(np.mean(forecast_values)) if forecast_values else last_actual
+    history_change = _pct_change(first_actual, last_actual)
+    future_change = _pct_change(last_actual, final_forecast)
+
+    if future_change is not None:
+        direction = "grow" if future_change > 3 else "decline" if future_change < -3 else "stay broadly stable"
+        insights.append(
+            {
+                "title": "Expected direction",
+                "summary": f"{target_column} is expected to {direction} over the next {horizon} {frequency_label} periods.",
+                "reasoning": (
+                    f"The forecast compares the latest observed value ({_fmt_num(last_actual)}) with the final projected "
+                    f"value ({_fmt_num(final_forecast)}), a change of about {future_change:.1f}%."
+                ),
+            }
+        )
+
+    if history_change is not None:
+        trend = "upward" if history_change > 5 else "downward" if history_change < -5 else "mostly flat"
+        insights.append(
+            {
+                "title": "Historical trend",
+                "summary": f"The historical pattern looks {trend}.",
+                "reasoning": (
+                    f"The first usable period was {_fmt_num(first_actual)} and the latest period was {_fmt_num(last_actual)}, "
+                    f"which is about {history_change:.1f}% different across the available history."
+                ),
+            }
+        )
+
+    recent_window = min(5, max(2, len(values) // 4))
+    if len(values) >= recent_window * 2:
+        recent = float(values.tail(recent_window).mean())
+        previous = float(values.iloc[-recent_window * 2 : -recent_window].mean())
+        recent_change = _pct_change(previous, recent)
+        if recent_change is not None:
+            mood = "stronger" if recent_change > 5 else "weaker" if recent_change < -5 else "similar"
+            insights.append(
+                {
+                    "title": "Recent momentum",
+                    "summary": f"Recent performance is {mood} than the period just before it.",
+                    "reasoning": (
+                        f"The last {recent_window} periods average {_fmt_num(recent)}, compared with {_fmt_num(previous)} "
+                        f"for the previous {recent_window} periods."
+                    ),
+                }
+            )
+
+    if len(values) >= 8:
+        volatility = float(values.std(ddof=1) / max(abs(values.mean()), 1e-9))
+        if volatility >= 0.5:
+            label = "high"
+            advice = "use the forecast as a planning range rather than a fixed target"
+        elif volatility >= 0.2:
+            label = "moderate"
+            advice = "review the forecast alongside recent business context"
+        else:
+            label = "low"
+            advice = "the series has been comparatively steady"
+        insights.append(
+            {
+                "title": "Planning reliability",
+                "summary": f"Past values show {label} variation.",
+                "reasoning": (
+                    f"The typical spread around the average is about {volatility * 100:.1f}% of the average value, so {advice}."
+                ),
+            }
+        )
+
+    mape = _safe_float(metrics.get("mape"))
+    if mape is not None:
+        confidence = "high" if mape <= 10 else "medium" if mape <= 25 else "limited"
+        insights.append(
+            {
+                "title": "Forecast confidence",
+                "summary": f"Back-test confidence is {confidence}.",
+                "reasoning": (
+                    f"The model was tested on the most recent historical periods and missed by about {mape:.1f}% on average. "
+                    f"The selected method was {model_name} because it performed best on that check."
+                ),
+            }
+        )
+
+    if filled_periods > 0:
+        insights.append(
+            {
+                "title": "Data completeness",
+                "summary": f"{filled_periods} missing time periods were filled before forecasting.",
+                "reasoning": (
+                    "Forecasting needs a regular timeline. Missing periods were filled from nearby values so the model could "
+                    "read the pattern consistently."
+                ),
+            }
+        )
+
+    insights.append(
+        {
+            "title": "Near-term planning level",
+            "summary": f"The average projected value is {_fmt_num(avg_forecast)} per {frequency_label.rstrip('ly')} period.",
+            "reasoning": (
+                f"This is the average of the future forecast points, useful for budgeting, staffing, inventory, or revenue planning."
+            ),
+        }
+    )
+
+    return insights[:7] if len(insights) >= 5 else insights
+
+
+def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str, Any]:
+    warnings: list[str] = []
+    if df.empty:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This dataset is empty, so forecasting cannot run.")
+    if options.date_column not in df.columns:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid date column for forecasting.")
+    if options.target_column not in df.columns:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid numeric column to forecast.")
+    if options.date_column == options.target_column:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date column and value column must be different.")
+
+    dates = pd.to_datetime(df[options.date_column], errors="coerce", utc=True)
+    values = pd.to_numeric(df[options.target_column], errors="coerce")
+    valid = pd.DataFrame({"date": dates, "value": values}).dropna()
+
+    if len(valid) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Forecasting needs at least 8 usable rows with both a valid date and a numeric value.",
+        )
+
+    dropped = len(df) - len(valid)
+    if dropped:
+        warnings.append(f"{dropped} rows were skipped because the date or value was missing or invalid.")
+
+    valid = valid.sort_values("date")
+    freq_code, freq_label, freq_warnings = _freq_to_pandas(options.frequency, valid["date"])
+    warnings.extend(freq_warnings)
+
+    cap = _horizon_cap(freq_label)
+    horizon = min(max(int(options.horizon), 1), cap)
+    if horizon != options.horizon:
+        warnings.append(f"The forecast horizon was capped at {cap} {freq_label} periods to keep results responsive.")
+
+    valid["bucket"] = valid["date"].dt.tz_convert(timezone.utc).dt.tz_localize(None)
+    if freq_code == "D":
+        valid["bucket"] = valid["bucket"].dt.floor("D")
+    elif freq_code == "W":
+        valid["bucket"] = valid["bucket"].dt.to_period("W").dt.start_time
+    else:
+        valid["bucket"] = valid["bucket"].dt.to_period("M").dt.start_time
+
+    grouped = valid.groupby("bucket")["value"]
+    agg = grouped.sum() if options.aggregation == "sum" else grouped.mean()
+    agg = agg.sort_index()
+    if len(agg) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="After grouping by time period, there are fewer than 8 periods. Try a smaller frequency such as daily.",
+        )
+
+    full_index = pd.date_range(agg.index.min(), agg.index.max(), freq=freq_code)
+    filled_periods = max(0, len(full_index) - len(agg))
+    series = agg.reindex(full_index)
+    if series.isna().any():
+        series = series.interpolate(limit_direction="both")
+    if filled_periods:
+        warnings.append(f"{filled_periods} missing {freq_label} periods were filled to create a regular timeline.")
+    if len(series) < 12:
+        warnings.append("The history is short. Treat this forecast as an early directional estimate.")
+    elif len(series) < 30:
+        warnings.append("More history would improve confidence, especially if the business has seasonal swings.")
+
+    y = series.astype(float).to_numpy()
+    test_size = min(max(3, int(len(y) * 0.2)), max(3, len(y) // 3))
+    train_end = len(y) - test_size
+    if train_end < 5:
+        train_end = len(y)
+        test_size = 0
+
+    x_all = _make_features(series.index)
+    future_index = pd.date_range(series.index[-1] + pd.tseries.frequencies.to_offset(freq_code), periods=horizon, freq=freq_code)
+    future_features = _make_features(pd.DatetimeIndex(list(series.index) + list(future_index)))[-horizon:]
+
+    model = LinearRegression()
+    if test_size:
+        model.fit(x_all[:train_end], y[:train_end])
+        linear_test = model.predict(x_all[train_end:])
+        window = min(5, train_end)
+        naive_value = float(np.mean(y[train_end - window : train_end]))
+        naive_test = np.full(test_size, naive_value)
+        linear_mae = float(mean_absolute_error(y[train_end:], linear_test))
+        naive_mae = float(mean_absolute_error(y[train_end:], naive_test))
+        if naive_mae <= linear_mae:
+            model_name = "recent average"
+            forecast_values = [float(np.mean(y[-window:])) for _ in range(horizon)]
+            backtest_pred = naive_test
+            mae = naive_mae
+        else:
+            model_name = "trend and seasonality"
+            model.fit(x_all, y)
+            forecast_values = [float(v) for v in model.predict(future_features)]
+            backtest_pred = linear_test
+            mae = linear_mae
+        actual_test = y[train_end:]
+        mape = float(np.mean(np.abs((actual_test - backtest_pred) / np.maximum(np.abs(actual_test), 1e-9))) * 100)
+        residual_std = float(np.std(actual_test - backtest_pred, ddof=1)) if len(actual_test) > 1 else mae
+    else:
+        model_name = "trend and seasonality"
+        model.fit(x_all, y)
+        forecast_values = [float(v) for v in model.predict(future_features)]
+        mae = None
+        mape = None
+        residual_std = float(np.std(y, ddof=1)) if len(y) > 1 else 0.0
+
+    lower = [max(0.0, v - 1.64 * residual_std) for v in forecast_values]
+    upper = [v + 1.64 * residual_std for v in forecast_values]
+    metrics = {
+        "mae": round(mae, 4) if mae is not None else None,
+        "mape": round(mape, 2) if mape is not None else None,
+        "backtest_periods": test_size,
+    }
+
+    insights = _generate_insights(
+        series=series,
+        forecast_values=forecast_values,
+        frequency_label=freq_label,
+        target_column=options.target_column,
+        metrics=metrics,
+        filled_periods=filled_periods,
+        model_name=model_name,
+        horizon=horizon,
+    )
+
+    actual_points = [
+        {"date": idx.date().isoformat(), "value": round(float(val), 4)}
+        for idx, val in series.tail(120).items()
+    ]
+    forecast_points = [
+        {
+            "date": idx.date().isoformat(),
+            "predicted": round(float(pred), 4),
+            "lower": round(float(lo), 4),
+            "upper": round(float(hi), 4),
+        }
+        for idx, pred, lo, hi in zip(future_index, forecast_values, lower, upper)
+    ]
+
+    return {
+        "date_column": options.date_column,
+        "target_column": options.target_column,
+        "frequency": freq_label,
+        "aggregation": options.aggregation,
+        "horizon": horizon,
+        "model": model_name,
+        "history_periods": int(len(series)),
+        "metrics": metrics,
+        "warnings": warnings,
+        "actual": actual_points,
+        "forecast": forecast_points,
+        "insights": insights,
+    }
