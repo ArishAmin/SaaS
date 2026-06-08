@@ -11,7 +11,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
 
 
-Frequency = Literal["auto", "daily", "weekly", "monthly"]
+Frequency = Literal["auto", "minute", "hourly", "daily", "weekly", "monthly"]
 Aggregation = Literal["sum", "average"]
 
 
@@ -34,9 +34,12 @@ def detect_forecast_columns(df: pd.DataFrame) -> dict[str, Any]:
         if non_missing == 0:
             continue
 
-        parsed_dates = pd.to_datetime(series, errors="coerce", utc=True)
+        is_numeric = pd.api.types.is_numeric_dtype(series)
+        name_hint = _looks_like_date_name(str(col))
+        parsed_dates = _parse_date_series(series, allow_numeric=name_hint)
         date_ratio = float(parsed_dates.notna().mean()) if len(parsed_dates) else 0.0
-        if pd.api.types.is_datetime64_any_dtype(series) or date_ratio >= 0.75:
+        is_date_column = pd.api.types.is_datetime64_any_dtype(series) or (date_ratio >= 0.75 and name_hint)
+        if is_date_column:
             date_columns.append(
                 {
                     "column": str(col),
@@ -47,7 +50,7 @@ def detect_forecast_columns(df: pd.DataFrame) -> dict[str, Any]:
 
         numeric = pd.to_numeric(series, errors="coerce")
         numeric_ratio = float(numeric.notna().mean()) if len(numeric) else 0.0
-        if pd.api.types.is_numeric_dtype(series) or numeric_ratio >= 0.75:
+        if not is_date_column and (is_numeric or numeric_ratio >= 0.75):
             numeric_columns.append(
                 {
                     "column": str(col),
@@ -59,8 +62,31 @@ def detect_forecast_columns(df: pd.DataFrame) -> dict[str, Any]:
     return {"date_columns": date_columns, "numeric_columns": numeric_columns}
 
 
+def _looks_like_date_name(name: str) -> bool:
+    return any(token in name.lower() for token in ("date", "time", "day", "month", "year", "created", "updated", "timestamp"))
+
+
+def _parse_date_series(series: pd.Series, *, allow_numeric: bool = False) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series) and allow_numeric:
+        numeric = pd.to_numeric(series, errors="coerce")
+        candidates = [
+            pd.to_datetime(numeric, errors="coerce", utc=True, unit="s"),
+            pd.to_datetime(numeric, errors="coerce", utc=True, unit="ms"),
+        ]
+        best = max(candidates, key=lambda s: float(s.notna().mean()) if len(s) else 0.0)
+        plausible = best.dt.year.between(1970, 2100)
+        return best.where(plausible)
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns, UTC]")
+    return pd.to_datetime(series, errors="coerce", utc=True)
+
+
 def _freq_to_pandas(freq: Frequency, dates: pd.Series) -> tuple[str, str, list[str]]:
     warnings: list[str] = []
+    if freq == "minute":
+        return "min", "minute", warnings
+    if freq == "hourly":
+        return "h", "hourly", warnings
     if freq == "daily":
         return "D", "daily", warnings
     if freq == "weekly":
@@ -73,8 +99,13 @@ def _freq_to_pandas(freq: Frequency, dates: pd.Series) -> tuple[str, str, list[s
         warnings.append("There are too few dates to confidently detect a rhythm, so daily forecasting was used.")
         return "D", "daily", warnings
 
-    gaps = sorted_dates.diff().dropna().dt.total_seconds() / 86400
-    median_gap = float(gaps[gaps > 0].median()) if len(gaps[gaps > 0]) else 1.0
+    gaps_seconds = sorted_dates.diff().dropna().dt.total_seconds()
+    median_seconds = float(gaps_seconds[gaps_seconds > 0].median()) if len(gaps_seconds[gaps_seconds > 0]) else 86400.0
+    if median_seconds < 3600:
+        return "min", "minute", warnings
+    if median_seconds < 86400:
+        return "h", "hourly", warnings
+    median_gap = median_seconds / 86400
     if median_gap >= 25:
         return "MS", "monthly", warnings
     if median_gap >= 5:
@@ -83,6 +114,10 @@ def _freq_to_pandas(freq: Frequency, dates: pd.Series) -> tuple[str, str, list[s
 
 
 def _horizon_cap(label: str) -> int:
+    if label == "minute":
+        return 1440
+    if label == "hourly":
+        return 24 * 90
     if label == "monthly":
         return 36
     if label == "weekly":
@@ -114,6 +149,8 @@ def _make_features(index: pd.DatetimeIndex) -> np.ndarray:
             np.cos(2 * np.pi * month / 12),
             np.sin(2 * np.pi * weekday / 7),
             np.cos(2 * np.pi * weekday / 7),
+            np.array([d.hour for d in index], dtype=float),
+            np.array([d.minute for d in index], dtype=float),
         ]
     )
 
@@ -270,14 +307,14 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
     if options.date_column == options.target_column:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date column and value column must be different.")
 
-    dates = pd.to_datetime(df[options.date_column], errors="coerce", utc=True)
+    dates = _parse_date_series(df[options.date_column], allow_numeric=_looks_like_date_name(options.date_column))
     values = pd.to_numeric(df[options.target_column], errors="coerce")
     valid = pd.DataFrame({"date": dates, "value": values}).dropna()
 
-    if len(valid) < 8:
+    if len(valid) < 4:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Forecasting needs at least 8 usable rows with both a valid date and a numeric value.",
+            detail="Forecasting needs at least 4 usable rows with both a valid date and a numeric value.",
         )
 
     dropped = len(df) - len(valid)
@@ -294,7 +331,11 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
         warnings.append(f"The forecast horizon was capped at {cap} {freq_label} periods to keep results responsive.")
 
     valid["bucket"] = valid["date"].dt.tz_convert(timezone.utc).dt.tz_localize(None)
-    if freq_code == "D":
+    if freq_code == "min":
+        valid["bucket"] = valid["bucket"].dt.floor("min")
+    elif freq_code == "h":
+        valid["bucket"] = valid["bucket"].dt.floor("h")
+    elif freq_code == "D":
         valid["bucket"] = valid["bucket"].dt.floor("D")
     elif freq_code == "W":
         valid["bucket"] = valid["bucket"].dt.to_period("W").dt.start_time
@@ -304,10 +345,10 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
     grouped = valid.groupby("bucket")["value"]
     agg = grouped.sum() if options.aggregation == "sum" else grouped.mean()
     agg = agg.sort_index()
-    if len(agg) < 8:
+    if len(agg) < 4:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="After grouping by time period, there are fewer than 8 periods. Try a smaller frequency such as daily.",
+            detail="After grouping by time period, there are fewer than 4 periods. Try a smaller timeline such as hourly or minute.",
         )
 
     full_index = pd.date_range(agg.index.min(), agg.index.max(), freq=freq_code)
@@ -317,15 +358,15 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
         series = series.interpolate(limit_direction="both")
     if filled_periods:
         warnings.append(f"{filled_periods} missing {freq_label} periods were filled to create a regular timeline.")
-    if len(series) < 12:
+    if len(series) < 8:
         warnings.append("The history is short. Treat this forecast as an early directional estimate.")
     elif len(series) < 30:
         warnings.append("More history would improve confidence, especially if the business has seasonal swings.")
 
     y = series.astype(float).to_numpy()
-    test_size = min(max(3, int(len(y) * 0.2)), max(3, len(y) // 3))
+    test_size = min(max(1, int(len(y) * 0.2)), max(1, len(y) // 3))
     train_end = len(y) - test_size
-    if train_end < 5:
+    if train_end < 3:
         train_end = len(y)
         test_size = 0
 

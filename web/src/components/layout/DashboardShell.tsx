@@ -54,8 +54,8 @@ const pipelineNav: NavItem[] = [
   { href: "/dashboard/feature-generation", label: "Generate Features", icon: Wand2 },
   { href: "/dashboard/recommendation", label: "Model Ideas", icon: Sparkles },
   { href: "/dashboard/training", label: "Train Models", icon: FlaskConical },
-  { href: "/dashboard/forecasting", label: "Forecasting", icon: CalendarClock },
   { href: "/dashboard/evaluation", label: "Model comparison", icon: BarChart3 },
+  { href: "/dashboard/forecasting", label: "Forecasting", icon: CalendarClock },
   { href: "/dashboard/export", label: "Export", icon: Download },
 ];
 

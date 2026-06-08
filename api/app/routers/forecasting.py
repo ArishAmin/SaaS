@@ -27,7 +27,7 @@ class ForecastRunRequest(BaseModel):
     date_column: str = Field(min_length=1)
     target_column: str = Field(min_length=1)
     horizon: int = Field(30, ge=1, le=365)
-    frequency: Literal["auto", "daily", "weekly", "monthly"] = "auto"
+    frequency: Literal["auto", "minute", "hourly", "daily", "weekly", "monthly"] = "auto"
     aggregation: Literal["sum", "average"] = "sum"
     source: Literal["raw", "cleaned", "engineered", "latest"] = "raw"
 
@@ -38,7 +38,7 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
         query=(
             f"dataset_id=eq.{dataset_id}"
             f"&select=dataset_id,user_id,storage_path,original_file_name,original_extension,"
-            f"cleaned_storage_path,engineered_storage_path,forecast_json,forecasted_at"
+            f"analysis_json,analyzed_at,cleaned_storage_path,engineered_storage_path,forecast_json,forecasted_at"
         ),
     )
     if not rows:
@@ -85,9 +85,12 @@ async def forecast_schema(
 
     df = await _load_forecast_frame(dataset, user_id, source)
     schema = await asyncio.to_thread(detect_forecast_columns, df)
+    analysis_ready = bool(dataset.get("analyzed_at") or dataset.get("analysis_json"))
     return {
         "dataset_id": str(dataset_id),
         "source": source,
+        "analysis_ready": analysis_ready,
+        "analyzed_at": dataset.get("analyzed_at"),
         "columns": [{"name": str(c)} for c in df.columns],
         **schema,
         "saved_forecast": dataset.get("forecast_json"),
@@ -107,6 +110,11 @@ async def run_dataset_forecast(
     dataset = await _get_dataset(dataset_id)
     if str(dataset["user_id"]) != str(user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if not (dataset.get("analyzed_at") or dataset.get("analysis_json")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Run dataset analysis first so forecasting can use a verified column profile.",
+        )
 
     await require_credits(user_id, CreditAction.FORECAST, dataset_id=str(dataset_id))
     df = await _load_forecast_frame(dataset, user_id, payload.source)

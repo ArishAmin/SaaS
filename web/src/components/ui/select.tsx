@@ -120,7 +120,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
   return (
     <div
       className={cn(
-        "absolute z-50 mt-1 w-full min-w-[8rem] overflow-hidden rounded-md border border-black/10 bg-white text-zinc-950 shadow-md animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50",
+        "absolute z-[1000] mt-1 max-h-72 w-full min-w-[8rem] overflow-auto rounded-md border border-black/10 bg-white text-zinc-950 shadow-xl animate-in fade-in-0 zoom-in-95 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50",
         className
       )}
     >
