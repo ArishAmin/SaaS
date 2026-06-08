@@ -27,6 +27,7 @@ type ForecastResult = {
   generated_at: string;
   date_column: string;
   target_column: string;
+  target_mode?: "value" | "count";
   frequency: string;
   aggregation: string;
   horizon: number;
@@ -151,9 +152,9 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
         setSchema(data);
         if (data.saved_forecast) setResult(data.saved_forecast);
         const firstDate = data.date_columns.find((c) => c.valid_rows > 0)?.column ?? data.columns[0]?.name ?? "";
-        const firstNumeric = data.numeric_columns.find((c) => c.column !== firstDate)?.column ?? data.numeric_columns[0]?.column ?? "";
+        const firstTarget = data.columns.find((c) => c.name !== firstDate)?.name ?? data.columns[0]?.name ?? "";
         setDateColumn(firstDate);
-        setTargetColumn((prev) => (prev && data.numeric_columns.some((c) => c.column === prev) ? prev : firstNumeric));
+        setTargetColumn((prev) => (prev && data.columns.some((c) => c.name === prev) ? prev : firstTarget));
       } catch (err) {
         if (!cancelled) toast.error(err instanceof Error ? err.message : "Failed to inspect dataset columns");
       } finally {
@@ -167,22 +168,22 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
   }, [datasetId, source]);
 
   const dateOptions = useMemo(() => schema?.date_columns ?? [], [schema]);
-  const metricOptions = useMemo(
-    () => (schema?.numeric_columns ?? []).filter((c) => c.column !== dateColumn),
+  const targetOptions = useMemo(
+    () => (schema?.columns ?? []).filter((c) => c.name !== dateColumn),
     [schema, dateColumn]
   );
   const hasDateColumn = dateOptions.length > 0;
-  const hasMetricColumn = metricOptions.length > 0;
+  const hasTargetColumn = targetOptions.length > 0;
   const analysisReady = !!schema?.analysis_ready;
   const selectedDateColumn = dateColumn;
   const selectedDateProfile = dateOptions.find((c) => c.column === selectedDateColumn);
-  const canRun = !!datasetId && analysisReady && hasDateColumn && hasMetricColumn && !!selectedDateColumn && !!targetColumn && selectedDateColumn !== targetColumn;
+  const canRun = !!datasetId && analysisReady && hasDateColumn && hasTargetColumn && !!selectedDateColumn && !!targetColumn && selectedDateColumn !== targetColumn;
 
   useEffect(() => {
     if (!schema) return;
-    if (targetColumn && metricOptions.some((c) => c.column === targetColumn)) return;
-    setTargetColumn(metricOptions[0]?.column ?? "");
-  }, [schema, dateColumn, targetColumn, metricOptions]);
+    if (targetColumn && targetOptions.some((c) => c.name === targetColumn)) return;
+    setTargetColumn(targetOptions[0]?.name ?? "");
+  }, [schema, dateColumn, targetColumn, targetOptions]);
 
   async function onRun() {
     if (!datasetId || !canRun) return;
@@ -221,7 +222,6 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
         {datasetId ? (
           <div className="flex items-center gap-2">
             <p className="text-sm text-foreground/70 break-all text-right max-w-xs">Dataset: <DatasetNameDisplay datasetId={datasetId} /></p>
-            <PdfReportButton datasetId={datasetId} label="Download forecast report" sections="forecasting" />
           </div>
         ) : null}
       </div>
@@ -288,10 +288,9 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                 </div>
               ) : null}
 
-              {!hasMetricColumn ? (
+              {!hasTargetColumn ? (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
-                  No reliable numeric value column was detected. Forecasting needs a measurable field such as revenue,
-                  sales, quantity, cost, inventory, or usage.
+                  Choose a target column different from the timeline. Numeric targets forecast the value; text or category targets forecast activity volume over time.
                 </div>
               ) : null}
 
@@ -333,13 +332,16 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Value to forecast</Label>
-                  <Select value={targetColumn} onValueChange={setTargetColumn} disabled={!hasMetricColumn}>
-                    <SelectTrigger><SelectValue placeholder="Choose target metric" /></SelectTrigger>
+                  <Label>Target to forecast</Label>
+                  <Select value={targetColumn} onValueChange={setTargetColumn} disabled={!hasTargetColumn}>
+                    <SelectTrigger><SelectValue placeholder="Choose target column" /></SelectTrigger>
                     <SelectContent>
-                      {metricOptions.map((c) => <SelectItem key={c.column} value={c.column}>{c.column}</SelectItem>)}
+                      {targetOptions.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-foreground/55">
+                    Numeric targets forecast their value. Text or category targets forecast how much activity appears over time.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -378,11 +380,19 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={onRun} disabled={!canRun || running}>
-                  {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-                  {running ? "Generating forecast..." : "Generate forecast"}
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={onRun} disabled={!canRun || running}>
+                    {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                    {running ? "Generating forecast..." : "Generate forecast"}
+                  </Button>
+                </div>
+                <PdfReportButton
+                  datasetId={datasetId}
+                  label="Download forecast report"
+                  sections="forecasting"
+                  className="ml-auto"
+                />
               </div>
             </>
           )}
@@ -403,14 +413,16 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><LineChart className="h-4 w-4" /> Forecast result</CardTitle>
-              <CardDescription>{result.target_column} forecasted {result.horizon} {result.frequency} periods ahead. Last generated {fmtDate(result.generated_at)}.</CardDescription>
+              <CardDescription>
+                {result.target_mode === "count"
+                  ? `${result.target_column} activity forecasted ${result.horizon} ${result.frequency} periods ahead.`
+                  : `${result.target_column} forecasted ${result.horizon} ${result.frequency} periods ahead.`} Last generated {fmtDate(result.generated_at)}.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg border border-black/10 p-3 dark:border-white/10"><p className="text-xs text-foreground/60">History used</p><p className="text-xl font-semibold">{result.history_periods}</p></div>
-                <div className="rounded-lg border border-black/10 p-3 dark:border-white/10"><p className="text-xs text-foreground/60">Timeline</p><p className="text-xl font-semibold capitalize">{result.frequency}</p></div>
-                <div className="rounded-lg border border-black/10 p-3 dark:border-white/10"><p className="text-xs text-foreground/60">Back-test error</p><p className="text-xl font-semibold">{result.metrics.mape != null ? `${fmtNum(result.metrics.mape)}%` : "-"}</p></div>
-                <div className="rounded-lg border border-black/10 p-3 dark:border-white/10"><p className="text-xs text-foreground/60">Method</p><p className="text-xl font-semibold capitalize">{result.model}</p></div>
+              <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3 text-sm leading-relaxed text-foreground/75">
+                The green line shows what already happened. The blue dashed line shows the expected future direction.
+                The light blue area is the planning range, so wider shading means the future is less certain.
               </div>
               <ForecastChart result={result} />
             </CardContent>
@@ -418,8 +430,8 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Business insights</CardTitle>
-              <CardDescription>Plain-English interpretation of the forecast and the history behind it.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Business predictions</CardTitle>
+              <CardDescription>What the forecast suggests for planning and decision-making.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               {result.insights.slice(0, 7).map((insight) => (
@@ -435,7 +447,7 @@ export function ForecastingCard({ datasetId }: { datasetId?: string }) {
       ) : (
         <Card>
           <CardContent className="py-8 text-sm text-foreground/65">
-            Choose a metric and run a forecast to see the chart, warnings, and business insights.
+            Choose a timeline and target column to see the chart, warnings, and business predictions.
           </CardContent>
         </Card>
       )}

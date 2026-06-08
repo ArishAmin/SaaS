@@ -185,6 +185,14 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
             >
               Go to cleaning
             </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                (window.location.href = `/dashboard/forecasting?datasetId=${encodeURIComponent(datasetId ?? "")}`)
+              }
+            >
+              Go to forecasting
+            </Button>
           </CardContent>
         </Card>
       ) : null}
@@ -286,16 +294,28 @@ export function InstantAnalyzerResults({ datasetId }: { datasetId?: string }) {
           <DatasetQualityCard datasetId={datasetId} />
 
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-black/10 dark:border-white/10">
-            <p className="text-sm text-foreground/70">Next: clean & preprocess your dataset.</p>
-            <Button
-              onClick={() =>
-              (window.location.href = `/dashboard/cleaning?datasetId=${encodeURIComponent(
-                datasetId ?? ""
-              )}`)
-              }
-            >
-              Clean & preprocess
-            </Button>
+            <p className="text-sm text-foreground/70">Next: clean your data or forecast a dated business metric.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                (window.location.href = `/dashboard/forecasting?datasetId=${encodeURIComponent(
+                  datasetId ?? ""
+                )}`)
+                }
+              >
+                Go to forecasting
+              </Button>
+              <Button
+                onClick={() =>
+                (window.location.href = `/dashboard/cleaning?datasetId=${encodeURIComponent(
+                  datasetId ?? ""
+                )}`)
+                }
+              >
+                Clean & preprocess
+              </Button>
+            </div>
           </div>
         </>
       ) : null}

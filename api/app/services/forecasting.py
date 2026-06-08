@@ -211,6 +211,7 @@ def _generate_insights(
     filled_periods: int,
     model_name: str,
     horizon: int,
+    target_mode: str,
 ) -> list[dict[str, str]]:
     insights: list[dict[str, str]] = []
     values = series.astype(float)
@@ -222,14 +223,15 @@ def _generate_insights(
     future_change = _pct_change(last_actual, final_forecast)
 
     if future_change is not None:
-        direction = "grow" if future_change > 3 else "decline" if future_change < -3 else "stay broadly stable"
+        direction = "increase" if future_change > 3 else "decrease" if future_change < -3 else "stay broadly stable"
+        subject = target_column if target_mode == "value" else f"activity for {target_column}"
         insights.append(
             {
                 "title": "Expected direction",
-                "summary": f"{target_column} is expected to {direction} over the next {horizon} {frequency_label} periods.",
+                "summary": f"{subject} is expected to {direction} over the next {horizon} {frequency_label} periods.",
                 "reasoning": (
-                    f"The forecast compares the latest observed value ({_fmt_num(last_actual)}) with the final projected "
-                    f"value ({_fmt_num(final_forecast)}), a change of about {future_change:.1f}%."
+                    f"The forecast compares the latest observed level ({_fmt_num(last_actual)}) with the final projected "
+                    f"level ({_fmt_num(final_forecast)}), a change of about {future_change:.1f}%."
                 ),
             }
         )
@@ -291,11 +293,11 @@ def _generate_insights(
         confidence = "high" if mape <= 10 else "medium" if mape <= 25 else "limited"
         insights.append(
             {
-                "title": "Forecast confidence",
-                "summary": f"Back-test confidence is {confidence}.",
+                "title": "Prediction confidence",
+                "summary": f"Prediction confidence is {confidence}.",
                 "reasoning": (
-                    f"The model was tested on the most recent historical periods and missed by about {mape:.1f}% on average. "
-                    f"The selected method was {model_name} because it performed best on that check."
+                    f"The forecast was checked against recent history and was off by about {mape:.1f}% on average. "
+                    "Lower error means the future estimate is more useful for planning."
                 ),
             }
         )
@@ -317,7 +319,7 @@ def _generate_insights(
             "title": "Near-term planning level",
             "summary": f"The average projected value is {_fmt_num(avg_forecast)} per {frequency_label.rstrip('ly')} period.",
             "reasoning": (
-                f"This is the average of the future forecast points, useful for budgeting, staffing, inventory, or revenue planning."
+                "This is the average of the future forecast points, useful for planning staffing, inventory, marketing, support, or revenue expectations."
             ),
         }
     )
@@ -332,23 +334,33 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
     if options.date_column not in df.columns:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid date column for forecasting.")
     if options.target_column not in df.columns:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid numeric column to forecast.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a valid target column to forecast.")
     if options.date_column == options.target_column:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date column and value column must be different.")
 
     dates = _parse_date_series(df[options.date_column], allow_numeric=True)
-    values = pd.to_numeric(df[options.target_column], errors="coerce")
+    if int(dates.notna().sum()) < 4:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The selected timeline column does not contain enough readable dates. Choose a column with real dates, months, or timestamps.",
+        )
+
+    target_raw = df[options.target_column]
+    numeric_values = pd.to_numeric(target_raw, errors="coerce")
+    numeric_ratio = float(numeric_values.notna().mean()) if len(numeric_values) else 0.0
+    target_mode = "value" if pd.api.types.is_numeric_dtype(target_raw) or numeric_ratio >= 0.75 else "count"
+    values = numeric_values if target_mode == "value" else target_raw.notna().astype(float)
     valid = pd.DataFrame({"date": dates, "value": values}).dropna()
 
     if len(valid) < 4:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Forecasting needs at least 4 usable rows with both a valid date and a numeric value.",
+            detail="Forecasting needs at least 4 usable rows with a valid date and target value.",
         )
 
     dropped = len(df) - len(valid)
     if dropped:
-        warnings.append(f"{dropped} rows were skipped because the date or value was missing or invalid.")
+        warnings.append(f"{dropped} rows were skipped because the selected timeline or target value was missing or invalid.")
 
     valid = valid.sort_values("date")
     freq_code, freq_label, freq_warnings = _freq_to_pandas(options.frequency, valid["date"])
@@ -372,7 +384,7 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
         valid["bucket"] = valid["bucket"].dt.to_period("M").dt.start_time
 
     grouped = valid.groupby("bucket")["value"]
-    agg = grouped.sum() if options.aggregation == "sum" else grouped.mean()
+    agg = grouped.sum() if target_mode == "count" or options.aggregation == "sum" else grouped.mean()
     agg = agg.sort_index()
     if len(agg) < 4:
         raise HTTPException(
@@ -456,6 +468,7 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
         filled_periods=filled_periods,
         model_name=model_name,
         horizon=horizon,
+        target_mode=target_mode,
     )
 
     actual_points = [
@@ -475,8 +488,9 @@ def run_forecast(df: pd.DataFrame, options: ForecastRequestOptions) -> dict[str,
     return {
         "date_column": options.date_column,
         "target_column": options.target_column,
+        "target_mode": target_mode,
         "frequency": freq_label,
-        "aggregation": options.aggregation,
+        "aggregation": "count" if target_mode == "count" else options.aggregation,
         "horizon": horizon,
         "model": model_name,
         "history_periods": int(len(series)),
