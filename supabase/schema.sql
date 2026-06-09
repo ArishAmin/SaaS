@@ -29,6 +29,12 @@ create table if not exists public.datasets (
   quick_evaluation_json jsonb,
   quick_trained_at timestamptz,
 
+  forecast_json jsonb,
+  forecasted_at timestamptz,
+
+  business_insights_json jsonb,
+  business_insights_at timestamptz,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

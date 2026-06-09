@@ -24,6 +24,7 @@ from .routers.profiles import router as profiles_router
 from .routers.admin import router as admin_router
 from .routers.support import router as support_router
 from .routers.forecasting import router as forecasting_router
+from .routers.business_insights import router as business_insights_router
 from .core.config import get_settings
 from .core.rate_limit import limiter
 from .core.http_client import HTTPClient
@@ -97,6 +98,7 @@ app.include_router(profiles_router)
 app.include_router(admin_router)
 app.include_router(support_router)
 app.include_router(forecasting_router)
+app.include_router(business_insights_router)
 
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(_request, _exc):

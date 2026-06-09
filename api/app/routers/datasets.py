@@ -252,7 +252,8 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
             f"analysis_json,status,created_at,updated_at,analyzed_at,error,"
             f"cleaned_storage_path,cleaned_params,cleaned_target_column,cleaned_at,"
             f"engineered_storage_path,engineered_params,engineered_at,"
-            f"quick_evaluation_json,quick_trained_at,forecast_json,forecasted_at"
+            f"quick_evaluation_json,quick_trained_at,forecast_json,forecasted_at,"
+            f"business_insights_json,business_insights_at"
         ),
     )
     if not rows:
@@ -474,7 +475,7 @@ async def list_datasets(
         "datasets",
         query=(
             f"user_id=eq.{user_id}"
-            f"&select=dataset_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at,forecasted_at"
+            f"&select=dataset_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at,forecasted_at,business_insights_at"
             f"&order=updated_at.desc"
         ),
     )
@@ -516,6 +517,8 @@ async def get_single_dataset(
         "has_quick_evaluation": bool(_quick_evaluation_is_displayable(quick)),
         "forecasted_at": dataset.get("forecasted_at"),
         "has_forecast": bool(dataset.get("forecast_json")),
+        "business_insights_at": dataset.get("business_insights_at"),
+        "has_business_insights": bool(dataset.get("business_insights_json")),
     }
 
 

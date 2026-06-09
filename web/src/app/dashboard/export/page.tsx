@@ -15,6 +15,7 @@ import {
   canExportBundle,
   hasCleanedDataset,
   hasEngineeredDataset,
+  hasBusinessInsights,
   hasForecast,
   hasInstantPreview,
 } from "@/lib/datasetPipeline";
@@ -143,6 +144,7 @@ export default function ExportPage() {
 
   const hasCleaned = hasCleanedDataset(meta);
   const hasEngineered = hasEngineeredDataset(meta);
+  const hasInsights = hasBusinessInsights(meta);
   const hasTrained = hasInstantPreview(meta);
   const hasForecastResult = hasForecast(meta);
   const canBundle = canExportBundle(meta);
@@ -192,6 +194,7 @@ export default function ExportPage() {
               <p className="font-medium text-foreground/70">{meta.original_file_name}</p>
               {hasCleaned && <p>Cleaned: {fmtDate(meta.cleaned_at)}</p>}
               {hasEngineered && <p>Engineered: {fmtDate(meta.engineered_at)}</p>}
+              {hasInsights && <p>Insights: {fmtDate(meta.business_insights_at)}</p>}
               {hasTrained && <p>Preview: {fmtDate(meta.quick_trained_at)}</p>}
               {hasForecastResult && <p>Forecast: {fmtDate(meta.forecasted_at)}</p>}
             </div>
@@ -265,7 +268,7 @@ export default function ExportPage() {
             </CardTitle>
             <CardDescription className="leading-relaxed">
               Printable summary for managers or compliance: pipeline timeline, column profile, cleaning settings,
-              model comparison tables, and forecast predictions when available.
+              business insights, model comparison tables, and forecast predictions when available.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

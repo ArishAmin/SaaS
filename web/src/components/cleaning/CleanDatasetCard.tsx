@@ -288,6 +288,9 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
                 <Button variant="outline" onClick={() => (window.location.href = `/dashboard/analyzer?datasetId=${encodeURIComponent(datasetId ?? "")}`)} disabled={!datasetId}>
                   Back to analyzer
                 </Button>
+                <Button variant="outline" onClick={() => (window.location.href = `/dashboard/business-insights?datasetId=${encodeURIComponent(datasetId ?? "")}`)} disabled={!datasetId}>
+                  Go to business insights
+                </Button>
                 <Button variant="outline" onClick={() => (window.location.href = `/dashboard/forecasting?datasetId=${encodeURIComponent(datasetId ?? "")}`)} disabled={!datasetId}>
                   Go to forecasting
                 </Button>
@@ -307,8 +310,16 @@ export function CleanDatasetCard({ datasetId }: { datasetId?: string }) {
           <CleanedDatasetPreview datasetId={datasetId} />
 
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-black/10 dark:border-white/10">
-            <p className="text-sm text-foreground/70">Next: forecast a metric, enrich features, or train models.</p>
+            <p className="text-sm text-foreground/70">Next: generate business insights, forecast a metric, enrich features, or train models.</p>
             <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  (window.location.href = `/dashboard/business-insights?datasetId=${encodeURIComponent(datasetId)}`)
+                }
+              >
+                Go to Business Insights
+              </Button>
               <Button
                 variant="outline"
                 onClick={() =>

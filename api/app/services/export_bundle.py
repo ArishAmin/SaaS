@@ -34,7 +34,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
         "WHAT IS INSIDE THIS ZIP",
         "------------------------",
         "  README.txt                     - This file",
-        "  report/project-report.pdf      - Full project report (analysis, cleaning, models, forecasts)",
+        "  report/project-report.pdf      - Full project report (analysis, cleaning, business insights, models, forecasts)",
         "  scripts/requirements-train.txt - Python packages for training script",
         "  scripts/cleaning_pipeline.py   - Reproduce cleaning on a new raw tabular file (optional)",
     ]
@@ -72,6 +72,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
             "Pipeline timestamps:",
             f"  Analyzed:    {dataset.get('analyzed_at') or '-'}",
             f"  Cleaned:     {dataset.get('cleaned_at') or '-'}",
+            f"  Insights:    {dataset.get('business_insights_at') or '-'}",
             f"  Engineered:  {dataset.get('engineered_at') or '-'}",
             f"  Preview run: {dataset.get('quick_trained_at') or '-'}",
             f"  Forecast:    {dataset.get('forecasted_at') or '-'}",

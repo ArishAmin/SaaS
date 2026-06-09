@@ -11,6 +11,8 @@ export type DatasetPipelineMeta = {
   has_quick_evaluation?: boolean;
   forecasted_at?: string | null;
   has_forecast?: boolean;
+  business_insights_at?: string | null;
+  has_business_insights?: boolean;
 };
 
 export type PipelineDataSource = "engineered" | "cleaned" | "raw";
@@ -58,6 +60,11 @@ export function hasForecast(meta: DatasetPipelineMeta | null | undefined): boole
   return !!(meta.forecasted_at || meta.has_forecast);
 }
 
+export function hasBusinessInsights(meta: DatasetPipelineMeta | null | undefined): boolean {
+  if (!meta) return false;
+  return !!(meta.business_insights_at || meta.has_business_insights);
+}
+
 export function canExportBundle(meta: DatasetPipelineMeta | null | undefined): boolean {
-  return hasCleanedDataset(meta) || hasEngineeredDataset(meta) || hasInstantPreview(meta) || hasForecast(meta);
+  return hasCleanedDataset(meta) || hasEngineeredDataset(meta) || hasInstantPreview(meta) || hasForecast(meta) || hasBusinessInsights(meta);
 }

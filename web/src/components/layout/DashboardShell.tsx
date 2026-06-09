@@ -20,6 +20,7 @@ import {
   FlaskConical,
   CreditCard,
   CalendarClock,
+  PieChart,
 } from "lucide-react";
 
 import {
@@ -50,6 +51,7 @@ const pipelineNav: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },
   { href: "/dashboard/analyzer", label: "Analyze & Explore", icon: LineChart },
   { href: "/dashboard/cleaning", label: "Clean & Encode", icon: ListChecks },
+  { href: "/dashboard/business-insights", label: "Business Insights", icon: PieChart },
   { href: "/dashboard/feature-generation", label: "Generate Features", icon: Wand2 },
   { href: "/dashboard/recommendation", label: "Model Ideas", icon: Sparkles },
   { href: "/dashboard/training", label: "Train Models", icon: FlaskConical },

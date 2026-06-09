@@ -162,6 +162,7 @@ def build_dataset_report_pdf(
     pdf.set_margins(left=16, top=16, right=16)
 
     forecast = dataset.get("forecast_json") or {}
+    business = dataset.get("business_insights_json") or {}
 
     # --- Cover ---
     pdf.add_page()
@@ -187,7 +188,7 @@ def build_dataset_report_pdf(
         5,
         _pdf_safe(
             "This document summarizes the end-to-end dataset workflow: data profiling, cleaning, optional feature "
-            "engineering, instant model comparison, and forecasting when available. Metrics and forecasts are "
+            "engineering, business insights, instant model comparison, and forecasting when available. Metrics and forecasts are "
             "directional planning aids and should be reviewed against business context before production decisions."
         ),
     )
@@ -199,6 +200,7 @@ def build_dataset_report_pdf(
         ("Data analysis", dataset.get("analyzed_at")),
         ("Cleaning & encoding", dataset.get("cleaned_at")),
         ("Generated features applied", dataset.get("engineered_at")),
+        ("Business insights", dataset.get("business_insights_at")),
         ("Instant model preview", dataset.get("quick_trained_at")),
         ("Forecasting", dataset.get("forecasted_at")),
     ]
@@ -221,7 +223,7 @@ def build_dataset_report_pdf(
             f"Task: {quick.get('task_type', '-')}  |  Target: {quick.get('target_column', '-')}"
         )
 
-    if include("analysis") or include("cleaning") or include("training") or include("forecasting"):
+    if include("analysis") or include("cleaning") or include("business_insights") or include("training") or include("forecasting"):
         # --- Project metadata ---
         pdf.section_title("Project metadata", 2)
         pdf.key_value_table(
@@ -304,9 +306,60 @@ def build_dataset_report_pdf(
                             )
                         )
 
+    if include("business_insights"):
+        pdf.section_title("Business insights", 5)
+        if not isinstance(business, dict) or not business.get("insights"):
+            pdf.body_text("Business insights have not been run for this dataset.")
+        else:
+            pdf.body_text(
+                "Business-friendly exploratory analysis of the dataset: dashboard-ready charts, quality signals, "
+                "segment patterns, and plain recommendations for decision-making."
+            )
+            pdf.key_value_table(
+                [
+                    ("Rows analyzed", str(business.get("row_count") or "-")),
+                    ("Columns analyzed", str(business.get("column_count") or "-")),
+                    ("Numeric fields", str(business.get("numeric_columns") or "-")),
+                    ("Category fields", str(business.get("category_columns") or "-")),
+                    ("Date/time fields", str(business.get("date_columns") or "-")),
+                    ("Missing cells", f"{business.get('missing_cells_percent', '-')}%"),
+                    ("Duplicate rows", str(business.get("duplicate_rows") or 0)),
+                    ("Generated", _fmt_ts(business.get("generated_at"))),
+                ]
+            )
+
+            charts = business.get("charts") or []
+            if charts:
+                pdf.ln(2)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Dashboard chart summary", new_x="LMARGIN", new_y="NEXT")
+                for chart in charts[:6]:
+                    if not isinstance(chart, dict):
+                        continue
+                    title = str(chart.get("title") or "Chart")
+                    items = chart.get("items") or []
+                    top = items[0] if isinstance(items, list) and items else {}
+                    top_label = top.get("label", "-") if isinstance(top, dict) else "-"
+                    top_value = top.get("value", "-") if isinstance(top, dict) else "-"
+                    pdf.bullet(f"{title}: top value is {top_label} ({top_value})")
+
+            insights = business.get("insights") or []
+            if insights:
+                pdf.ln(2)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Business insights", new_x="LMARGIN", new_y="NEXT")
+                for item in insights[:12]:
+                    if not isinstance(item, dict):
+                        continue
+                    pdf.prediction_block(
+                        str(item.get("title") or "Insight"),
+                        str(item.get("summary") or ""),
+                        str(item.get("reasoning") or ""),
+                    )
+
     if include("training"):
         quick = dataset.get("quick_evaluation_json") or {}
-        pdf.section_title("Model comparison (instant preview)", 5)
+        pdf.section_title("Model comparison (instant preview)", 6)
         pdf.body_text(
             "Several algorithms were trained on a random sample (up to 5,000 rows or 5% of data). "
             "Results are indicative; validate on held-out production data before deployment."
@@ -383,7 +436,7 @@ def build_dataset_report_pdf(
                 )
 
     if include("forecasting"):
-        pdf.section_title("Business forecast", 6)
+        pdf.section_title("Business forecast", 7)
         if not isinstance(forecast, dict) or not forecast.get("forecast"):
             pdf.body_text("Forecasting has not been run for this dataset.")
         else:
