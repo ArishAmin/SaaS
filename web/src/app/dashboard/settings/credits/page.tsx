@@ -121,9 +121,7 @@ export default function CreditsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="capitalize">{data.plan} plan</CardTitle>
-          <CardDescription>
-            Status: {data.subscription_status === "none" ? "Free tier" : data.subscription_status}
-          </CardDescription>
+          
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-6">
