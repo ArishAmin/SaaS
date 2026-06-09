@@ -75,7 +75,7 @@ export default function CreditsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Usage & credits</CardTitle>
-          <CardDescription>Billing enforcement is off (local dev only).</CardDescription>
+          <CardDescription>Billing enforcement is off.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -206,9 +206,7 @@ export default function CreditsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Credit costs</CardTitle>
-          <CardDescription>
-            Browsing analyzer, EDA, and quality views is free. Credits apply when you run a step.
-          </CardDescription>
+          
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -231,9 +229,7 @@ export default function CreditsSettingsPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-muted-foreground mt-4">
-            Saving your feature list and downloading the engineered CSV after Generate features — no extra charge.
-          </p>
+          
         </CardContent>
       </Card>
 
