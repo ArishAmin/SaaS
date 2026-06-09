@@ -18,7 +18,6 @@ import { isBillingEnforcementEnabled } from "@/lib/billing";
 import {
   CREDIT_USAGE_ROWS,
   CUSTOM_CREDIT_TIERS,
-  GENERATIVE_PIPELINE_CREDITS,
   PLANS,
   YEARLY_DISCOUNT_PERCENT,
   formatPlanPrice,
@@ -128,12 +127,7 @@ export default function PricingPage() {
               Simple pricing for your data pipeline
             </h1>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Credits are spent only when you run a step
-              (analyze, clean, suggest features, train preview, etc.). A typical generative run ≈{" "}
-              <strong className="text-slate-800 dark:text-slate-200">
-                {GENERATIVE_PIPELINE_CREDITS} credits
-              </strong>
-              .
+              Credits are spent only when you run a step such as cleaning, generating insights, forecasting, or training a preview.
             </p>
 
             <div className="inline-flex mt-6 p-1 rounded-full bg-slate-200 dark:bg-slate-800">
@@ -408,7 +402,7 @@ export default function PricingPage() {
             {[
               {
                 q: "How do Generate features and Model ideas differ?",
-                a: "Generate features (4 credits) suggests new columns from your data; saving and CSV download are free. Model ideas (2 credits) recommends algorithms, not new columns.",
+                a: "Generate features (5 credits) suggests new columns from your data. Saving, applying feature selections, and CSV download are free. Model ideas (3 credits) recommends algorithms, not new columns.",
               },
               {
                 q: "What happens if I run out of credits?",
@@ -420,7 +414,7 @@ export default function PricingPage() {
               },
               {
                 q: "Is full model training included?",
-                a: "Instant preview runs in the cloud (8 credits). Full training is a Python script you run locally—no extra cloud training charge.",
+                a: "Instant preview runs in the cloud (11 credits). Full training is a Python script you run locally—no extra cloud training charge.",
               },
             ].map((faq, idx) => (
               <div
@@ -442,3 +436,4 @@ export default function PricingPage() {
     </div>
   );
 }
+

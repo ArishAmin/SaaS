@@ -3,16 +3,16 @@ export type BillingInterval = "monthly" | "yearly";
 
 export const CREDIT_COST_LABELS: Record<string, number> = {
   analyze: 2,
-  clean: 3,
-  feature_suggest: 4,
+  clean: 4,
+  feature_suggest: 5,
   feature_apply: 0,
-  train_instant: 8,
-  recommend: 2,
+  train_instant: 11,
+  recommend: 3,
   export_pdf: 2,
-  export_bundle: 4,
-  forecast: 8,
-  businessInsights: 16,
-  feature_engineer: 4,
+  export_bundle: 6,
+  forecast: 10,
+  business_insights: 16,
+  feature_engineer: 0,
 };
 
 export interface PlanDefinition {
@@ -37,8 +37,8 @@ export interface CustomCreditTier {
   contactSupport: boolean;
 }
 
-/** Generative path: suggest only; save + CSV download are free */
-export const GENERATIVE_PIPELINE_CREDITS = 2 + 3 + 4 + 8 + 2; // analyze + clean + suggest + train + recommend = 19
+/** Main one-run path stays within the 60-credit free starter pack. */
+export const STARTER_FULL_WORKFLOW_CREDITS = 60;
 
 export const YEARLY_DISCOUNT_PERCENT = 17;
 
@@ -62,7 +62,7 @@ export const PLANS: PlanDefinition[] = [
     datasetsLabel: "Up to 3 active datasets",
     features: [
       "60 credits one-time (until you upgrade)",
-      "About 3 full pipeline runs on your starter pack",
+      "Enough credits to run every main workflow step once",
       "10 MB max file size, up to 20,000 rows per step",
       "Instant profile, EDA and quality views (free to browse)",
       "Pay credits only when you run a step (clean, suggest, train, etc.)",
@@ -83,7 +83,7 @@ export const PLANS: PlanDefinition[] = [
     datasetsLabel: "Up to 12 active datasets",
     features: [
       "450 credits per month",
-      "About 23 generative pipeline runs per month",
+      "Enough credits for multiple full workflow runs per month",
       "30 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows (all plans)",
       "All instant-preview models",
@@ -106,7 +106,7 @@ export const PLANS: PlanDefinition[] = [
     datasetsLabel: "Unlimited active datasets",
     features: [
       "2,500 credits per month",
-      "About 130+ generative pipeline runs per month",
+      "Enough credits for high-volume workflow runs per month",
       "75 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows (all plans)",
       "Unlimited concurrent datasets",
@@ -136,12 +136,12 @@ export function formatPlanPrice(plan: PlanDefinition, interval: BillingInterval)
 
 export const CREDIT_USAGE_ROWS = [
   { action: "Analyze / profile", credits: 2 },
-  { action: "Clean and encode", credits: 3 },
-  { action: "Generate features", credits: 4 },
-  { action: "Instant model preview", credits: 8 },
-  { action: "Model ideas", credits: 2 },
-  { action: "Forecast future values", credits: 8 },
+  { action: "Clean and encode", credits: 4 },
+  { action: "Generate features", credits: 5 },
+  { action: "Instant model preview", credits: 11 },
+  { action: "Model ideas", credits: 3 },
+  { action: "Forecast future values", credits: 10 },
   { action: "Business insights", credits: 16 },
   { action: "PDF report", credits: 2 },
-  { action: "ZIP export bundle", credits: 4 },
+  { action: "ZIP export bundle", credits: 6 },
 ];

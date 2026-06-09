@@ -2078,9 +2078,6 @@ async def feature_engineer(
     if not cleaned_path or not target_column:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleaned dataset not available")
 
-    if not payload.dry_run:
-        await require_credits(user_id, CreditAction.FEATURE_ENGINEER, dataset_id=str(dataset_id))
-
     raw = await storage_download("datasets", cleaned_path)
     udl = await get_user_data_limits(user_id)
     if len(raw) > settings.cleaned_max_bytes:

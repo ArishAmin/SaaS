@@ -211,22 +211,26 @@ export default function CreditsSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-muted-foreground border-b">
-                <th className="py-2 pr-4 font-medium">Operation</th>
-                <th className="py-2 text-right font-medium">Credits</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.credit_costs_table.map((row) => (
-                <tr key={row.action} className="border-b border-border/50 last:border-0">
-                  <td className="py-2.5 pr-4">{row.label}</td>
-                  <td className="py-2.5 text-right font-medium tabular-nums">{row.credits}</td>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                  <th className="py-2 px-4 font-medium">Action</th>
+                  <th className="py-2 px-4 text-right font-medium">Credits</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.credit_costs_table.map((row) => (
+                  <tr key={row.action} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                    <td className="py-2.5 px-4 text-slate-700 dark:text-slate-300">{row.label}</td>
+                    <td className="py-2.5 px-4 text-right font-medium tabular-nums text-slate-900 dark:text-white">
+                      {row.credits === 0 ? "Free" : row.credits}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="text-xs text-muted-foreground mt-4">
             Saving your feature list and downloading the engineered CSV after Generate features — no extra charge.
           </p>

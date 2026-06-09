@@ -14,6 +14,7 @@ const PLANS = [
     description: "Try Acutize with starter credits before choosing a paid plan.",
     features: [
       "60 credits one-time (until you upgrade)",
+      "Enough credits to run every main workflow step once",
       "10 MB max file size, up to 20,000 rows per step",
       "Up to 3 active datasets",
       "Instant profile, EDA and quality views",
@@ -33,7 +34,7 @@ const PLANS = [
     description: "For practitioners running multiple datasets each month.",
     features: [
       "450 credits per month",
-      "About 23 generative pipeline runs per month",
+      "Enough credits for multiple full workflow runs per month",
       "30 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows",
       "Up to 12 active datasets",
@@ -54,7 +55,7 @@ const PLANS = [
     description: "Unlimited datasets and larger files within server-safe limits.",
     features: [
       "2,500 credits per month",
-      "About 130+ generative pipeline runs per month",
+      "Enough credits for high-volume workflow runs per month",
       "75 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows",
       "Unlimited concurrent datasets",
