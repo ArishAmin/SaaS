@@ -36,7 +36,7 @@ CREDIT_COSTS: dict[CreditAction, int] = {
     CreditAction.EXPORT_BUNDLE: 4,
     CreditAction.FEATURE_ENGINEER: 4,
     CreditAction.FORECAST: 8,
-    CreditAction.BUSINESS_INSIGHTS: 10,
+    CreditAction.BUSINESS_INSIGHTS: 16,
 }
 
 CREDIT_ACTION_LABELS: dict[str, str] = {

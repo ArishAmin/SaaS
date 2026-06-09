@@ -50,6 +50,14 @@ SEGMENT_HINTS = (
 OPERATION_HINTS = ("ticket", "support", "issue", "complaint", "case", "delay", "return", "churn", "risk")
 IDENTIFIER_HINTS = ("id", "uuid", "key", "hash", "token", "code", "ref")
 
+CONTEXT_HINTS: dict[str, tuple[str, ...]] = {
+    "sales": ("revenue", "sales", "order", "customer", "product", "plan", "region", "deal"),
+    "finance": ("revenue", "profit", "cost", "margin", "expense", "income", "amount", "balance"),
+    "support": ("ticket", "support", "issue", "case", "priority", "resolution", "complaint"),
+    "retention": ("churn", "active", "retention", "satisfaction", "renewal", "cancel"),
+    "operations": ("inventory", "delivery", "delay", "usage", "quantity", "volume", "capacity"),
+}
+
 
 def _fmt_num(value: float | int | None) -> str:
     if value is None:
@@ -233,6 +241,35 @@ def _kpi(label: str, value: str, detail: str) -> dict[str, str]:
     return {"label": label, "value": value, "detail": detail}
 
 
+def _detect_context(columns: list[str]) -> str:
+    joined = " ".join(c.lower() for c in columns)
+    scores = {name: sum(1 for token in hints if token in joined) for name, hints in CONTEXT_HINTS.items()}
+    best, score = max(scores.items(), key=lambda item: item[1])
+    return best if score >= 2 else "general business"
+
+
+def _confidence(count: int, groups: int = 1) -> str:
+    if count >= 100 and groups >= 3:
+        return "Strong signal"
+    if count >= 25 and groups >= 2:
+        return "Directional signal"
+    return "Limited signal"
+
+
+def _segment_metric_frame(df: pd.DataFrame, segment: str, metric: str) -> pd.DataFrame:
+    work = pd.DataFrame({"segment": df[segment].astype(str), "value": pd.to_numeric(df[metric], errors="coerce")}).dropna()
+    if work.empty:
+        return pd.DataFrame(columns=["segment", "sum", "mean", "count"])
+    grouped = (
+        work.groupby("segment")["value"]
+        .agg(["sum", "mean", "count"])
+        .query("count >= 2")
+        .sort_values("sum", ascending=False)
+        .reset_index()
+    )
+    return grouped
+
+
 def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
     if df.empty:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This dataset is empty, so business insights cannot run.")
@@ -246,10 +283,19 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
     primary_metric = _choose_business_numeric(df, numeric_cols)
     primary_segment = _choose_segment_column(df, category_cols)
     operation_metric = _choose_operation_numeric(numeric_cols)
+    context = _detect_context([str(c) for c in df.columns])
 
     charts: list[dict[str, Any]] = []
     insights: list[dict[str, str]] = []
     kpis: list[dict[str, str]] = []
+
+    insights.append(
+        _insight(
+            "Business context detected",
+            f"This dataset looks most like a {context} dataset.",
+            "The app inferred this from column names and available values, then prioritized charts that explain business value, segment performance, activity movement, and operational pressure instead of repeating basic data-quality checks.",
+        )
+    )
 
     if numeric_cols:
         totals = []
@@ -333,30 +379,26 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                 _insight(
                     "Largest business segment",
                     f"{top_label} is the largest group in {selected_category}, representing {_pct(top_share)} of records.",
-                    f"The app counted each value in {selected_category}. This group has the largest visible presence, so it may deserve focused reporting, retention review, sales analysis, or operational planning.",
+                    f"{_confidence(row_count, len(counts))}: the app counted each value in {selected_category}. This group has the largest visible presence, so it may deserve focused reporting, retention review, sales analysis, or operational planning.",
                 )
             )
 
     if primary_metric and category_cols:
-        metric = pd.to_numeric(df[primary_metric], errors="coerce")
         best_segment: tuple[str, str, float, int] | None = None
         weakest_segment: tuple[str, str, float, int] | None = None
         categories_to_check = [primary_segment] if primary_segment else []
         categories_to_check.extend([c for c in category_cols[:12] if c not in categories_to_check])
 
         for cat in categories_to_check:
-            work = pd.DataFrame({"segment": df[cat].astype(str), "value": metric}).dropna()
-            if work.empty:
-                continue
-            grouped = work.groupby("segment")["value"].agg(["mean", "count"]).query("count >= 2").sort_values("mean", ascending=False)
+            grouped = _segment_metric_frame(df, cat, primary_metric).sort_values("mean", ascending=False)
             if grouped.empty:
                 continue
-            top_name = str(grouped.index[0])
+            top_name = str(grouped.iloc[0]["segment"])
             top_value = float(grouped.iloc[0]["mean"])
             top_count = int(grouped.iloc[0]["count"])
             if best_segment is None or top_value > best_segment[2]:
                 best_segment = (cat, top_name, top_value, top_count)
-            low_name = str(grouped.index[-1])
+            low_name = str(grouped.iloc[-1]["segment"])
             low_value = float(grouped.iloc[-1]["mean"])
             low_count = int(grouped.iloc[-1]["count"])
             if weakest_segment is None or low_value < weakest_segment[2]:
@@ -364,20 +406,29 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
 
         if best_segment:
             cat, segment, value, count = best_segment
+            segment_frame = _segment_metric_frame(df, cat, primary_metric)
+            total_metric = float(segment_frame["sum"].sum()) if not segment_frame.empty else 0.0
+            top_sum = float(segment_frame.iloc[0]["sum"]) if not segment_frame.empty else 0.0
+            top_contribution = (top_sum / max(abs(total_metric), 1e-9)) * 100
             kpis.append(_kpi("Best performing segment", segment, f"Highest average {primary_metric}: {_fmt_num(value)}."))
             charts.append(
                 _chart(
-                    f"{primary_metric} by {cat}",
-                    "Highlights which segment has the highest average business value.",
+                    f"{primary_metric} contribution by {cat}",
+                    "Shows which segment contributes the largest share of total business value.",
                     [
-                        {"label": idx, "value": val, "hint": f"Average {_fmt_num(val)}"}
-                        for idx, val in pd.DataFrame({"segment": df[cat].astype(str), "value": metric})
-                        .dropna()
-                        .groupby("segment")["value"]
-                        .mean()
-                        .sort_values(ascending=False)
-                        .head(10)
-                        .items()
+                        {"label": row["segment"], "value": float(row["sum"]), "hint": f"Total {_fmt_num(float(row['sum']))}"}
+                        for _, row in segment_frame.sort_values("sum", ascending=False).head(10).iterrows()
+                    ],
+                    chart_type="pie",
+                )
+            )
+            charts.append(
+                _chart(
+                    f"Average {primary_metric} by {cat}",
+                    "Highlights which segment has the highest typical business value per record.",
+                    [
+                        {"label": row["segment"], "value": float(row["mean"]), "hint": f"Average {_fmt_num(float(row['mean']))}"}
+                        for _, row in segment_frame.sort_values("mean", ascending=False).head(10).iterrows()
                     ],
                 )
             )
@@ -385,16 +436,47 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                 _insight(
                     "Highest value segment",
                     f"{segment} has the highest average {primary_metric} within {cat}.",
-                    f"The app compared average {primary_metric} across groups in {cat}. {segment} leads with an average of {_fmt_num(value)} across {count:,} usable rows, making it a useful segment to study for pricing, retention, sales, or operational focus.",
+                    f"{_confidence(count, len(segment_frame))}: the app compared average {primary_metric} across groups in {cat}. {segment} leads with an average of {_fmt_num(value)} across {count:,} usable rows, making it a useful segment to study for pricing, retention, sales, or operational focus.",
+                )
+            )
+            insights.append(
+                _insight(
+                    "Segment contribution",
+                    f"{segment_frame.iloc[0]['segment']} contributes {_pct(top_contribution)} of total {primary_metric}.",
+                    f"{_confidence(int(segment_frame.iloc[0]['count']), len(segment_frame))}: the app compared total {primary_metric} by {cat}. A high contribution share means this segment may deserve priority attention because it carries a large part of the business result.",
                 )
             )
         if weakest_segment:
             cat, segment, value, count = weakest_segment
+            top_value = best_segment[2] if best_segment else value
+            gap = (top_value - value) / max(abs(value), 1e-9) * 100 if value else None
             insights.append(
                 _insight(
                     "Lowest value segment",
                     f"{segment} has the lowest average {primary_metric} within {cat}.",
-                    f"The app compared group averages inside {cat}. {segment} averages {_fmt_num(value)} across {count:,} usable rows, so it may need pricing review, better onboarding, product changes, or targeted support depending on your business context.",
+                    f"{_confidence(count)}: the app compared group averages inside {cat}. {segment} averages {_fmt_num(value)} across {count:,} usable rows. The gap from the top segment is about {_pct(gap) if gap is not None else 'not measurable'}, so this group may need pricing review, better onboarding, product changes, or targeted support depending on your business context.",
+                )
+            )
+
+    if operation_metric and primary_segment:
+        op_frame = _segment_metric_frame(df, primary_segment, operation_metric)
+        if not op_frame.empty:
+            charts.append(
+                _chart(
+                    f"{operation_metric} by {primary_segment}",
+                    "Shows which segment creates the largest operational load.",
+                    [
+                        {"label": row["segment"], "value": float(row["sum"]), "hint": f"Total {_fmt_num(float(row['sum']))}"}
+                        for _, row in op_frame.sort_values("sum", ascending=False).head(10).iterrows()
+                    ],
+                )
+            )
+            top_op = op_frame.sort_values("sum", ascending=False).iloc[0]
+            insights.append(
+                _insight(
+                    "Operational load concentration",
+                    f"{top_op['segment']} creates the highest total {operation_metric}.",
+                    f"{_confidence(int(top_op['count']), len(op_frame))}: the app summed {operation_metric} by {primary_segment}. If this metric represents tickets, complaints, returns, delays, or usage load, this segment may need process improvement, support capacity, or product attention.",
                 )
             )
 
@@ -422,7 +504,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                 _insight(
                     "Strongest metric relationship",
                     f"{a} and {b} move together the most among measurable fields.",
-                    f"The app compared numeric business fields pair by pair. This pair had the strongest relationship at {_pct(value * 100)}, which may point to a business driver, dependency, or duplicated measurement worth investigating.",
+                    f"{_confidence(row_count)}: the app compared numeric business fields pair by pair. This pair had the strongest relationship at {_pct(value * 100)}, which may point to a business driver, dependency, or measurement worth investigating.",
                 )
             )
 
@@ -430,7 +512,22 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         date_name, dates = max(date_cols, key=lambda item: int(item[1].notna().sum()))
         usable = dates.dropna().sort_values()
         if len(usable):
-            daily = usable.dt.tz_convert("UTC").dt.tz_localize(None).dt.floor("D").value_counts().sort_index()
+            day_bucket = usable.dt.tz_convert("UTC").dt.tz_localize(None).dt.floor("D")
+            daily = day_bucket.value_counts().sort_index()
+            if primary_metric:
+                trend_frame = pd.DataFrame({"date": day_bucket, "value": pd.to_numeric(df[primary_metric], errors="coerce")}).dropna()
+                metric_daily = trend_frame.groupby("date")["value"].sum().sort_index()
+            else:
+                metric_daily = pd.Series(dtype=float)
+            if primary_metric and len(metric_daily):
+                charts.append(
+                    _chart(
+                        f"{primary_metric} over time",
+                        "Shows how the main business metric changes across the available timeline.",
+                        [{"label": idx.date().isoformat(), "value": val, "hint": f"Total {_fmt_num(float(val))}"} for idx, val in metric_daily.tail(12).items()],
+                        chart_type="line",
+                    )
+                )
             charts.append(
                 _chart(
                     f"Business activity over time ({date_name})",
@@ -459,6 +556,20 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                             "Recent activity movement",
                             f"Recent record activity is {direction} than the period before it.",
                             f"The app compared the average number of records in the latest days against the previous comparable days. The change was about {_pct(change)}, which can help spot rising or falling business activity.",
+                        )
+                    )
+            if primary_metric and len(metric_daily) >= 4:
+                window = max(2, min(7, len(metric_daily) // 2))
+                recent_metric = float(metric_daily.tail(window).mean())
+                previous_metric = float(metric_daily.iloc[:-window].tail(window).mean())
+                if previous_metric:
+                    metric_change = (recent_metric - previous_metric) / abs(previous_metric) * 100
+                    direction = "improving" if metric_change > 5 else "declining" if metric_change < -5 else "broadly stable"
+                    insights.append(
+                        _insight(
+                            f"Recent {primary_metric} movement",
+                            f"Recent {primary_metric} is {direction} compared with the previous comparable window.",
+                            f"{_confidence(len(metric_daily))}: the app compared the recent average {_fmt_num(recent_metric)} with the previous average {_fmt_num(previous_metric)}. The movement is about {_pct(metric_change)}, which can guide sales planning, finance review, or operational follow-up.",
                         )
                     )
 
@@ -504,8 +615,9 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         "date_columns": len(date_cols),
         "primary_metric": primary_metric,
         "primary_segment": primary_segment,
+        "business_context": context,
         "kpis": kpis[:4],
-        "charts": charts[:8],
+        "charts": charts[:10],
         "insights": insights[:12],
         "warnings": [],
     }
