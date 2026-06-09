@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 import warnings
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,26 @@ BUSINESS_NUMERIC_HINTS = (
     "score",
     "rating",
 )
+
+SEGMENT_HINTS = (
+    "customer",
+    "client",
+    "segment",
+    "plan",
+    "product",
+    "category",
+    "region",
+    "country",
+    "city",
+    "market",
+    "channel",
+    "status",
+    "department",
+    "team",
+    "industry",
+)
+
+OPERATION_HINTS = ("ticket", "support", "issue", "complaint", "case", "delay", "return", "churn", "risk")
 
 
 def _fmt_num(value: float | int | None) -> str:
@@ -64,9 +84,9 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
-def _business_score(name: str) -> int:
+def _score(name: str, hints: tuple[str, ...]) -> int:
     lower = name.lower()
-    return sum(3 for token in BUSINESS_NUMERIC_HINTS if token in lower)
+    return sum(3 for token in hints if token in lower)
 
 
 def _parse_date_series(series: pd.Series) -> pd.Series:
@@ -84,16 +104,66 @@ def _parse_date_series(series: pd.Series) -> pd.Series:
         return pd.to_datetime(series, errors="coerce", utc=True)
 
 
-def _column_kind(series: pd.Series) -> str:
-    if pd.api.types.is_bool_dtype(series):
-        return "Yes/no"
-    numeric = pd.to_numeric(series, errors="coerce")
-    if pd.api.types.is_numeric_dtype(series) or numeric.notna().mean() >= 0.75:
-        return "Number"
-    dates = _parse_date_series(series)
-    if dates.notna().mean() >= 0.65:
-        return "Date/time"
-    return "Category"
+def _numeric_columns(df: pd.DataFrame) -> list[str]:
+    cols: list[str] = []
+    for col in df.columns:
+        numeric = pd.to_numeric(df[col], errors="coerce")
+        if pd.api.types.is_numeric_dtype(df[col]) or numeric.notna().mean() >= 0.75:
+            cols.append(str(col))
+    return cols
+
+
+def _category_columns(df: pd.DataFrame, numeric_cols: list[str]) -> list[str]:
+    cols: list[str] = []
+    row_count = max(len(df), 1)
+    for col in df.columns:
+        if str(col) in numeric_cols:
+            continue
+        unique = int(df[col].nunique(dropna=True))
+        if 2 <= unique <= min(60, max(2, row_count // 2)):
+            cols.append(str(col))
+    return cols
+
+
+def _date_columns(df: pd.DataFrame) -> list[tuple[str, pd.Series]]:
+    found: list[tuple[str, pd.Series]] = []
+    for col in df.columns:
+        dates = _parse_date_series(df[col])
+        if dates.notna().mean() >= 0.55 and int(dates.notna().sum()) >= 3:
+            found.append((str(col), dates))
+    return found
+
+
+def _choose_business_numeric(df: pd.DataFrame, numeric_cols: list[str]) -> str | None:
+    if not numeric_cols:
+        return None
+    return max(
+        numeric_cols,
+        key=lambda col: (
+            _score(col, BUSINESS_NUMERIC_HINTS),
+            pd.to_numeric(df[col], errors="coerce").notna().sum(),
+            abs(pd.to_numeric(df[col], errors="coerce").mean(skipna=True) or 0),
+        ),
+    )
+
+
+def _choose_segment_column(df: pd.DataFrame, category_cols: list[str]) -> str | None:
+    if not category_cols:
+        return None
+    return max(
+        category_cols,
+        key=lambda col: (
+            _score(col, SEGMENT_HINTS),
+            min(int(df[col].nunique(dropna=True)), 25),
+            -int(df[col].nunique(dropna=True)),
+        ),
+    )
+
+
+def _choose_operation_numeric(numeric_cols: list[str]) -> str | None:
+    scored = [(col, _score(col, OPERATION_HINTS)) for col in numeric_cols]
+    scored = [item for item in scored if item[1] > 0]
+    return max(scored, key=lambda item: item[1])[0] if scored else None
 
 
 def _chart(title: str, description: str, items: list[dict[str, Any]], value_suffix: str = "") -> dict[str, Any]:
@@ -119,67 +189,8 @@ def _insight(title: str, summary: str, reasoning: str) -> dict[str, str]:
     return {"title": title, "summary": summary, "reasoning": reasoning}
 
 
-def _numeric_columns(df: pd.DataFrame) -> list[str]:
-    cols: list[str] = []
-    for col in df.columns:
-        numeric = pd.to_numeric(df[col], errors="coerce")
-        if pd.api.types.is_numeric_dtype(df[col]) or numeric.notna().mean() >= 0.75:
-            cols.append(str(col))
-    return cols
-
-
-def _category_columns(df: pd.DataFrame) -> list[str]:
-    cols: list[str] = []
-    row_count = max(len(df), 1)
-    for col in df.columns:
-        if str(col) in _numeric_columns(df):
-            continue
-        unique = int(df[col].nunique(dropna=True))
-        if 2 <= unique <= min(50, max(2, row_count // 2)):
-            cols.append(str(col))
-    return cols
-
-
-def _date_columns(df: pd.DataFrame) -> list[tuple[str, pd.Series]]:
-    found: list[tuple[str, pd.Series]] = []
-    for col in df.columns:
-        dates = _parse_date_series(df[col])
-        if dates.notna().mean() >= 0.55 and int(dates.notna().sum()) >= 3:
-            found.append((str(col), dates))
-    return found
-
-
-def _choose_business_numeric(df: pd.DataFrame, numeric_cols: list[str]) -> str | None:
-    if not numeric_cols:
-        return None
-    return max(
-        numeric_cols,
-        key=lambda col: (
-            _business_score(col),
-            pd.to_numeric(df[col], errors="coerce").notna().sum(),
-            abs(pd.to_numeric(df[col], errors="coerce").mean(skipna=True) or 0),
-        ),
-    )
-
-
-def _top_category_chart(df: pd.DataFrame, category_cols: list[str]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    if not category_cols:
-        return None, None
-    best = max(category_cols, key=lambda c: min(df[c].nunique(dropna=True), 20))
-    counts = df[best].astype(str).replace({"nan": "Missing"}).value_counts(dropna=False).head(10)
-    chart = _chart(
-        f"Top groups in {best}",
-        "Shows which group values appear most often in the dataset.",
-        [{"label": idx, "value": val, "hint": f"{val} rows"} for idx, val in counts.items()],
-    )
-    top_label = str(counts.index[0]) if len(counts) else "-"
-    top_share = float(counts.iloc[0] / max(len(df), 1) * 100) if len(counts) else 0.0
-    insight = _insight(
-        "Largest customer or business group",
-        f"{top_label} is the largest group in {best}, representing {_pct(top_share)} of rows.",
-        f"The app counted each value in {best}. The most common value appears {int(counts.iloc[0]) if len(counts) else 0} times out of {len(df)} rows, making it the largest visible segment.",
-    )
-    return chart, insight
+def _kpi(label: str, value: str, detail: str) -> dict[str, str]:
+    return {"label": label, "value": value, "detail": detail}
 
 
 def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
@@ -189,145 +200,130 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
     df = df.copy()
     row_count = int(len(df))
     column_count = int(len(df.columns))
-    missing_pct = float(df.isna().sum().sum() / max(row_count * max(column_count, 1), 1) * 100)
-    duplicate_rows = int(df.duplicated().sum())
-
     numeric_cols = _numeric_columns(df)
-    category_cols = _category_columns(df)
+    category_cols = _category_columns(df, numeric_cols)
     date_cols = _date_columns(df)
-    target_numeric = _choose_business_numeric(df, numeric_cols)
+    primary_metric = _choose_business_numeric(df, numeric_cols)
+    primary_segment = _choose_segment_column(df, category_cols)
+    operation_metric = _choose_operation_numeric(numeric_cols)
 
-    kinds: dict[str, int] = {}
-    for col in df.columns:
-        kind = _column_kind(df[col])
-        kinds[kind] = kinds.get(kind, 0) + 1
-
-    charts: list[dict[str, Any]] = [
-        _chart(
-            "Column types",
-            "A quick view of what kind of information the dataset contains.",
-            [{"label": label, "value": value, "hint": f"{value} columns"} for label, value in kinds.items()],
-            " cols",
-        )
-    ]
-
-    missing_by_col = (df.isna().mean() * 100).sort_values(ascending=False)
-    charts.append(
-        _chart(
-            "Missing data by column",
-            "Columns with high missing values should be cleaned before important decisions.",
-            [{"label": col, "value": pct, "hint": f"{_pct(pct)} empty"} for col, pct in missing_by_col.head(12).items()],
-            "%",
-        )
-    )
-
-    insights: list[dict[str, str]] = [
-        _insight(
-            "Dataset readiness",
-            f"The dataset contains {row_count:,} rows and {column_count:,} columns.",
-            "This gives a quick sense of the business coverage available for analysis. More rows usually mean patterns are more reliable, while many columns can provide more angles for segmentation and decision-making.",
-        ),
-        _insight(
-            "Data completeness",
-            f"About {_pct(missing_pct)} of all cells are missing.",
-            "The app compared empty cells against the total number of cells in the dataset. Lower missingness usually means dashboards and decisions are less likely to be distorted by incomplete information.",
-        ),
-    ]
-
-    if duplicate_rows:
-        duplicate_pct = duplicate_rows / max(row_count, 1) * 100
-        insights.append(
-            _insight(
-                "Duplicate record risk",
-                f"{duplicate_rows:,} duplicate rows were found, equal to {_pct(duplicate_pct)} of the dataset.",
-                "Duplicate rows can overstate revenue, activity, customer counts, support volume, or demand. Reviewing duplicates before reporting helps avoid inflated business numbers.",
-            )
-        )
-    else:
-        insights.append(
-            _insight(
-                "Duplicate record risk",
-                "No fully duplicate rows were found.",
-                "The app checked whether entire rows repeat exactly. This reduces the chance that totals or counts are inflated by repeated records.",
-            )
-        )
-
-    high_missing = missing_by_col[missing_by_col >= 20]
-    if len(high_missing):
-        top_col = str(high_missing.index[0])
-        insights.append(
-            _insight(
-                "Cleaning priority",
-                f"{top_col} has the highest missing data at {_pct(float(high_missing.iloc[0]))}.",
-                "This column should be reviewed first because heavily missing fields can weaken dashboards, segment comparisons, and any later modeling work.",
-            )
-        )
+    charts: list[dict[str, Any]] = []
+    insights: list[dict[str, str]] = []
+    kpis: list[dict[str, str]] = []
 
     if numeric_cols:
-        numeric_summary_items: list[dict[str, Any]] = []
-        for col in numeric_cols[:12]:
+        totals = []
+        for col in sorted(numeric_cols, key=lambda c: _score(c, BUSINESS_NUMERIC_HINTS), reverse=True)[:12]:
             s = pd.to_numeric(df[col], errors="coerce")
-            mean = _safe_float(s.mean())
-            if mean is not None:
-                numeric_summary_items.append({"label": col, "value": abs(mean), "hint": f"Average {_fmt_num(mean)}"})
-        charts.append(_chart("Numeric averages", "Compares average size across numeric business fields.", numeric_summary_items))
+            total = _safe_float(s.sum())
+            if total is not None:
+                totals.append({"label": col, "value": abs(total), "hint": f"Total {_fmt_num(total)}"})
+        if totals:
+            charts.append(_chart("Business metric totals", "Compares the largest measurable business values in the dataset.", totals))
 
-    if target_numeric:
-        target = pd.to_numeric(df[target_numeric], errors="coerce").dropna()
-        if len(target):
-            total = float(target.sum())
-            avg = float(target.mean())
+    if primary_metric:
+        metric = pd.to_numeric(df[primary_metric], errors="coerce")
+        usable_metric = metric.dropna()
+        if len(usable_metric):
+            total = float(usable_metric.sum())
+            avg = float(usable_metric.mean())
+            kpis.append(_kpi(f"Total {primary_metric}", _fmt_num(total), "Overall business value across usable records."))
+            kpis.append(_kpi(f"Average {primary_metric}", _fmt_num(avg), "Typical value per record."))
             insights.append(
                 _insight(
-                    "Key numeric performance field",
-                    f"{target_numeric} totals {_fmt_num(total)} with an average row value of {_fmt_num(avg)}.",
-                    f"The app selected {target_numeric} because its name and values look business-relevant. Summing it gives the overall scale, while the average shows the typical value per record.",
+                    "Main business value",
+                    f"{primary_metric} totals {_fmt_num(total)} across the dataset.",
+                    f"The app selected {primary_metric} because its name and values look business-relevant. The total shows business scale, while the average of {_fmt_num(avg)} shows the typical value per record.",
                 )
             )
-            q1 = float(target.quantile(0.25))
-            q3 = float(target.quantile(0.75))
-            iqr = q3 - q1
-            if iqr > 0:
-                outliers = int(((target < q1 - 1.5 * iqr) | (target > q3 + 1.5 * iqr)).sum())
-                outlier_pct = outliers / max(len(target), 1) * 100
-                insights.append(
-                    _insight(
-                        "Unusual value check",
-                        f"{outliers:,} unusual values were found in {target_numeric}.",
-                        f"The app compared values against the normal middle range for {target_numeric}. Unusual values equal {_pct(outlier_pct)} of usable records and may represent premium customers, errors, one-off events, or special cases worth reviewing.",
-                    )
+
+            top_count = max(1, int(len(usable_metric) * 0.1))
+            top_share = float(usable_metric.sort_values(ascending=False).head(top_count).sum() / max(abs(total), 1e-9) * 100)
+            kpis.append(_kpi("Top value concentration", _pct(top_share), f"Share of {primary_metric} from the top records."))
+            insights.append(
+                _insight(
+                    "Value concentration",
+                    f"The top {top_count:,} records contribute {_pct(top_share)} of total {primary_metric}.",
+                    f"The app sorted {primary_metric} from highest to lowest and measured how much the largest records contribute. A high share means a small group of customers, orders, products, or accounts may be driving most of the business value.",
                 )
+            )
 
-    cat_chart, cat_insight = _top_category_chart(df, category_cols)
-    if cat_chart:
-        charts.append(cat_chart)
-    if cat_insight:
-        insights.append(cat_insight)
+            if operation_metric and operation_metric != primary_metric:
+                joined = pd.DataFrame(
+                    {
+                        "value": metric,
+                        "operation": pd.to_numeric(df[operation_metric], errors="coerce"),
+                    }
+                ).dropna()
+                if len(joined) >= 3:
+                    corr = _safe_float(joined["value"].corr(joined["operation"]))
+                    if corr is not None:
+                        direction = "rise together" if corr > 0.25 else "move in opposite directions" if corr < -0.25 else "do not show a strong movement together"
+                        insights.append(
+                            _insight(
+                                "Operational pressure",
+                                f"{primary_metric} and {operation_metric} {direction}.",
+                                f"The app compared {primary_metric} with {operation_metric}. This helps reveal whether higher business value is linked with more support work, risk, returns, complaints, or other operational load.",
+                            )
+                        )
 
-    if target_numeric and category_cols:
-        target_values = pd.to_numeric(df[target_numeric], errors="coerce")
+    if category_cols:
+        selected_category = primary_segment or category_cols[0]
+        counts = df[selected_category].astype(str).replace({"nan": "Unknown"}).value_counts(dropna=False).head(10)
+        if len(counts):
+            top_label = str(counts.index[0])
+            top_share = float(counts.iloc[0] / max(row_count, 1) * 100)
+            charts.append(
+                _chart(
+                    f"Top groups in {selected_category}",
+                    "Shows which segment appears most often in the business records.",
+                    [{"label": idx, "value": val, "hint": f"{val} records"} for idx, val in counts.items()],
+                )
+            )
+            kpis.append(_kpi("Largest segment", top_label, f"{_pct(top_share)} of records."))
+            insights.append(
+                _insight(
+                    "Largest business segment",
+                    f"{top_label} is the largest group in {selected_category}, representing {_pct(top_share)} of records.",
+                    f"The app counted each value in {selected_category}. This group has the largest visible presence, so it may deserve focused reporting, retention review, sales analysis, or operational planning.",
+                )
+            )
+
+    if primary_metric and category_cols:
+        metric = pd.to_numeric(df[primary_metric], errors="coerce")
         best_segment: tuple[str, str, float, int] | None = None
-        for cat in category_cols[:12]:
-            work = pd.DataFrame({"segment": df[cat].astype(str), "value": target_values}).dropna()
+        weakest_segment: tuple[str, str, float, int] | None = None
+        categories_to_check = [primary_segment] if primary_segment else []
+        categories_to_check.extend([c for c in category_cols[:12] if c not in categories_to_check])
+
+        for cat in categories_to_check:
+            work = pd.DataFrame({"segment": df[cat].astype(str), "value": metric}).dropna()
             if work.empty:
                 continue
             grouped = work.groupby("segment")["value"].agg(["mean", "count"]).query("count >= 2").sort_values("mean", ascending=False)
             if grouped.empty:
                 continue
-            segment = str(grouped.index[0])
-            value = float(grouped.iloc[0]["mean"])
-            count = int(grouped.iloc[0]["count"])
-            if best_segment is None or value > best_segment[2]:
-                best_segment = (cat, segment, value, count)
+            top_name = str(grouped.index[0])
+            top_value = float(grouped.iloc[0]["mean"])
+            top_count = int(grouped.iloc[0]["count"])
+            if best_segment is None or top_value > best_segment[2]:
+                best_segment = (cat, top_name, top_value, top_count)
+            low_name = str(grouped.index[-1])
+            low_value = float(grouped.iloc[-1]["mean"])
+            low_count = int(grouped.iloc[-1]["count"])
+            if weakest_segment is None or low_value < weakest_segment[2]:
+                weakest_segment = (cat, low_name, low_value, low_count)
+
         if best_segment:
             cat, segment, value, count = best_segment
+            kpis.append(_kpi("Best performing segment", segment, f"Highest average {primary_metric}: {_fmt_num(value)}."))
             charts.append(
                 _chart(
-                    f"{target_numeric} by {cat}",
+                    f"{primary_metric} by {cat}",
                     "Highlights which segment has the highest average business value.",
                     [
                         {"label": idx, "value": val, "hint": f"Average {_fmt_num(val)}"}
-                        for idx, val in pd.DataFrame({"segment": df[cat].astype(str), "value": target_values})
+                        for idx, val in pd.DataFrame({"segment": df[cat].astype(str), "value": metric})
                         .dropna()
                         .groupby("segment")["value"]
                         .mean()
@@ -340,8 +336,17 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
             insights.append(
                 _insight(
                     "Highest value segment",
-                    f"{segment} has the highest average {target_numeric} within {cat}.",
-                    f"The app compared average {target_numeric} across groups in {cat}. {segment} leads with an average of {_fmt_num(value)} across {count:,} usable rows, making it a useful segment to study for pricing, retention, sales, or operational focus.",
+                    f"{segment} has the highest average {primary_metric} within {cat}.",
+                    f"The app compared average {primary_metric} across groups in {cat}. {segment} leads with an average of {_fmt_num(value)} across {count:,} usable rows, making it a useful segment to study for pricing, retention, sales, or operational focus.",
+                )
+            )
+        if weakest_segment:
+            cat, segment, value, count = weakest_segment
+            insights.append(
+                _insight(
+                    "Lowest value segment",
+                    f"{segment} has the lowest average {primary_metric} within {cat}.",
+                    f"The app compared group averages inside {cat}. {segment} averages {_fmt_num(value)} across {count:,} usable rows, so it may need pricing review, better onboarding, product changes, or targeted support depending on your business context.",
                 )
             )
 
@@ -358,8 +363,8 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         if pairs:
             charts.append(
                 _chart(
-                    "Strongest numeric relationships",
-                    "Higher bars mean two numeric fields move together more often.",
+                    "Strongest business metric relationships",
+                    "Higher bars mean two measurable business fields move together more often.",
                     [{"label": f"{a} / {b}", "value": v * 100, "hint": f"{_pct(v * 100)} relationship strength"} for a, b, v in pairs[:10]],
                     "%",
                 )
@@ -367,9 +372,9 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
             a, b, value = pairs[0]
             insights.append(
                 _insight(
-                    "Strongest numeric relationship",
-                    f"{a} and {b} move together the most among numeric fields.",
-                    f"The app compared numeric fields pair by pair. This pair had the strongest relationship at {_pct(value * 100)}, which may point to a business driver, dependency, or duplicated measurement worth investigating.",
+                    "Strongest metric relationship",
+                    f"{a} and {b} move together the most among measurable fields.",
+                    f"The app compared numeric business fields pair by pair. This pair had the strongest relationship at {_pct(value * 100)}, which may point to a business driver, dependency, or duplicated measurement worth investigating.",
                 )
             )
 
@@ -380,24 +385,26 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
             daily = usable.dt.tz_convert("UTC").dt.tz_localize(None).dt.floor("D").value_counts().sort_index()
             charts.append(
                 _chart(
-                    f"Activity over time ({date_name})",
+                    f"Business activity over time ({date_name})",
                     "Shows when records are concentrated across the available timeline.",
                     [{"label": idx.date().isoformat(), "value": val, "hint": f"{val} records"} for idx, val in daily.tail(12).items()],
                 )
             )
             insights.append(
                 _insight(
-                    "Timeline coverage",
-                    f"The dataset runs from {usable.iloc[0].date().isoformat()} to {usable.iloc[-1].date().isoformat()}.",
-                    f"The app read {date_name} as the strongest timeline field. Knowing the date range helps decide whether the dataset is recent enough for current planning or whether older records should be filtered.",
+                    "Business timeline",
+                    f"Business activity is visible from {usable.iloc[0].date().isoformat()} to {usable.iloc[-1].date().isoformat()}.",
+                    f"The app read {date_name} as the strongest timeline field. This date range helps teams understand whether the dataset covers a recent campaign, sales period, customer lifecycle, or operational window.",
                 )
             )
             if len(daily) >= 4:
-                recent = float(daily.tail(max(2, min(7, len(daily) // 2))).mean())
-                previous = float(daily.iloc[: -max(2, min(7, len(daily) // 2))].tail(max(2, min(7, len(daily) // 2))).mean())
+                window = max(2, min(7, len(daily) // 2))
+                recent = float(daily.tail(window).mean())
+                previous = float(daily.iloc[:-window].tail(window).mean())
                 if previous:
                     change = (recent - previous) / previous * 100
                     direction = "higher" if change > 5 else "lower" if change < -5 else "similar"
+                    kpis.append(_kpi("Recent activity movement", _pct(change), "Change in recent activity versus the previous comparable window."))
                     insights.append(
                         _insight(
                             "Recent activity movement",
@@ -410,8 +417,8 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         insights.append(
             _insight(
                 "Segmentation opportunity",
-                f"{len(category_cols)} useful category fields were found for grouping customers, products, regions, or operations.",
-                "Category fields are useful for business dashboards because they let teams compare groups instead of only looking at total numbers. These fields can support retention, pricing, regional, support, or product analysis depending on the dataset.",
+                f"The dataset supports comparisons across {len(category_cols)} business grouping fields.",
+                "These fields can help teams compare customers, products, plans, regions, channels, or operational groups instead of only looking at totals. The most useful next dashboard view is usually the one that combines a business metric with one of these segments.",
             )
         )
 
@@ -419,7 +426,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         insights.append(
             _insight(
                 "Metric dashboard potential",
-                f"{len(numeric_cols)} numeric fields were found for KPI cards, trend views, and segment comparisons.",
+                f"{len(numeric_cols)} measurable business fields can support KPI cards, trend views, and segment comparisons.",
                 "Numeric fields can be used for totals, averages, rankings, and performance monitoring. These are the main building blocks for business dashboards.",
             )
         )
@@ -427,7 +434,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
     while len(insights) < 10:
         title = [
             "Decision support",
-            "Dashboard readiness",
+            "Dashboard focus",
             "Next action",
             "Business review area",
             "Operational planning",
@@ -436,7 +443,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
             _insight(
                 title,
                 "This dataset has enough structure to support a business review, but the most useful decision depends on your business goal.",
-                "The app found columns that can be grouped, counted, or summarized. Use the strongest charts above to decide whether the next step should be cleaning, segmentation, forecasting, or model comparison.",
+                "The app found fields that can be grouped, counted, or summarized. Use the strongest charts above to decide whether the next step should be segment deep-dives, forecasting, pricing review, retention analysis, or operational planning.",
             )
         )
 
@@ -446,8 +453,9 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         "numeric_columns": len(numeric_cols),
         "category_columns": len(category_cols),
         "date_columns": len(date_cols),
-        "missing_cells_percent": round(missing_pct, 2),
-        "duplicate_rows": duplicate_rows,
+        "primary_metric": primary_metric,
+        "primary_segment": primary_segment,
+        "kpis": kpis[:4],
         "charts": charts[:8],
         "insights": insights[:12],
         "warnings": [],

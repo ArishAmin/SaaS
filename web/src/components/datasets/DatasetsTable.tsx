@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BarChart3, CalendarClock, Download, Lightbulb, Sparkles, Trash2, Wand2, Brain } from "lucide-react";
+import { BarChart3, Brain, CalendarClock, Download, Lightbulb, PieChart, Sparkles, Trash2, Wand2 } from "lucide-react";
 
 import { apiRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -26,19 +26,79 @@ type DatasetRow = {
   updated_at?: string;
   cleaned_at?: string | null;
   engineered_at?: string | null;
+  business_insights_at?: string | null;
   quick_trained_at?: string | null;
+  forecasted_at?: string | null;
 };
 
 function fmtDate(v?: string | null) {
-  if (!v) return "—";
+  if (!v) return "-";
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString();
+}
+
+function latestActivity(row: DatasetRow) {
+  const activities = [
+    { label: "Uploaded", at: row.created_at },
+    { label: "Cleaned", at: row.cleaned_at },
+    { label: "Engineered", at: row.engineered_at },
+    { label: "Business insights", at: row.business_insights_at },
+    { label: "Trained", at: row.quick_trained_at },
+    { label: "Forecasted", at: row.forecasted_at },
+  ]
+    .map((item) => ({ ...item, time: item.at ? new Date(item.at).getTime() : 0 }))
+    .filter((item) => item.time && !Number.isNaN(item.time))
+    .sort((a, b) => b.time - a.time);
+  return activities[0] ?? { label: "Uploaded", at: row.created_at };
+}
+
+function ActionButton({
+  label,
+  icon: Icon,
+  href,
+  variant = "secondary",
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  variant?: "secondary" | "outline";
+}) {
+  return (
+    <Button
+      variant={variant}
+      size="sm"
+      className="h-8 gap-1.5 px-2.5"
+      onClick={() => {
+        window.location.href = href;
+      }}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </Button>
+  );
+}
+
+function DatasetActions({ row }: { row: DatasetRow }) {
+  const id = encodeURIComponent(row.dataset_id);
+  return (
+    <div className="flex justify-end gap-1.5 flex-wrap">
+      <ActionButton label="Analyze" icon={BarChart3} href={`/dashboard/analyzer?datasetId=${id}`} />
+      <ActionButton label="Clean" icon={Wand2} href={`/dashboard/cleaning?datasetId=${id}`} />
+      <ActionButton label="Insights" icon={PieChart} href={`/dashboard/business-insights?datasetId=${id}`} />
+      <ActionButton label="Features" icon={Sparkles} href={`/dashboard/feature-generation?datasetId=${id}`} />
+      <ActionButton label="Ideas" icon={Lightbulb} href={`/dashboard/recommendation?datasetId=${id}`} />
+      <ActionButton label="Train" icon={Brain} href={`/dashboard/training?datasetId=${id}`} />
+      <ActionButton label="Forecast" icon={CalendarClock} href={`/dashboard/forecasting?datasetId=${id}`} />
+      <ActionButton label="Export" icon={Download} href={`/dashboard/export?datasetId=${id}`} variant="outline" />
+    </div>
+  );
 }
 
 export function DatasetsTable() {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<DatasetRow[]>([]);
+  const [deletingDatasetId, setDeletingDatasetId] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -55,8 +115,6 @@ export function DatasetsTable() {
 
   useEffect(() => {
     refresh();
-
-    // Listen to Dataset Upload component completion DOM event
     const handleUpload = () => {
       refresh();
     };
@@ -66,11 +124,8 @@ export function DatasetsTable() {
 
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows.length]);
 
-  const [deletingDatasetId, setDeletingDatasetId] = useState<string | null>(null);
-
   async function confirmDelete() {
     if (!deletingDatasetId) return;
-
     try {
       await apiRequest(`/datasets/${deletingDatasetId}`, { method: "DELETE" });
       toast.success("Dataset deleted.");
@@ -90,7 +145,7 @@ export function DatasetsTable() {
         <div>
           <CardTitle>Your datasets</CardTitle>
           <CardDescription>
-            Status, timestamps, and the next actions for each uploaded dataset.
+            Uploaded files, latest activity, and connected actions for each dataset.
           </CardDescription>
         </div>
         <Button variant="outline" onClick={refresh} disabled={loading}>
@@ -111,126 +166,94 @@ export function DatasetsTable() {
         ) : null}
 
         {!loading && rows.length ? (
-          <div className="overflow-auto border border-black/10 dark:border-white/10 rounded-lg">
-            <table className="min-w-[900px] w-full text-sm">
-              <thead className="bg-black/5 dark:bg-white/5">
-                <tr>
-                  <th className="text-left p-3">Name</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Updated</th>
-                  <th className="text-left p-3">Cleaned</th>
-                  <th className="text-left p-3">Engineered</th>
-                  <th className="text-left p-3">Trained</th>
-                  <th className="text-right p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.dataset_id} className="border-t border-black/10 dark:border-white/10">
-                    <td className="p-3">
-                      <p className="font-medium truncate max-w-[280px]">{r.original_file_name}</p>
-                      <p className="text-xs text-foreground/70">{r.original_extension.toUpperCase()}</p>
-                    </td>
-                    <td className="p-3">
-                      <span className="text-xs rounded-full px-2 py-1 border border-black/10 dark:border-white/10">
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-foreground/70">{fmtDate(r.updated_at)}</td>
-                    <td className="p-3 text-foreground/70">{fmtDate(r.cleaned_at)}</td>
-                    <td className="p-3 text-foreground/70">{fmtDate(r.engineered_at)}</td>
-                    <td className="p-3 text-foreground/70">{fmtDate(r.quick_trained_at)}</td>
-                    <td className="p-3">
-                      <div className="flex justify-end gap-1.5 flex-wrap">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/analyzer?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <BarChart3 className="h-3.5 w-3.5" />
-                          Analyze
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/cleaning?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <Wand2 className="h-3.5 w-3.5" />
-                          Clean
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/feature-generation?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Engineering
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/recommendation?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <Lightbulb className="h-3.5 w-3.5" />
-                          Recommendations
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/training?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <Brain className="h-3.5 w-3.5" />
-                          Train Model
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/forecasting?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          Forecast
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => (window.location.href = `/dashboard/export?datasetId=${encodeURIComponent(r.dataset_id)}`)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          Export
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2.5"
-                          onClick={() => setDeletingDatasetId(r.dataset_id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
+          <>
+            <div className="grid gap-3 md:hidden">
+              {rows.map((r) => {
+                const activity = latestActivity(r);
+                return (
+                  <div key={r.dataset_id} className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{r.original_file_name}</p>
+                        <p className="text-xs text-foreground/60">
+                          {r.original_extension.toUpperCase()} | Uploaded {fmtDate(r.created_at)}
+                        </p>
                       </div>
-                    </td>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 text-red-600 hover:text-red-700"
+                        onClick={() => setDeletingDatasetId(r.dataset_id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mt-3 rounded-md bg-foreground/[0.03] p-2 text-xs text-foreground/65">
+                      <span className="font-medium text-foreground/80">{activity.label}</span>
+                      <span> | {fmtDate(activity.at)}</span>
+                    </div>
+                    <div className="mt-3">
+                      <DatasetActions row={r} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-auto border border-black/10 dark:border-white/10 rounded-lg">
+              <table className="min-w-[780px] w-full text-sm">
+                <thead className="bg-black/5 dark:bg-white/5">
+                  <tr>
+                    <th className="text-left p-3">Name</th>
+                    <th className="text-left p-3">Uploaded</th>
+                    <th className="text-left p-3">Latest activity</th>
+                    <th className="text-right p-3">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const activity = latestActivity(r);
+                    return (
+                      <tr key={r.dataset_id} className="border-t border-black/10 dark:border-white/10 align-top">
+                        <td className="p-3">
+                          <p className="font-medium truncate max-w-[240px]">{r.original_file_name}</p>
+                          <p className="text-xs text-foreground/70">{r.original_extension.toUpperCase()}</p>
+                        </td>
+                        <td className="p-3 text-foreground/70 whitespace-nowrap">{fmtDate(r.created_at)}</td>
+                        <td className="p-3 text-foreground/70 whitespace-nowrap">
+                          <p className="font-medium text-foreground/85">{activity.label}</p>
+                          <p className="text-xs">{fmtDate(activity.at)}</p>
+                        </td>
+                        <td className="p-3">
+                          <DatasetActions row={r} />
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1.5 px-2.5 text-red-600 hover:text-red-700"
+                              onClick={() => setDeletingDatasetId(r.dataset_id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
       </CardContent>
 
-      {/* Delete Confirmation Modal */}
       <Dialog open={!!deletingDatasetId} onOpenChange={(open) => !open && setDeletingDatasetId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Dataset</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this dataset? This action will permanently remove the dataset and all its related artifacts (cleaning settings, trained models, etc.). This cannot be undone.
+              Are you sure you want to delete this dataset? This action will permanently remove the dataset and all its related artifacts. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

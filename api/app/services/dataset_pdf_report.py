@@ -312,21 +312,24 @@ def build_dataset_report_pdf(
             pdf.body_text("Business insights have not been run for this dataset.")
         else:
             pdf.body_text(
-                "Business-friendly exploratory analysis of the dataset: dashboard-ready charts, quality signals, "
-                "segment patterns, and plain recommendations for decision-making."
+                "Business-friendly exploratory analysis of the dataset: dashboard-ready charts, value drivers, "
+                "segment patterns, activity movement, and plain recommendations for decision-making."
             )
             pdf.key_value_table(
                 [
-                    ("Rows analyzed", str(business.get("row_count") or "-")),
-                    ("Columns analyzed", str(business.get("column_count") or "-")),
-                    ("Numeric fields", str(business.get("numeric_columns") or "-")),
-                    ("Category fields", str(business.get("category_columns") or "-")),
-                    ("Date/time fields", str(business.get("date_columns") or "-")),
-                    ("Missing cells", f"{business.get('missing_cells_percent', '-')}%"),
-                    ("Duplicate rows", str(business.get("duplicate_rows") or 0)),
+                    ("Primary business metric", str(business.get("primary_metric") or "-")),
+                    ("Primary segment", str(business.get("primary_segment") or "-")),
                     ("Generated", _fmt_ts(business.get("generated_at"))),
                 ]
             )
+            kpis = business.get("kpis") or []
+            if kpis:
+                pdf.ln(2)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Business KPI summary", new_x="LMARGIN", new_y="NEXT")
+                for kpi in kpis[:4]:
+                    if isinstance(kpi, dict):
+                        pdf.bullet(f"{kpi.get('label', '-')}: {kpi.get('value', '-')} - {kpi.get('detail', '')}")
 
             charts = business.get("charts") or []
             if charts:

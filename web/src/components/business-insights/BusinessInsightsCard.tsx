@@ -7,14 +7,11 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { DatasetNameDisplay } from "@/components/datasets/DatasetNameDisplay";
 import { PdfReportButton } from "@/components/reports/PdfReportButton";
 import { apiRequest } from "@/lib/api";
-
-type Mode = "simple" | "advanced";
 
 type BusinessChart = {
   title: string;
@@ -30,6 +27,12 @@ type BusinessInsight = {
   reasoning: string;
 };
 
+type BusinessKpi = {
+  label: string;
+  value: string;
+  detail: string;
+};
+
 type BusinessInsightsResult = {
   dataset_id: string;
   source: string;
@@ -39,8 +42,9 @@ type BusinessInsightsResult = {
   numeric_columns: number;
   category_columns: number;
   date_columns: number;
-  missing_cells_percent: number;
-  duplicate_rows: number;
+  primary_metric?: string | null;
+  primary_segment?: string | null;
+  kpis?: BusinessKpi[];
   charts: BusinessChart[];
   insights: BusinessInsight[];
   warnings: string[];
@@ -56,21 +60,6 @@ type BusinessInsightsSchema = {
   saved_business_insights?: BusinessInsightsResult | null;
   business_insights_at?: string | null;
 };
-
-function ModeButton({ value, mode, setMode, children }: { value: Mode; mode: Mode; setMode: (m: Mode) => void; children: React.ReactNode }) {
-  const active = value === mode;
-  return (
-    <button
-      type="button"
-      onClick={() => setMode(value)}
-      className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
-        active ? "bg-foreground text-background" : "text-foreground/70 hover:bg-black/5 dark:hover:bg-white/10"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function fmtDate(v?: string | null) {
   if (!v) return "";
@@ -92,8 +81,6 @@ function MetricTile({ label, value, hint }: { label: string; value: string | num
 }
 
 export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
-  const [mode, setMode] = useState<Mode>("simple");
-  const [source, setSource] = useState("latest");
   const [schema, setSchema] = useState<BusinessInsightsSchema | null>(null);
   const [result, setResult] = useState<BusinessInsightsResult | null>(null);
   const [loadingSchema, setLoadingSchema] = useState(false);
@@ -106,7 +93,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
       setLoadingSchema(true);
       try {
         const data = await apiRequest<BusinessInsightsSchema>(
-          `/business-insights/${datasetId}/schema?source=${encodeURIComponent(source)}`,
+          `/business-insights/${datasetId}/schema?source=latest`,
           { method: "GET" }
         );
         if (cancelled) return;
@@ -122,7 +109,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [datasetId, source]);
+  }, [datasetId]);
 
   const analysisReady = !!schema?.analysis_ready;
   const hasGeneratedInsights = !!result;
@@ -136,7 +123,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
         method: "POST",
         timeout: 120000,
         body: {
-          source: mode === "simple" ? "latest" : source,
+          source: "latest",
         },
       });
       setResult(data);
@@ -154,7 +141,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
         <div className="max-w-2xl space-y-2">
           <h2 className="text-2xl font-semibold">Business Insights</h2>
           <p className="text-sm text-foreground/70 leading-relaxed">
-            Build a business dashboard-style EDA view with charts, quality signals, segment comparisons, and decision-focused insights.
+            Build a business dashboard-style view with value drivers, segment performance, activity movement, and decision-focused insights.
           </p>
         </div>
         {datasetId ? (
@@ -166,25 +153,17 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
 
       <Card className="relative overflow-visible">
         <CardHeader>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <CardTitle className="flex items-center gap-2"><PieChart className="h-4 w-4" /> Insight setup</CardTitle>
-              <CardDescription className="mt-1">
-                Run Analyze first, then generate dashboard-ready business insights from the cleaned or latest available data.
-              </CardDescription>
-            </div>
-            <div className="inline-flex rounded-lg border border-black/10 p-1 dark:border-white/10">
-              <ModeButton value="simple" mode={mode} setMode={setMode}>Simple</ModeButton>
-              <ModeButton value="advanced" mode={mode} setMode={setMode}>Advanced</ModeButton>
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2"><PieChart className="h-4 w-4" /> Insight setup</CardTitle>
+          <CardDescription className="mt-1">
+            Run Analyze first, then generate dashboard-ready business insights from the latest available version of your dataset.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 overflow-visible">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
               <p className="text-sm font-medium">Use clean data</p>
               <p className="mt-1 text-xs leading-relaxed text-foreground/65">
-                Cleaned data produces clearer charts because empty values, duplicate rows, and messy formats are easier to interpret.
+                Cleaned data can make business comparisons steadier because messy values are already handled before insights are generated.
               </p>
               {datasetId ? (
                 <Button asChild variant="outline" size="sm" className="mt-3">
@@ -195,7 +174,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
             <div className="rounded-md border border-black/10 bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
               <p className="text-sm font-medium">Dashboard charts</p>
               <p className="mt-1 text-xs leading-relaxed text-foreground/65">
-                The app chooses useful charts based on the columns it finds: missing data, categories, numeric metrics, timelines, and relationships.
+                The app chooses useful charts based on business signals it finds: metric totals, segment rankings, timelines, and relationships.
               </p>
             </div>
             <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
@@ -224,27 +203,9 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
                 </div>
               ) : null}
 
-              {mode === "advanced" ? (
-                <div className="max-w-md space-y-2">
-                  <p className="text-sm font-medium">Data source</p>
-                  <Select value={source} onValueChange={setSource}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="latest">Latest available</SelectItem>
-                      <SelectItem value="cleaned">Cleaned data</SelectItem>
-                      <SelectItem value="engineered">Engineered data</SelectItem>
-                      <SelectItem value="raw">Raw upload</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-foreground/55">
-                    Latest available uses engineered data first, then cleaned data, then raw upload.
-                  </p>
-                </div>
-              ) : (
-                <p className="max-w-2xl text-xs leading-relaxed text-foreground/60">
-                  Simple mode automatically uses the latest available version of your dataset and selects useful dashboard charts for you.
-                </p>
-              )}
+              <p className="max-w-2xl text-xs leading-relaxed text-foreground/60">
+                Insights automatically use the latest available version of your dataset: engineered data first, then cleaned data, then raw upload.
+              </p>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
@@ -279,12 +240,13 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
             </Card>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricTile label="Rows reviewed" value={result.row_count.toLocaleString()} hint="Total records scanned for charts and insights." />
-            <MetricTile label="Columns reviewed" value={result.column_count.toLocaleString()} hint="Fields available for quality checks and segmentation." />
-            <MetricTile label="Missing cells" value={`${result.missing_cells_percent.toFixed(1)}%`} hint="Lower missingness usually means cleaner decisions." />
-            <MetricTile label="Duplicate rows" value={result.duplicate_rows.toLocaleString()} hint="Duplicates can inflate counts, totals, or activity." />
-          </div>
+          {(result.kpis ?? []).length ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {(result.kpis ?? []).map((kpi) => (
+                <MetricTile key={`${kpi.label}-${kpi.value}`} label={kpi.label} value={kpi.value} hint={kpi.detail} />
+              ))}
+            </div>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -327,7 +289,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
       ) : (
         <Card>
           <CardContent className="py-8 text-sm text-foreground/65">
-            Generate business insights to see dashboard charts, quality warnings, and decision-focused recommendations.
+            Generate business insights to see dashboard charts, business patterns, and decision-focused recommendations.
           </CardContent>
         </Card>
       )}
