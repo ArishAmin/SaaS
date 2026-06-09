@@ -137,12 +137,7 @@ export default function CreditsSettingsPage() {
               </p>
             </div>
             <div className="text-sm text-muted-foreground">
-              {credits.credits_refresh_mode === "one_time" ? (
-                <StepHint>
-                  Free tier includes a <strong>one-time</strong> {credits.credits_quota}-credit pack. Upgrade
-                  for monthly refills.
-                </StepHint>
-              ) : credits.credits_period_end ? (
+              {credits.credits_period_end ? (
                 <p>Credits reset on {new Date(credits.credits_period_end).toLocaleDateString()}.</p>
               ) : (
                 <p>Monthly credit refresh on your billing cycle.</p>
