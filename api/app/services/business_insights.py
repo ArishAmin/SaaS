@@ -48,6 +48,7 @@ SEGMENT_HINTS = (
 )
 
 OPERATION_HINTS = ("ticket", "support", "issue", "complaint", "case", "delay", "return", "churn", "risk")
+IDENTIFIER_HINTS = ("id", "uuid", "key", "hash", "token", "code", "ref")
 
 
 def _fmt_num(value: float | int | None) -> str:
@@ -104,11 +105,36 @@ def _parse_date_series(series: pd.Series) -> pd.Series:
         return pd.to_datetime(series, errors="coerce", utc=True)
 
 
+def _is_identifier_column(name: str, series: pd.Series) -> bool:
+    lower = name.lower().replace("-", "_").replace(" ", "_")
+    parts = [p for p in lower.split("_") if p]
+    name_says_identifier = (
+        lower.endswith("_id")
+        or lower.endswith("_number")
+        or lower == "id"
+        or any(part in IDENTIFIER_HINTS for part in parts)
+        or any(token in lower for token in ("customerid", "userid", "orderid", "transactionid", "invoiceid"))
+    )
+    non_null = series.dropna()
+    if len(non_null) < 3:
+        return name_says_identifier
+    numeric = pd.to_numeric(non_null, errors="coerce")
+    mostly_sequential = bool(
+        numeric.notna().mean() >= 0.95
+        and numeric.nunique(dropna=True) == len(numeric)
+        and numeric.sort_values().diff().dropna().abs().median() in (1, 1.0)
+    )
+    return name_says_identifier or mostly_sequential
+
+
 def _numeric_columns(df: pd.DataFrame) -> list[str]:
     cols: list[str] = []
     for col in df.columns:
+        lower = str(col).lower()
+        if pd.api.types.is_datetime64_any_dtype(df[col]) or any(token in lower for token in ("date", "time", "timestamp", "created_at", "updated_at")):
+            continue
         numeric = pd.to_numeric(df[col], errors="coerce")
-        if pd.api.types.is_numeric_dtype(df[col]) or numeric.notna().mean() >= 0.75:
+        if (pd.api.types.is_numeric_dtype(df[col]) or numeric.notna().mean() >= 0.75) and not _is_identifier_column(str(col), df[col]):
             cols.append(str(col))
     return cols
 
@@ -166,7 +192,7 @@ def _choose_operation_numeric(numeric_cols: list[str]) -> str | None:
     return max(scored, key=lambda item: item[1])[0] if scored else None
 
 
-def _chart(title: str, description: str, items: list[dict[str, Any]], value_suffix: str = "") -> dict[str, Any]:
+def _chart(title: str, description: str, items: list[dict[str, Any]], value_suffix: str = "", chart_type: str = "bar") -> dict[str, Any]:
     cleaned = [
         {
             "label": str(item.get("label") or "-")[:80],
@@ -179,10 +205,24 @@ def _chart(title: str, description: str, items: list[dict[str, Any]], value_suff
     return {
         "title": title,
         "description": description,
-        "type": "bar",
+        "type": chart_type,
         "value_suffix": value_suffix,
         "items": cleaned[:12],
     }
+
+
+def _histogram_chart(series: pd.Series, title: str, description: str) -> dict[str, Any] | None:
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    if len(values) < 5:
+        return None
+    bins = min(8, max(4, int(np.sqrt(len(values)))))
+    counts, edges = np.histogram(values, bins=bins)
+    items = []
+    for idx, count in enumerate(counts):
+        start = _fmt_num(float(edges[idx]))
+        end = _fmt_num(float(edges[idx + 1]))
+        items.append({"label": f"{start} to {end}", "value": int(count), "hint": f"{int(count)} records"})
+    return _chart(title, description, items, chart_type="histogram")
 
 
 def _insight(title: str, summary: str, reasoning: str) -> dict[str, str]:
@@ -227,6 +267,13 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
         if len(usable_metric):
             total = float(usable_metric.sum())
             avg = float(usable_metric.mean())
+            distribution = _histogram_chart(
+                usable_metric,
+                f"{primary_metric} distribution",
+                "Shows whether most records are low, mid-range, or high value.",
+            )
+            if distribution:
+                charts.append(distribution)
             kpis.append(_kpi(f"Total {primary_metric}", _fmt_num(total), "Overall business value across usable records."))
             kpis.append(_kpi(f"Average {primary_metric}", _fmt_num(avg), "Typical value per record."))
             insights.append(
@@ -278,6 +325,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                     f"Top groups in {selected_category}",
                     "Shows which segment appears most often in the business records.",
                     [{"label": idx, "value": val, "hint": f"{val} records"} for idx, val in counts.items()],
+                    chart_type="pie",
                 )
             )
             kpis.append(_kpi("Largest segment", top_label, f"{_pct(top_share)} of records."))
@@ -388,6 +436,7 @@ def run_business_insights(df: pd.DataFrame) -> dict[str, Any]:
                     f"Business activity over time ({date_name})",
                     "Shows when records are concentrated across the available timeline.",
                     [{"label": idx.date().isoformat(), "value": val, "hint": f"{val} records"} for idx, val in daily.tail(12).items()],
+                    chart_type="line",
                 )
             )
             insights.append(

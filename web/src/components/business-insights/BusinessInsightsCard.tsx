@@ -16,7 +16,7 @@ import { apiRequest } from "@/lib/api";
 type BusinessChart = {
   title: string;
   description: string;
-  type: "bar";
+  type: "bar" | "pie" | "histogram" | "line";
   value_suffix?: string;
   items: Array<{ label: string; value: number; hint?: string }>;
 };
@@ -77,6 +77,109 @@ function MetricTile({ label, value, hint }: { label: string; value: string | num
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
       <p className="mt-1 text-xs leading-relaxed text-foreground/60">{hint}</p>
     </div>
+  );
+}
+
+const chartColors = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
+
+function PieChartView({ chart }: { chart: BusinessChart }) {
+  const total = chart.items.reduce((sum, item) => sum + Math.max(item.value, 0), 0);
+  let cursor = 0;
+  const gradient = total
+    ? chart.items
+      .slice(0, 8)
+      .map((item, idx) => {
+        const start = cursor;
+        const end = cursor + (Math.max(item.value, 0) / total) * 100;
+        cursor = end;
+        return `${chartColors[idx % chartColors.length]} ${start}% ${end}%`;
+      })
+      .join(", ")
+    : "#d4d4d8 0% 100%";
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium">{chart.title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{chart.description}</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)] items-center">
+        <div
+          className="mx-auto h-32 w-32 rounded-full border border-black/10 dark:border-white/10"
+          style={{ background: `conic-gradient(${gradient})` }}
+          aria-label={chart.title}
+        />
+        <div className="space-y-2">
+          {chart.items.slice(0, 8).map((item, idx) => {
+            const share = total ? (item.value / total) * 100 : 0;
+            return (
+              <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">{share.toFixed(1)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LineChartView({ chart }: { chart: BusinessChart }) {
+  const values = chart.items.map((item) => item.value).filter(Number.isFinite);
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const width = 520;
+  const height = 180;
+  const pad = 20;
+  const points = chart.items
+    .map((item, idx) => {
+      const x = pad + (idx / Math.max(chart.items.length - 1, 1)) * (width - pad * 2);
+      const y = pad + (1 - (item.value - min) / span) * (height - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium">{chart.title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{chart.description}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[420px] w-full h-auto" role="img" aria-label={chart.title}>
+          <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="currentColor" opacity="0.16" />
+          <line x1={pad} y1={pad} x2={pad} y2={height - pad} stroke="currentColor" opacity="0.16" />
+          <polyline points={points} fill="none" stroke="rgb(37 99 235)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {chart.items.map((item, idx) => {
+            const [x, y] = points.split(" ")[idx]?.split(",") ?? ["0", "0"];
+            return <circle key={`${item.label}-${idx}`} cx={x} cy={y} r="3.5" fill="rgb(37 99 235)" />;
+          })}
+        </svg>
+      </div>
+      <div className="flex justify-between gap-3 text-[11px] text-muted-foreground">
+        <span className="truncate">{chart.items[0]?.label}</span>
+        <span className="truncate text-right">{chart.items[chart.items.length - 1]?.label}</span>
+      </div>
+    </div>
+  );
+}
+
+function BusinessChartView({ chart }: { chart: BusinessChart }) {
+  if (chart.type === "pie") return <PieChartView chart={chart} />;
+  if (chart.type === "line") return <LineChartView chart={chart} />;
+  return (
+    <SimpleBarChart
+      title={chart.title}
+      description={chart.description}
+      items={chart.items}
+      valueSuffix={chart.value_suffix ?? ""}
+      maxItems={chart.type === "histogram" ? 8 : 10}
+    />
   );
 }
 
@@ -258,13 +361,7 @@ export function BusinessInsightsCard({ datasetId }: { datasetId?: string }) {
             <CardContent className="grid gap-4 lg:grid-cols-2">
               {result.charts.map((chart) => (
                 <div key={chart.title} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-                  <SimpleBarChart
-                    title={chart.title}
-                    description={chart.description}
-                    items={chart.items}
-                    valueSuffix={chart.value_suffix ?? ""}
-                    maxItems={10}
-                  />
+                  <BusinessChartView chart={chart} />
                 </div>
               ))}
             </CardContent>
