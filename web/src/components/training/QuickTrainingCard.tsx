@@ -357,7 +357,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Want deeper charts, feature importance, and per-model breakdowns? Head to{" "}
+            Want deeper charts, score details, and per-model breakdowns? Head to{" "}
             <Link href={compareHref} className="font-medium text-foreground hover:underline">
               Model comparison
             </Link>

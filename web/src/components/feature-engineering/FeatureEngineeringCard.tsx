@@ -129,17 +129,17 @@ export function FeatureEngineeringCard({ datasetId }: { datasetId?: string }) {
       <CardHeader>
         <CardTitle>Feature Engineering</CardTitle>
         <CardDescription>
-          Rank features with a decision tree and keep the strongest columns for training.
+          Rank columns with a decision tree and keep the strongest inputs for training.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!suggestions && !suggestionsLoading ? (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             <p className="mb-4">
-              Preview which columns matter most. Applying your selection saves an engineered dataset.
+              Preview which columns are most useful. Applying your selection saves an engineered dataset.
             </p>
             <Button onClick={onRefreshSuggestions} disabled={suggestionsLoading}>
-              {suggestionsLoading ? "Loading…" : "Preview feature importance"}
+              {suggestionsLoading ? "Loading..." : "Preview column ranking"}
             </Button>
           </div>
         ) : null}
@@ -186,7 +186,7 @@ export function FeatureEngineeringCard({ datasetId }: { datasetId?: string }) {
 
             <div className="grid gap-3 md:grid-cols-2">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="top_k">Top K features</Label>
+                <Label htmlFor="top_k">Top K columns</Label>
                 <Input
                   id="top_k"
                   type="number"
@@ -195,12 +195,12 @@ export function FeatureEngineeringCard({ datasetId }: { datasetId?: string }) {
                   min={0}
                 />
                 <p className="text-xs text-foreground/70">
-                  If set, the backend keeps the top features by importance.
+                  If set, the backend keeps the strongest ranked columns.
                 </p>
               </div>
 
               <div className="flex flex-col gap-2">
-                <Label htmlFor="threshold">Importance threshold</Label>
+                <Label htmlFor="threshold">Ranking threshold</Label>
                 <Input
                   id="threshold"
                   type="number"
@@ -213,15 +213,15 @@ export function FeatureEngineeringCard({ datasetId }: { datasetId?: string }) {
                   }}
                 />
                 <p className="text-xs text-foreground/70">
-                  Optional: override selection using importance greater than or equal to threshold.
+                  Optional: override selection using a minimum ranking score.
                 </p>
               </div>
             </div>
 
             <div className="border border-black/10 dark:border-white/10 rounded-lg p-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-sm font-medium">Top feature importance</p>
-                <p className="text-xs text-foreground/70">Scaled to max importance</p>
+                <p className="text-sm font-medium">Top ranked columns</p>
+                <p className="text-xs text-foreground/70">Scaled to the highest score</p>
               </div>
 
               <div className="mt-3 space-y-2">
@@ -249,4 +249,3 @@ export function FeatureEngineeringCard({ datasetId }: { datasetId?: string }) {
     </Card>
   );
 }
-

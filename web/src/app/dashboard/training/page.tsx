@@ -31,7 +31,7 @@ export default async function TrainingPage({
             },
             {
               title: "Compare in depth",
-              detail: "Open Model comparison for charts, feature importance, PDF, and sharing.",
+              detail: "Open Model comparison for charts, score details, PDF, and sharing.",
             },
           ]}
           next={

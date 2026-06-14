@@ -127,7 +127,7 @@ const featureDocs = [
     items: [
       "Instant preview trains several models on a sample so you can compare likely performance quickly.",
       "Cleaning first is recommended because missing values and categorical encoding affect model quality.",
-      "Model comparison displays saved preview results, charts, metrics, and feature-importance signals.",
+      "Model comparison displays saved preview results, charts, metrics, and recommendation context.",
       "The comparison page reads the latest saved preview; run Train Models first when no results are available.",
     ],
   },
@@ -184,7 +184,7 @@ const faqGroups = [
       },
       {
         q: "Does Model Comparison train new models?",
-        a: "No. Model Comparison reads the latest saved instant-preview results. Use Train Models first, then open Model Comparison for charts, metrics, feature importance, PDF, and sharing workflows.",
+        a: "No. Model Comparison reads the latest saved instant-preview results. Use Train Models first, then open Model Comparison for charts, metrics, PDF, and sharing workflows.",
       },
     ],
   },

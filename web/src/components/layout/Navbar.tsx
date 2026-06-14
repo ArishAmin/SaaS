@@ -50,6 +50,9 @@ export function Navbar() {
             <Link href="/#demo-videos" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
               Demos
             </Link>
+            <Link href="/#pricing" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
+              Pricing
+            </Link>
             <Link href="/#why-acutize" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
               Security
             </Link>

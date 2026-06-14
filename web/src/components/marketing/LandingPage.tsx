@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
+import { PLANS, formatPlanPrice } from "@/lib/plans";
 
 const capabilityGroups = [
   {
@@ -48,9 +49,9 @@ const capabilityGroups = [
   },
   {
     icon: LineChart,
-    title: "Forecasting and model previews",
+    title: "Model comparison and recommendations",
     description:
-      "Preview model direction, compare useful metrics, review feature-importance signals, and forecast dated business metrics from your uploaded data.",
+      "Compare preview results, review practical score differences, and get a clear model recommendation before deeper work.",
   },
   {
     icon: Download,
@@ -78,8 +79,8 @@ const workflowSteps = [
   },
   {
     step: "04",
-    title: "Analyze, forecast, or model",
-    detail: "Use the prepared dataset for insight generation, forecasting, quick model previews, and reports.",
+    title: "Analyze or compare models",
+    detail: "Use the prepared dataset for insight generation, quick model previews, recommendations, and reports.",
   },
   {
     step: "05",
@@ -122,12 +123,12 @@ const demoTours = [
   {
     title: "Compare model performance",
     description:
-      "Compare model candidates, review score differences, and inspect the features that most influenced the preview.",
-    highlights: ["Model comparison", "Score review", "Feature importance"],
+      "Compare model candidates, review score differences, and use the recommendation to choose the strongest next step.",
+    highlights: ["Model comparison", "Score review", "Recommendation"],
     metric: "4",
     metricLabel: "models compared",
     icon: LineChart,
-    videoSrc: "/demos/forecast-models.mp4",
+    videoSrc: "/demos/model-comparison.mp4",
   },
 ];
 
@@ -135,54 +136,9 @@ const sampleOutputs = [
   "Cleaned dataset CSV",
   "Engineered dataset CSV",
   "Business insights PDF",
-  "Forecast result",
   "Model comparison report",
+  "Model recommendation summary",
   "Python training script",
-];
-
-const landingPlans = [
-  {
-    name: "Free",
-    price: "$0",
-    description: "For trying Acutize with a real dataset before choosing a paid plan.",
-    features: [
-      "Upload and inspect supported tabular files",
-      "Analyze data quality and column structure",
-      "Try the core cleaning and insight workflow",
-      "Download selected outputs",
-    ],
-    href: "/signup",
-    cta: "Start free",
-  },
-  {
-    name: "Pro",
-    price: "$25",
-    period: "/mo",
-    description: "For practitioners who work with multiple datasets and need more room to operate.",
-    features: [
-      "Larger files and more active datasets",
-      "Full workflow access for cleaning and insights",
-      "Model previews, generated features, and reports",
-      "Standard email support",
-    ],
-    href: "/pricing",
-    cta: "View Pro",
-    featured: true,
-  },
-  {
-    name: "Business",
-    price: "$70",
-    period: "/mo",
-    description: "For teams that need higher-volume workspace capacity and priority support.",
-    features: [
-      "Largest supported files and unlimited active datasets",
-      "Everything in Pro",
-      "Python full-training export script",
-      "Priority email support",
-    ],
-    href: "/pricing",
-    cta: "View Business",
-  },
 ];
 
 const faqs = [
@@ -192,7 +148,7 @@ const faqs = [
   },
   {
     q: "Is Acutize a replacement for a data science team?",
-    a: "No. Acutize is designed to help teams move faster on common data preparation, exploration, forecasting, and model-preview tasks. Critical business decisions should still be reviewed by qualified people.",
+    a: "No. Acutize is designed to help teams move faster on common data preparation, exploration, recommendations, and model-preview tasks. Critical business decisions should still be reviewed by qualified people.",
   },
   {
     q: "What kind of datasets work best?",
@@ -212,14 +168,14 @@ function ProductPreview() {
           <p className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Acutize workspace</p>
           <p className="text-sm font-semibold text-zinc-900 dark:text-white">Customer churn dataset</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <div className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+          <span className="h-2 w-2 rounded-full bg-blue-500" />
           Ready to analyze
         </div>
       </div>
       <div className="grid gap-0 lg:grid-cols-[240px_1fr]">
         <aside className="border-b border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/[0.03] lg:border-b-0 lg:border-r">
-          {["Data Hub", "Analyze", "Clean & Encode", "Business Insights", "Train Models", "Forecasting", "Export"].map(
+          {["Data Hub", "Analyze", "Clean & Encode", "Business Insights", "Train Models", "Model Ideas", "Export"].map(
             (item, index) => (
               <div
                 key={item}
@@ -296,22 +252,22 @@ function ProductPreview() {
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-white text-zinc-900 dark:bg-[#050505] dark:text-zinc-50 selection:bg-emerald-500/25">
+    <div className="min-h-screen bg-white text-zinc-900 dark:bg-[#050505] dark:text-zinc-50 selection:bg-blue-500/25">
       <Navbar />
 
       <main className="pt-16">
         <section className="border-b border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950">
           <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-24">
             <div className="flex flex-col justify-center">
-              <p className="mb-5 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              <p className="mb-5 text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                 AI data workspace for business teams
               </p>
               <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-5xl lg:text-6xl">
-                Clean, analyze, forecast, and report on datasets without writing scripts.
+                Clean, analyze, compare models, and report on datasets without writing scripts.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Acutize helps teams turn raw tabular files into clean datasets, business insights, model previews,
-                forecasts, and export-ready reports from one secure browser workspace.
+                Acutize helps teams turn raw tabular files into clean datasets, business insights, model recommendations,
+                preview comparisons, and export-ready reports from one secure browser workspace.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" className="h-12 rounded-lg bg-zinc-900 px-6 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200" asChild>
@@ -320,7 +276,7 @@ export function LandingPage() {
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 rounded-lg border-zinc-300 bg-white px-6 dark:border-white/15 dark:bg-transparent" asChild>
-                  <Link href="#pricing">
+                  <Link href="/pricing">
                     View pricing <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -328,7 +284,7 @@ export function LandingPage() {
               <div className="mt-8 grid gap-3 text-sm text-zinc-600 dark:text-zinc-300 sm:grid-cols-3">
                 {["No credit card to start", "CSV, Excel, JSON, Parquet", "Downloadable outputs"].map((item) => (
                   <div key={item} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <CheckCircle2 className="h-4 w-4 text-blue-600" />
                     {item}
                   </div>
                 ))}
@@ -341,21 +297,21 @@ export function LandingPage() {
         <section id="features" className="py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                 Capabilities
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
                 Everything a buyer should understand before logging in.
               </h2>
               <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Acutize brings data preparation, exploration, forecasting, model previews, and exports into one
+                Acutize brings data preparation, exploration, model recommendations, preview comparison, and exports into one
                 practical workspace for business datasets.
               </p>
             </div>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {capabilityGroups.map((item) => (
                 <div key={item.title} className="border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-950">
-                  <item.icon className="h-6 w-6 text-emerald-700 dark:text-emerald-300" />
+                  <item.icon className="h-6 w-6 text-blue-700 dark:text-blue-300" />
                   <h3 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
                   <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>
                 </div>
@@ -368,7 +324,7 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                   Product workflow
                 </p>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
@@ -382,7 +338,7 @@ export function LandingPage() {
               <div className="grid gap-3">
                 {workflowSteps.map((item) => (
                   <div key={item.step} className="grid gap-4 border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-[#050505] sm:grid-cols-[72px_1fr]">
-                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{item.step}</div>
+                    <div className="text-sm font-bold text-blue-700 dark:text-blue-300">{item.step}</div>
                     <div>
                       <h3 className="font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
                       <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.detail}</p>
@@ -398,7 +354,7 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
               <div className="max-w-3xl">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                   Demo videos
                 </p>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
@@ -433,7 +389,7 @@ export function LandingPage() {
                       </video>
                       <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                         <div className="flex items-center gap-3 bg-zinc-950/85 px-4 py-3 backdrop-blur">
-                          <demo.icon className="h-5 w-5 text-emerald-300" />
+                          <demo.icon className="h-5 w-5 text-blue-300" />
                           <h3 className="text-base font-semibold">{demo.title}</h3>
                         </div>
                         <div className="hidden border border-white/15 bg-zinc-950/85 p-3 text-right backdrop-blur sm:block">
@@ -462,7 +418,7 @@ export function LandingPage() {
         <section id="pricing" className="border-y border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                 Pricing
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
@@ -473,49 +429,73 @@ export function LandingPage() {
                 Detailed limits are available on the pricing page.
               </p>
             </div>
-            <div className="mt-12 grid gap-6 lg:grid-cols-3">
-              {landingPlans.map((plan) => (
+            <div className="mt-12 grid gap-6 lg:grid-cols-4">
+              {PLANS.map((plan) => {
+                const priced = formatPlanPrice(plan, "monthly");
+                return (
                 <div
                   key={plan.name}
-                  className={`flex flex-col border bg-white p-6 dark:bg-[#050505] ${
-                    plan.featured
-                      ? "border-emerald-600 shadow-xl shadow-emerald-900/10 dark:border-emerald-400"
-                      : "border-zinc-200 dark:border-white/10"
+                  className={`flex flex-col rounded-2xl border bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] dark:bg-slate-900 ${
+                    plan.popular
+                      ? "border-blue-600 shadow-xl shadow-blue-900/10 dark:border-blue-400"
+                      : "border-slate-200 dark:border-slate-800"
                   }`}
                 >
-                  {plan.featured && (
-                    <div className="mb-5 w-fit bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200">
-                      Popular
+                  {plan.badge && (
+                    <div className="mb-5 w-fit rounded-full bg-blue-600 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
+                      {plan.badge}
                     </div>
                   )}
-                  <h3 className="text-xl font-semibold text-zinc-950 dark:text-white">{plan.name}</h3>
-                  <div className="mt-4 flex items-end gap-1">
-                    <span className="text-4xl font-bold text-zinc-950 dark:text-white">{plan.price}</span>
-                    {plan.period && <span className="pb-1 text-sm text-zinc-500 dark:text-zinc-400">{plan.period}</span>}
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{plan.name}</h3>
+                  <div className="mt-4 flex flex-wrap items-baseline gap-1">
+                    <span className="text-4xl font-extrabold text-slate-900 dark:text-white">{priced.main}</span>
+                    {priced.sub && <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{priced.sub}</span>}
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{plan.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{plan.description}</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="rounded-md bg-slate-100 px-2 py-1 dark:bg-slate-800">{plan.maxFileMb} MB max file</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-1 dark:bg-slate-800">{plan.datasetsLabel}</span>
+                  </div>
                   <div className="mt-6 flex-1 space-y-3">
-                    {plan.features.map((feature) => (
-                      <div key={feature} className="flex gap-3 text-sm text-zinc-700 dark:text-zinc-300">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                    {plan.features.slice(0, 3).map((feature) => (
+                      <div key={feature} className="flex gap-3 text-sm text-slate-700 dark:text-slate-300">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                         <span>{feature}</span>
                       </div>
                     ))}
                   </div>
-                  <Button
-                    className={`mt-8 h-11 rounded-lg ${
-                      plan.featured
-                        ? "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                        : "bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
-                    }`}
-                    asChild
-                  >
-                    <Link href={plan.href}>
-                      {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
                 </div>
-              ))}
+                );
+              })}
+              <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-300 hover:translate-y-[-4px] dark:border-slate-800 dark:bg-slate-900">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Custom credits</h3>
+                <div className="mt-4 flex flex-wrap items-baseline gap-1">
+                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">5k+</span>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">credits/month</span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  Add more monthly capacity on Business-level infrastructure without changing the core workflow.
+                </p>
+                <div className="mt-6 flex-1 space-y-3">
+                  {[
+                    "Monthly and yearly packages",
+                    "Business-level file and dataset limits",
+                    "Priority support for high-volume use",
+                  ].map((feature) => (
+                    <div key={feature} className="flex gap-3 text-sm text-slate-700 dark:text-slate-300">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="mt-10 flex justify-center">
+              <Button size="lg" className="h-12 rounded-lg bg-blue-600 px-7 text-white hover:bg-blue-700" asChild>
+                <Link href="/pricing">
+                  View pricing details <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
           </div>
         </section>
@@ -523,7 +503,7 @@ export function LandingPage() {
         <section id="outputs" className="border-y border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
           <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                 Sample outcomes
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
@@ -537,7 +517,7 @@ export function LandingPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               {sampleOutputs.map((item) => (
                 <div key={item} className="flex items-center gap-3 border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-[#050505]">
-                  <Download className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                  <Download className="h-5 w-5 text-blue-700 dark:text-blue-300" />
                   <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item}</span>
                 </div>
               ))}
@@ -566,7 +546,7 @@ export function LandingPage() {
                 },
               ].map((item) => (
                 <div key={item.title} className="border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-950">
-                  <item.icon className="h-6 w-6 text-emerald-700 dark:text-emerald-300" />
+                  <item.icon className="h-6 w-6 text-blue-700 dark:text-blue-300" />
                   <h3 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
                   <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.text}</p>
                 </div>
@@ -578,7 +558,7 @@ export function LandingPage() {
         <section id="faq" className="border-t border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
                 Buyer FAQ
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
