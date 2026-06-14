@@ -94,13 +94,14 @@ begin
   );
 
   insert into public.profiles (
-    id, email, username, full_name, plan, credits_balance, credits_period_end
+    id, email, username, full_name, plan, credits_balance, credits_monthly_quota, credits_period_end
   )
-  values (new.id, v_email, v_username, v_full_name, 'hobby', 200, null)
+  values (new.id, v_email, v_username, v_full_name, 'hobby', 200, 200, null)
   on conflict (id) do update set
     email = excluded.email,
     username = coalesce(public.profiles.username, excluded.username),
-    full_name = coalesce(excluded.full_name, public.profiles.full_name);
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    credits_monthly_quota = coalesce(public.profiles.credits_monthly_quota, excluded.credits_monthly_quota);
 
   return new;
 end;

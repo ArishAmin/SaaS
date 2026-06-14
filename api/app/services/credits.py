@@ -119,6 +119,15 @@ async def _log_transaction(
         pass
 
 
+async def _has_credit_transactions(user_id: str) -> bool:
+    try:
+        rows = await rest_list("credit_transactions", f"user_id=eq.{user_id}&select=id&limit=1")
+        return bool(rows)
+    except Exception:
+        # If history cannot be checked, avoid granting corrective credits twice.
+        return True
+
+
 async def ensure_credits_period(user_id: str) -> dict:
     """Paid plans: refill credits every 30 days. Free (hobby): one-time pack, never auto-refill."""
     profile = await _get_profile(user_id)
@@ -126,11 +135,58 @@ async def ensure_credits_period(user_id: str) -> dict:
         return profile
 
     plan_name = _effective_plan(profile)
+    now = _utcnow()
     if plan_name == PlanType.HOBBY.value:
+        limits = get_plan_limits(plan_name)
+        target_quota = limits.monthly_credits
+        stored_quota = int(profile.get("credits_monthly_quota") or 60)
+        balance = int(profile.get("credits_balance") or 0)
+        if stored_quota > target_quota or balance > target_quota:
+            new_balance = min(balance, target_quota)
+            payload = {
+                "credits_balance": new_balance,
+                "credits_monthly_quota": target_quota,
+                "credits_period_end": None,
+                "updated_at": now.isoformat(),
+            }
+            await rest_patch("profiles", f"id=eq.{user_id}", payload)
+            await _log_transaction(
+                user_id=user_id,
+                action="free_quota_cap",
+                credits_delta=new_balance - balance,
+                balance_after=new_balance,
+                metadata={"previous_quota": stored_quota, "new_quota": target_quota},
+            )
+            return {**profile, **payload}
+        legacy_start_balance = (
+            stored_quota == target_quota
+            and balance == 60
+            and not await _has_credit_transactions(user_id)
+        )
+        if stored_quota < target_quota or legacy_start_balance:
+            # Preserve credits already spent under the old free quota while moving
+            # the account to the current starter pack.
+            old_quota = 60 if legacy_start_balance else stored_quota
+            used_credits = max(0, old_quota - balance)
+            new_balance = max(0, target_quota - used_credits)
+            payload = {
+                "credits_balance": new_balance,
+                "credits_monthly_quota": target_quota,
+                "credits_period_end": None,
+                "updated_at": now.isoformat(),
+            }
+            await rest_patch("profiles", f"id=eq.{user_id}", payload)
+            await _log_transaction(
+                user_id=user_id,
+                action="free_quota_update",
+                credits_delta=new_balance - balance,
+                balance_after=new_balance,
+                metadata={"previous_quota": stored_quota, "new_quota": target_quota},
+            )
+            return {**profile, **payload}
         return profile
 
     period_end = _parse_ts(profile.get("credits_period_end"))
-    now = _utcnow()
     if period_end and now < period_end:
         return profile
 

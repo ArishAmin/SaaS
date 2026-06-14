@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   BarChart3,
   Brain,
   CalendarClock,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { Footer } from "@/components/layout/Footer";
+import { HelpHeroActions } from "@/components/help/HelpHeroActions";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 
@@ -271,18 +271,7 @@ export default function HelpPage() {
                   A practical guide to uploading datasets, preparing data, generating insights, testing model
                   direction, exporting deliverables, and understanding how your data is handled in the workspace.
                 </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <Button asChild>
-                    <Link href="/signup">
-                      Start free <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href="/dashboard/contact">
-                      Contact support <Mail className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
+                <HelpHeroActions />
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950">
