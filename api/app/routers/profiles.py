@@ -17,8 +17,8 @@ async def get_my_profile(user: dict = Depends(get_current_user)):
                 "id": user_id,
                 "plan": "hobby",
                 "subscription_status": "none",
-                "credits_balance": 60,
-                "credits_quota": 60,
+                "credits_balance": 200,
+                "credits_quota": 200,
             }
             return {**base, **(await get_credits_summary(user_id))}
 

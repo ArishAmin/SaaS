@@ -2,16 +2,16 @@ export type PlanId = "hobby" | "pro" | "business";
 export type BillingInterval = "monthly" | "yearly";
 
 export const CREDIT_COST_LABELS: Record<string, number> = {
-  analyze: 2,
-  clean: 4,
-  feature_suggest: 5,
+  analyze: 7,
+  clean: 14,
+  feature_suggest: 17,
   feature_apply: 0,
-  train_instant: 11,
-  recommend: 3,
-  export_pdf: 2,
-  export_bundle: 6,
-  forecast: 10,
-  business_insights: 16,
+  train_instant: 37,
+  recommend: 10,
+  export_pdf: 7,
+  export_bundle: 20,
+  forecast: 34,
+  business_insights: 54,
   feature_engineer: 0,
 };
 
@@ -37,8 +37,8 @@ export interface CustomCreditTier {
   contactSupport: boolean;
 }
 
-/** Main one-run path stays within the 60-credit free starter pack. */
-export const STARTER_FULL_WORKFLOW_CREDITS = 60;
+/** Main one-run path stays within the 200-credit free starter pack. */
+export const STARTER_FULL_WORKFLOW_CREDITS = 200;
 
 export const YEARLY_DISCOUNT_PERCENT = 17;
 
@@ -57,11 +57,11 @@ export const PLANS: PlanDefinition[] = [
     priceMonthly: 0,
     priceYearly: 0,
     description: "Try Acutize with starter credits before choosing a paid plan.",
-    monthlyCredits: 60,
+    monthlyCredits: 200,
     maxFileMb: 10,
     datasetsLabel: "Up to 3 active datasets",
     features: [
-      "60 credits one-time (until you upgrade)",
+      "200 credits one-time (until you upgrade)",
       "Enough credits to run every main workflow step once",
       "10 MB max file size, up to 20,000 rows per step",
       "Instant profile, EDA and quality views (free to browse)",
@@ -78,11 +78,11 @@ export const PLANS: PlanDefinition[] = [
     priceMonthly: 25,
     priceYearly: 249,
     description: "For practitioners running multiple datasets each month.",
-    monthlyCredits: 450,
+    monthlyCredits: 500,
     maxFileMb: 30,
     datasetsLabel: "Up to 12 active datasets",
     features: [
-      "450 credits per month",
+      "500 credits per month",
       "Enough credits for multiple full workflow runs per month",
       "30 MB max file size, full file on pipeline steps",
       "Instant preview trains on 20k rows (all plans)",
@@ -135,13 +135,13 @@ export function formatPlanPrice(plan: PlanDefinition, interval: BillingInterval)
 }
 
 export const CREDIT_USAGE_ROWS = [
-  { action: "Analyze / profile", credits: 2 },
-  { action: "Clean and encode", credits: 4 },
-  { action: "Generate features", credits: 5 },
-  { action: "Instant model preview", credits: 11 },
-  { action: "Model ideas", credits: 3 },
-  { action: "Forecast future values", credits: 10 },
-  { action: "Business insights", credits: 16 },
-  { action: "PDF report", credits: 2 },
-  { action: "ZIP export bundle", credits: 6 },
+  { action: "Analyze / profile", credits: 7 },
+  { action: "Clean and encode", credits: 14 },
+  { action: "Generate features", credits: 17 },
+  { action: "Instant model preview", credits: 37 },
+  { action: "Model ideas", credits: 10 },
+  { action: "Forecast future values", credits: 34 },
+  { action: "Business insights", credits: 54 },
+  { action: "PDF report", credits: 7 },
+  { action: "ZIP export bundle", credits: 20 },
 ];

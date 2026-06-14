@@ -21,6 +21,7 @@ import {
   CreditCard,
   CalendarClock,
   PieChart,
+  HelpCircle,
 } from "lucide-react";
 
 import {
@@ -63,6 +64,7 @@ const pipelineNav: NavItem[] = [
 const moreNav: NavItem[] = [
   { href: "/dashboard/settings/credits", label: "Usage & credits", icon: CreditCard },
   { href: "/pricing", label: "Pricing", icon: Sparkles },
+  { href: "/help", label: "Help", icon: HelpCircle },
   { href: "/dashboard/contact", label: "Contact Us", icon: Mail },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

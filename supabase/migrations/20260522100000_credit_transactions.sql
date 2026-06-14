@@ -11,7 +11,7 @@ alter table public.profiles
   add column if not exists subscription_status text default 'inactive',
   add column if not exists current_period_end timestamptz,
   add column if not exists cancel_at_period_end boolean default false,
-  add column if not exists credits_balance integer default 60,
+  add column if not exists credits_balance integer default 200,
   add column if not exists credits_period_end timestamptz,
   add column if not exists paddle_customer_id text,
   add column if not exists paddle_subscription_id text,
@@ -22,7 +22,7 @@ update public.profiles
 set
   plan = coalesce(plan, 'hobby'),
   subscription_status = coalesce(subscription_status, 'inactive'),
-  credits_balance = coalesce(credits_balance, 60)
+  credits_balance = coalesce(credits_balance, 200)
 where plan is null
    or subscription_status is null
    or credits_balance is null;
@@ -56,7 +56,7 @@ create policy "credit_transactions_select_own" on public.credit_transactions
   for select using (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- 3) Signup trigger: one-time 60 credits on free tier
+-- 3) Signup trigger: one-time 200 credits on free tier
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -67,7 +67,7 @@ begin
     new.email,
     new.raw_user_meta_data->>'full_name',
     'hobby',
-    60,
+    200,
     null
   )
   on conflict (id) do update set

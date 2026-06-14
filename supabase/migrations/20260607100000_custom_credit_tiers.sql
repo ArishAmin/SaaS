@@ -6,7 +6,7 @@ alter table public.profiles
 update public.profiles
 set credits_monthly_quota = case
   when plan = 'business' then 2500
-  when plan = 'pro' then 450
-  else 60
+  when plan = 'pro' then 500
+  else 200
 end
 where credits_monthly_quota is null;

@@ -402,11 +402,11 @@ export default function PricingPage() {
             {[
               {
                 q: "How do Generate features and Model ideas differ?",
-                a: "Generate features (5 credits) suggests new columns from your data. Saving, applying feature selections, and CSV download are free. Model ideas (3 credits) recommends algorithms, not new columns.",
+                a: "Generate features (17 credits) suggests new columns from your data. Saving, applying feature selections, and CSV download are free. Model ideas (10 credits) recommends algorithms, not new columns.",
               },
               {
                 q: "What happens if I run out of credits?",
-                a: "Free tier gets 60 credits once (not monthly). Paid plans refill every 30 days. Opening pages and viewing cached analysis does not spend credits — you'll see an upgrade prompt if an action needs more credits.",
+                a: "Free tier gets 200 credits once (not monthly). Paid plans refill every 30 days. Opening pages and viewing cached analysis does not spend credits — you'll see an upgrade prompt if an action needs more credits.",
               },
               {
                 q: "How do yearly plans work?",
@@ -414,7 +414,7 @@ export default function PricingPage() {
               },
               {
                 q: "Is full model training included?",
-                a: "Instant preview runs in the cloud (11 credits). Full training is a Python script you run locally—no extra cloud training charge.",
+                a: "Instant preview runs in the cloud (37 credits). Full training is a Python script you run locally—no extra cloud training charge.",
               },
             ].map((faq, idx) => (
               <div

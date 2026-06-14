@@ -4,7 +4,7 @@
 # Cost-focused layout (May 2026):
 #   - API + Web on Starter ($7/mo each) = $14/mo compute
 #   - Redis Free for shared rate limits (upgrade to Starter $10/mo if you scale API replicas)
-#   - No Celery worker (full training runs on the user's machine via export; TTL cleanup off by default)
+#   - No Celery worker (full training runs on the user's machine via export; TTL cleanup runs by cron)
 #   - Supabase (auth/DB/storage) billed separately — Free tier OK for launch, Pro ~$25/mo when you grow
 #   - Render workspace: Hobby $0 (cold starts) or Pro $25/mo for always-on production
 
@@ -66,6 +66,14 @@ services:
         value: "0.1.0"
       - key: ADMIN_CLEANUP_TOKEN
         sync: false
+      - key: TTL_CLEANUP_ENABLED
+        value: "true"
+      - key: DATASET_TTL_HOURS
+        value: "720"
+      - key: SHARED_REPORT_TTL_HOURS
+        value: "720"
+      - key: TTL_CLEANUP_INTERVAL_MINUTES
+        value: "60"
 
   # -------------------------
   # 1.5. TTL Cleanup Cron Job

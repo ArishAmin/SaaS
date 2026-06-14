@@ -30,7 +30,7 @@ PLAN_CONFIGS: dict[PlanType, PlanLimits] = {
     PlanType.HOBBY: PlanLimits(
         max_dataset_size_mb=10,
         max_concurrent_datasets=3,
-        monthly_credits=60,
+        monthly_credits=200,
         allowed_models=["linear_regression", "logistic_regression", "decision_tree"],
         max_compute_seconds=300,
         support_priority="community",
@@ -39,7 +39,7 @@ PLAN_CONFIGS: dict[PlanType, PlanLimits] = {
     PlanType.PRO: PlanLimits(
         max_dataset_size_mb=30,
         max_concurrent_datasets=12,
-        monthly_credits=450,
+        monthly_credits=500,
         allowed_models=[
             "linear_regression",
             "logistic_regression",

@@ -40,7 +40,7 @@ const features = [
   {
     icon: ShieldCheck,
     title: "Private Dataset Workspace",
-    description: "Keep uploaded datasets tied to your account with authenticated access and secure file handling.",
+    description: "Keep uploaded datasets and generated outputs tied to your account with authenticated access and private file handling.",
   },
   {
     icon: Rocket,

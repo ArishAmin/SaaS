@@ -34,6 +34,7 @@ async def run_ttl_cleanup() -> dict:
     skipped_busy = 0
     deleted_objects = 0
     deleted_models = 0
+    skipped_cleanup_errors = 0
 
     # List candidate datasets that haven't been updated recently.
     # We only need a small selection; storage deletion uses prefix listing.
@@ -59,7 +60,9 @@ async def run_ttl_cleanup() -> dict:
             skipped_busy += 1
             continue
 
-        # Delete model artifacts referenced by runs (best-effort).
+        cleanup_failed = False
+
+        # Delete model artifacts referenced by runs.
         for r in runs:
             results = r.get("results_json") or {}
             model_path = results.get("model_storage_path")
@@ -67,25 +70,41 @@ async def run_ttl_cleanup() -> dict:
                 try:
                     await storage_remove("datasets", str(model_path))
                     deleted_models += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    cleanup_failed = True
+                    logger.warning("Failed to delete model artifact %s for dataset %s: %s", model_path, dataset_id, e)
 
         # Delete all objects in the dataset prefix.
         prefix = f"{user_id}/datasets/{dataset_id}/"
         try:
-            objs = await storage_list("datasets", prefix, limit=1000, offset=0)
-            for o in objs:
-                name = o.get("name")
-                if not name:
-                    continue
-                try:
-                    await storage_remove("datasets", str(name))
-                    deleted_objects += 1
-                except Exception:
-                    pass
-        except Exception:
-            # If listing fails, still proceed to delete DB row to enforce TTL.
-            pass
+            offset = 0
+            while True:
+                objs = await storage_list("datasets", prefix, limit=1000, offset=offset)
+                if not objs:
+                    break
+                for o in objs:
+                    name = o.get("name")
+                    if not name:
+                        continue
+                    object_path = str(name)
+                    if not object_path.startswith(prefix):
+                        object_path = f"{prefix}{object_path}"
+                    try:
+                        await storage_remove("datasets", object_path)
+                        deleted_objects += 1
+                    except Exception as e:
+                        cleanup_failed = True
+                        logger.warning("Failed to delete dataset object %s: %s", object_path, e)
+                if len(objs) < 1000:
+                    break
+                offset += 1000
+        except Exception as e:
+            cleanup_failed = True
+            logger.warning("Failed to list storage objects for dataset %s: %s", dataset_id, e)
+
+        if cleanup_failed:
+            skipped_cleanup_errors += 1
+            continue
 
         # Delete dataset row (cascades runs + shared reports).
         try:
@@ -108,6 +127,7 @@ async def run_ttl_cleanup() -> dict:
         metadata={
             "deleted_datasets": deleted_datasets,
             "skipped_busy": skipped_busy,
+            "skipped_cleanup_errors": skipped_cleanup_errors,
             "deleted_dataset_objects": deleted_objects,
             "deleted_models": deleted_models,
         },
@@ -117,6 +137,7 @@ async def run_ttl_cleanup() -> dict:
         "ok": True,
         "deleted_datasets": deleted_datasets,
         "skipped_busy": skipped_busy,
+        "skipped_cleanup_errors": skipped_cleanup_errors,
         "deleted_dataset_objects": deleted_objects,
         "deleted_models": deleted_models,
     }
@@ -134,4 +155,3 @@ def _await(coro):
     if asyncio.iscoroutine(coro):
         return asyncio.run(coro)
     return coro
-

@@ -96,7 +96,7 @@ begin
   insert into public.profiles (
     id, email, username, full_name, plan, credits_balance, credits_period_end
   )
-  values (new.id, v_email, v_username, v_full_name, 'hobby', 60, null)
+  values (new.id, v_email, v_username, v_full_name, 'hobby', 200, null)
   on conflict (id) do update set
     email = excluded.email,
     username = coalesce(public.profiles.username, excluded.username),

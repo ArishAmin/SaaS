@@ -16,7 +16,7 @@ def main():
     }
     
     print(f"Triggering TTL cleanup at {url}...")
-    response = requests.post(url, headers=headers)
+    response = requests.post(url, headers=headers, timeout=60)
     
     if response.status_code >= 400:
         print(f"Failed to trigger cleanup. Status code: {response.status_code}")

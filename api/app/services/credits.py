@@ -26,17 +26,17 @@ class CreditAction(str, Enum):
 
 
 CREDIT_COSTS: dict[CreditAction, int] = {
-    CreditAction.ANALYZE: 2,
-    CreditAction.CLEAN: 4,
-    CreditAction.FEATURE_SUGGEST: 5,
+    CreditAction.ANALYZE: 7,
+    CreditAction.CLEAN: 14,
+    CreditAction.FEATURE_SUGGEST: 17,
     CreditAction.FEATURE_APPLY: 0,
-    CreditAction.TRAIN_INSTANT: 11,
-    CreditAction.RECOMMEND: 3,
-    CreditAction.EXPORT_PDF: 2,
-    CreditAction.EXPORT_BUNDLE: 6,
+    CreditAction.TRAIN_INSTANT: 37,
+    CreditAction.RECOMMEND: 10,
+    CreditAction.EXPORT_PDF: 7,
+    CreditAction.EXPORT_BUNDLE: 20,
     CreditAction.FEATURE_ENGINEER: 0,
-    CreditAction.FORECAST: 10,
-    CreditAction.BUSINESS_INSIGHTS: 16,
+    CreditAction.FORECAST: 34,
+    CreditAction.BUSINESS_INSIGHTS: 54,
 }
 
 CREDIT_ACTION_LABELS: dict[str, str] = {

@@ -90,7 +90,7 @@ begin
     v_username,
     v_full_name,
     'hobby',
-    60,
+    200,
     null
   )
   on conflict (id) do update set

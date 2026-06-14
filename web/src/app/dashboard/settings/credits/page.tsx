@@ -8,7 +8,6 @@ import { apiRequest } from "@/lib/api";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StepHint } from "@/components/ui/step-hint";
 
 type BillingAccount = {
   plan: string;

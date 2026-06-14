@@ -1,7 +1,7 @@
 -- Paddle billing + monthly credits (replaces Stripe columns on profiles)
 
 alter table public.profiles
-  add column if not exists credits_balance integer not null default 60,
+  add column if not exists credits_balance integer not null default 200,
   add column if not exists credits_period_end timestamptz,
   add column if not exists paddle_customer_id text,
   add column if not exists paddle_subscription_id text,
@@ -22,8 +22,8 @@ begin
     new.email,
     new.raw_user_meta_data->>'full_name',
     'hobby',
-    60,
-    (now() at time zone 'utc') + interval '30 days'
+    200,
+    null
   );
   return new;
 end;

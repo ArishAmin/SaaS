@@ -20,8 +20,8 @@ const PlanContext = createContext<PlanContextType | undefined>(undefined);
 export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [plan, setPlan] = useState<PlanId>("hobby");
   const [status, setStatus] = useState("none");
-  const [creditsBalance, setCreditsBalance] = useState(60);
-  const [creditsQuota, setCreditsQuota] = useState(60);
+  const [creditsBalance, setCreditsBalance] = useState(200);
+  const [creditsQuota, setCreditsQuota] = useState(200);
   const [creditsRefreshMode, setCreditsRefreshMode] = useState<"one_time" | "monthly" | null>("one_time");
   const [loading, setLoading] = useState(true);
 
@@ -33,8 +33,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     if (!session?.access_token) {
       setPlan("hobby");
       setStatus("none");
-      setCreditsBalance(60);
-      setCreditsQuota(60);
+      setCreditsBalance(200);
+      setCreditsQuota(200);
       setLoading(false);
       return;
     }
@@ -51,8 +51,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
       setPlan((profile?.plan || "hobby") as PlanId);
       setStatus(profile?.subscription_status || "none");
-      setCreditsBalance(profile?.credits_balance ?? 60);
-      setCreditsQuota(profile?.credits_quota ?? profile?.credits_monthly_quota ?? 60);
+      setCreditsBalance(profile?.credits_balance ?? 200);
+      setCreditsQuota(profile?.credits_quota ?? profile?.credits_monthly_quota ?? 200);
       setCreditsRefreshMode(profile?.credits_refresh_mode ?? "one_time");
     } catch (err) {
       if (process.env.NODE_ENV === "development") {

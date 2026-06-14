@@ -56,9 +56,9 @@ class Settings(BaseSettings):
     # TTL cleanup (scheduled)
     # When enabled, the worker will periodically delete entire datasets (DB + storage + runs + shares)
     # that have been inactive (updated_at) longer than the TTL, as long as no run is queued/running.
-    ttl_cleanup_enabled: bool = False
+    ttl_cleanup_enabled: bool = True
     ttl_cleanup_interval_minutes: int = 60
-    dataset_ttl_hours: int = 24 * 7  # 7 days
+    dataset_ttl_hours: int = 24 * 30  # 30 days
 
     # Optionally delete share tokens older than this, even if dataset remains.
     shared_report_ttl_hours: int = 24 * 30  # 30 days

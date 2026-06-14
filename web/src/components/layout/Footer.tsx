@@ -23,6 +23,9 @@ export function Footer() {
           <Link href="/privacy" className="transition hover:text-zinc-900 dark:hover:text-zinc-100">
             Privacy Policy
           </Link>
+          <Link href="/help" className="transition hover:text-zinc-900 dark:hover:text-zinc-100">
+            Help Center
+          </Link>
           <Link href="/dashboard/contact" className="transition hover:text-zinc-900 dark:hover:text-zinc-100">
             Contact Us
           </Link>

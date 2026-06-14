@@ -69,8 +69,8 @@ export default function ContactPage() {
             <div className="flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-500 shrink-0" />
               <div>
-                <p className="text-sm font-medium">Bank-grade Security</p>
-                <p className="text-xs text-foreground/70 mt-1">Your data never leaves your private cloud instance. We are fully compliant with modern data protection regulations.</p>
+                <p className="text-sm font-medium">Private workspace controls</p>
+                <p className="text-xs text-foreground/70 mt-1">Uploaded datasets and generated outputs are stored in account-scoped private storage with ownership checks on dataset access, exports, and reports.</p>
               </div>
             </div>
 
