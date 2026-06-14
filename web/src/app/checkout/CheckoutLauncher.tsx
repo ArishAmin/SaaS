@@ -41,7 +41,7 @@ declare global {
 }
 
 const paddleToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-const paddleEnvironment = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT ?? "sandbox";
+const paddleEnvironment = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT;
 
 export function CheckoutLauncher() {
   const searchParams = useSearchParams();
@@ -63,6 +63,10 @@ export function CheckoutLauncher() {
       queueMicrotask(() => setError("Paddle checkout did not load."));
       return;
     }
+    if (paddleEnvironment !== "production" && paddleEnvironment !== "sandbox") {
+      queueMicrotask(() => setError("Paddle checkout environment is not configured."));
+      return;
+    }
     const token = paddleToken;
     if (!token) return;
     const checkoutTransactionId = transactionId;
@@ -71,9 +75,7 @@ export function CheckoutLauncher() {
     openedRef.current = true;
 
     try {
-      if (paddleEnvironment === "sandbox") {
-        window.Paddle.Environment?.set("sandbox");
-      }
+      window.Paddle.Environment?.set(paddleEnvironment);
 
       window.Paddle.Initialize({
         token,

@@ -39,7 +39,7 @@ services:
       - key: PADDLE_WEBHOOK_SECRET
         sync: false
       - key: PADDLE_ENVIRONMENT
-        value: sandbox
+        value: production
       - key: PADDLE_PRICE_ID_PRO
         sync: false
       - key: PADDLE_PRICE_ID_PRO_YEARLY
@@ -116,7 +116,7 @@ services:
       - key: NEXT_PUBLIC_BILLING_ENFORCEMENT_ENABLED
         value: "true"
       - key: NEXT_PUBLIC_PADDLE_ENVIRONMENT
-        value: sandbox
+        value: production
       - key: NEXT_PUBLIC_PADDLE_CLIENT_TOKEN
         sync: false
 

@@ -61,7 +61,7 @@ Set when prompted (or in each service → **Environment**):
 | `SUPABASE_JWKS_URL` | Yes | Usually `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` |
 | `PADDLE_API_KEY` | If billing on | Paddle Billing API secret key |
 | `PADDLE_WEBHOOK_SECRET` | If billing on | Notification destination secret |
-| `PADDLE_ENVIRONMENT` | Yes | `sandbox` or `production` |
+| `PADDLE_ENVIRONMENT` | Yes | Production blueprint sets `production`; use `sandbox` only in separate test services |
 | `PADDLE_PRICE_ID_PRO` | If billing on | Paddle Price ID for $25/mo Pro |
 | `PADDLE_PRICE_ID_PRO_YEARLY` | If billing on | Paddle Price ID for $249/yr Pro (17% off) |
 | `PADDLE_PRICE_ID_BUSINESS` | If billing on | Paddle Price ID for $70/mo Business |
@@ -85,22 +85,23 @@ Set when prompted (or in each service → **Environment**):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon key |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes | `https://acutize-api.onrender.com` (after API deploys) |
 | `NEXT_PUBLIC_BILLING_ENFORCEMENT_ENABLED` | Prod | Blueprint sets `true` (must match API) |
-| `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | If billing on | `sandbox` for test checkouts, `production` for live |
-| `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | If billing on | Paddle client-side token; sandbox tokens start with `test_`, live tokens start with `live_` |
+| `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | If billing on | Production blueprint sets `production`; use `sandbox` only in separate test services |
+| `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | If billing on | Live Paddle client-side token for production; sandbox tokens are only for separate test services |
 
 After the API URL is live, update `NEXT_PUBLIC_API_BASE_URL` and redeploy the web service.
 
-### Paddle sandbox → production (when you go live)
+### Paddle production checklist
 
-Keep the same env var **names**. Only change values:
+The root `render.yaml` is production-oriented. Keep these values live on Render:
 
-1. `PADDLE_ENVIRONMENT` → `production`
-2. Replace `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` with live dashboard values
-3. Replace all four `PADDLE_PRICE_ID_*` with production catalog price IDs
-4. Replace `PADDLE_CUSTOM_CREDIT_PRICE_IDS` with production custom tier price IDs
-5. Re-register webhook URL on the **live** Paddle notification destination
+1. `PADDLE_ENVIRONMENT=production`
+2. `NEXT_PUBLIC_PADDLE_ENVIRONMENT=production`
+3. Use live `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, and `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`
+4. Use production catalog price IDs for all `PADDLE_PRICE_ID_*` values
+5. Use production custom tier price IDs in `PADDLE_CUSTOM_CREDIT_PRICE_IDS`
+6. Register the webhook URL on the **live** Paddle notification destination
 
-With `PADDLE_ENVIRONMENT=sandbox` and sandbox keys, the site behaves like production (limits, credits, checkout) — payments are test-only until you swap credentials.
+Do not point the production Render services at sandbox Paddle values. If you need sandbox billing tests, create separate test services or a separate Render blueprint so production env vars are not overwritten on deploy.
 
 ## Step 4: Supabase
 

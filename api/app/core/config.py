@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -77,6 +78,15 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @model_validator(mode="after")
+    def validate_production_billing_environment(self) -> "Settings":
+        paddle_environment = (self.paddle_environment or "").lower()
+        if paddle_environment not in {"sandbox", "production"}:
+            raise ValueError("PADDLE_ENVIRONMENT must be either 'sandbox' or 'production'.")
+        if self.app_env == "production" and paddle_environment != "production":
+            raise ValueError("Production deployments must set PADDLE_ENVIRONMENT=production.")
+        return self
 
 
 def get_settings() -> Settings:
