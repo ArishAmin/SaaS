@@ -2,235 +2,523 @@
 
 import Link from "next/link";
 import {
+  ArrowRight,
   BarChart3,
-  Sparkles,
-  Wand2,
-  Zap,
   CheckCircle2,
+  ClipboardCheck,
+  Database,
+  Download,
+  FileSpreadsheet,
+  LineChart,
+  LockKeyhole,
+  Play,
   ShieldCheck,
-  Rocket,
+  Sparkles,
+  Table2,
+  Wand2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/layout/Footer";
-import { PricingSection } from "@/components/marketing/PricingSection";
 import { Navbar } from "@/components/layout/Navbar";
 
-const features = [
+const capabilityGroups = [
   {
-    icon: Sparkles,
-    title: "Preview Any Tabular File",
-    description: "Upload CSV, Excel, JSON, or Parquet files and quickly understand rows, columns, data types, and quality issues.",
+    icon: FileSpreadsheet,
+    title: "Dataset upload and profiling",
+    description:
+      "Upload CSV, Excel, JSON, or Parquet files and inspect rows, columns, data types, missing values, duplicates, and quality signals before taking action.",
   },
   {
     icon: Wand2,
-    title: "Clean Data Without Scripts",
-    description: "Handle missing values, duplicates, encoding, and scaling with guided controls instead of writing cleaning code.",
-  },
-  {
-    icon: Zap,
-    title: "Test Model Direction",
-    description: "Run quick model previews on your dataset to see useful metrics before investing time in a deeper workflow.",
+    title: "No-code cleaning workflow",
+    description:
+      "Clean common dataset problems with guided options for missing values, duplicates, categorical encoding, scaling, and repeatable preparation steps.",
   },
   {
     icon: BarChart3,
-    title: "Export Files and Reports",
-    description: "Download cleaned datasets, PDF reports, and export bundles you can share, archive, or review later.",
+    title: "Business insights and EDA",
+    description:
+      "Generate charts, summaries, patterns, and business-friendly recommendations that help teams understand what the data is saying.",
   },
   {
-    icon: ShieldCheck,
-    title: "Private Dataset Workspace",
-    description: "Keep uploaded datasets and generated outputs tied to your account with authenticated access and private file handling.",
+    icon: Sparkles,
+    title: "Generated feature suggestions",
+    description:
+      "Discover useful derived columns, review the expected impact, choose what to keep, and save an engineered dataset for modeling or export.",
   },
   {
-    icon: Rocket,
-    title: "Continue Where You Left Off",
-    description: "Return to cleaned versions, run another cleaning pass, train again, or export results without starting over.",
+    icon: LineChart,
+    title: "Forecasting and model previews",
+    description:
+      "Preview model direction, compare useful metrics, review feature-importance signals, and forecast dated business metrics from your uploaded data.",
+  },
+  {
+    icon: Download,
+    title: "Reports and export bundles",
+    description:
+      "Download cleaned datasets, engineered files, PDF reports, Python training scripts, and ZIP bundles for review, handoff, or internal records.",
   },
 ];
 
+const workflowSteps = [
+  {
+    step: "01",
+    title: "Upload a business dataset",
+    detail: "Start with a tabular file from operations, sales, marketing, finance, support, or research.",
+  },
+  {
+    step: "02",
+    title: "Understand the current state",
+    detail: "Review schema, quality issues, distributions, missing values, duplicates, and early insights.",
+  },
+  {
+    step: "03",
+    title: "Prepare the data",
+    detail: "Clean, encode, scale, and create useful derived features with visible choices before export.",
+  },
+  {
+    step: "04",
+    title: "Analyze, forecast, or model",
+    detail: "Use the prepared dataset for insight generation, forecasting, quick model previews, and reports.",
+  },
+  {
+    step: "05",
+    title: "Export what the team needs",
+    detail: "Download files, reports, scripts, or bundles so the output can move into your next workflow.",
+  },
+];
+
+const demoTours = [
+  {
+    title: "Analyze dataset quality",
+    duration: "60 sec demo",
+    description:
+      "See how Acutize profiles a dataset, surfaces missing values, identifies column types, and helps you choose the next step.",
+    highlights: ["File preview", "Quality summary", "Column-level signals"],
+    metric: "93%",
+    metricLabel: "quality score",
+    icon: Table2,
+    videoSrc: "/demos/analyze-quality.mp4",
+  },
+  {
+    title: "Clean and prepare data",
+    duration: "75 sec demo",
+    description:
+      "Walk through guided cleaning settings for missing values, duplicates, category handling, and numeric scaling.",
+    highlights: ["Cleaning controls", "Processed copy", "Download-ready CSV"],
+    metric: "18",
+    metricLabel: "columns prepared",
+    icon: ClipboardCheck,
+    videoSrc: "/demos/clean-prepare.mp4",
+  },
+  {
+    title: "Generate business insights",
+    duration: "90 sec demo",
+    description:
+      "Review dashboard-style charts, plain-English findings, and recommendations generated from uploaded data.",
+    highlights: ["EDA charts", "Business summary", "PDF report"],
+    metric: "12",
+    metricLabel: "insights found",
+    icon: BarChart3,
+    videoSrc: "/demos/business-insights.mp4",
+  },
+  {
+    title: "Forecast and test models",
+    duration: "90 sec demo",
+    description:
+      "Preview model direction, compare results, inspect important features, and forecast future values from dated metrics.",
+    highlights: ["Model preview", "Feature importance", "Forecast chart"],
+    metric: "4",
+    metricLabel: "models compared",
+    icon: LineChart,
+    videoSrc: "/demos/forecast-models.mp4",
+  },
+];
+
+const sampleOutputs = [
+  "Cleaned dataset CSV",
+  "Engineered dataset CSV",
+  "Business insights PDF",
+  "Forecast result",
+  "Model comparison report",
+  "Python training script",
+];
+
+const faqs = [
+  {
+    q: "Can I understand Acutize without creating an account?",
+    a: "Yes. The public page explains the main workflow, supported file types, core capabilities, sample outputs, data handling, and common use cases before signup.",
+  },
+  {
+    q: "Is Acutize a replacement for a data science team?",
+    a: "No. Acutize is designed to help teams move faster on common data preparation, exploration, forecasting, and model-preview tasks. Critical business decisions should still be reviewed by qualified people.",
+  },
+  {
+    q: "What kind of datasets work best?",
+    a: "Acutize works best with structured tabular datasets such as CSV, Excel, JSON, and Parquet files that contain business metrics, categories, dates, targets, or operational records.",
+  },
+  {
+    q: "How is uploaded data handled?",
+    a: "Uploaded datasets and generated outputs stay tied to the authenticated account. They are kept to support the active workspace and are removed by the published retention policy when they are no longer active.",
+  },
+];
+
+function ProductPreview() {
+  return (
+    <div className="border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/10 dark:border-white/10 dark:bg-zinc-950">
+      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-white/10">
+        <div>
+          <p className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">Acutize workspace</p>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">Customer churn dataset</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          Ready to analyze
+        </div>
+      </div>
+      <div className="grid gap-0 lg:grid-cols-[240px_1fr]">
+        <aside className="border-b border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/[0.03] lg:border-b-0 lg:border-r">
+          {["Data Hub", "Analyze", "Clean & Encode", "Business Insights", "Train Models", "Forecasting", "Export"].map(
+            (item, index) => (
+              <div
+                key={item}
+                className={`mb-2 flex items-center gap-2 px-3 py-2 text-sm ${
+                  index === 1
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-950"
+                    : "text-zinc-600 dark:text-zinc-300"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {item}
+              </div>
+            )
+          )}
+        </aside>
+        <div className="p-4 sm:p-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              ["Rows", "18,420"],
+              ["Columns", "28"],
+              ["Missing cells", "2.8%"],
+            ].map(([label, value]) => (
+              <div key={label} className="border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+                <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 border border-zinc-200 dark:border-white/10">
+            <div className="grid grid-cols-4 border-b border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400">
+              {["Column", "Type", "Quality", "Signal"].map((head) => (
+                <div key={head} className="px-3 py-2">
+                  {head}
+                </div>
+              ))}
+            </div>
+            {[
+              ["monthly_spend", "number", "98%", "Strong"],
+              ["tenure_months", "number", "100%", "Useful"],
+              ["support_tickets", "number", "91%", "Review"],
+              ["contract_type", "category", "96%", "Useful"],
+            ].map((row) => (
+              <div
+                key={row[0]}
+                className="grid grid-cols-4 border-b border-zinc-100 text-xs text-zinc-700 last:border-b-0 dark:border-white/5 dark:text-zinc-300"
+              >
+                {row.map((cell) => (
+                  <div key={cell} className="px-3 py-3">
+                    {cell}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_160px]">
+            <div className="border border-zinc-200 p-4 dark:border-white/10">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">Recommended next step</p>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Clean missing support ticket values and review category encoding before model preview.
+              </p>
+            </div>
+            <div className="flex items-center justify-center bg-zinc-900 p-4 text-center text-white dark:bg-white dark:text-zinc-950">
+              <div>
+                <p className="text-3xl font-bold">4</p>
+                <p className="text-xs">issues to review</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-white text-zinc-900 dark:bg-[#030303] dark:text-zinc-50 selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-white text-zinc-900 dark:bg-[#050505] dark:text-zinc-50 selection:bg-emerald-500/25">
       <Navbar />
 
       <main className="pt-16">
-        {/* Hero Section */}
-        <section className="relative pt-24 pb-20 lg:pt-32 lg:pb-40 overflow-hidden">
-          {/* Animated Background Gradients */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] -z-10 pointer-events-none overflow-hidden">
-            <div className="absolute top-[-100px] left-[-150px] w-[600px] h-[600px] bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[120px] animate-pulse" />
-            <div className="absolute top-[-50px] right-[-150px] w-[600px] h-[600px] bg-purple-500/10 dark:bg-purple-500/20 rounded-full blur-[120px] animate-pulse [animation-delay:1s]" />
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-[100px]" />
-          </div>
-
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
-            <div className="text-center">
-              <h1 className="mx-auto max-w-5xl text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl leading-[1.1] bg-clip-text text-transparent bg-linear-to-b from-zinc-900 via-zinc-800 to-zinc-600 dark:from-white dark:via-zinc-200 dark:to-zinc-500">
-                Clean, analyze, and test models on your datasets.
-              </h1>
-              <p className="mx-auto mt-8 max-w-2xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Upload CSV, Excel, JSON, or Parquet files. Preview your data, fix common issues, run quick model tests, and export clean files or reports without writing scripts.
+        <section className="border-b border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950">
+          <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-24">
+            <div className="flex flex-col justify-center">
+              <p className="mb-5 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                AI data workspace for business teams
               </p>
-              <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Button size="lg" className="h-14 min-w-[220px] rounded-full text-base font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95" asChild>
-                  <Link href="/signup">Start Free</Link>
+              <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-5xl lg:text-6xl">
+                Clean, analyze, forecast, and report on datasets without writing scripts.
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                Acutize helps teams turn raw tabular files into clean datasets, business insights, model previews,
+                forecasts, and export-ready reports from one secure browser workspace.
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button size="lg" className="h-12 rounded-lg bg-zinc-900 px-6 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200" asChild>
+                  <Link href="/signup">
+                    Start free <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
-                <Button size="lg" variant="outline" className="h-14 min-w-[220px] rounded-full text-base font-semibold border-zinc-200 dark:border-white/10 bg-white/50 backdrop-blur-sm dark:bg-white/5 hover:bg-zinc-100 dark:hover:bg-white/10 transition-all" asChild>
-                  <Link href="#how-it-works">See How It Works</Link>
+                <Button size="lg" variant="outline" className="h-12 rounded-lg border-zinc-300 bg-white px-6 dark:border-white/15 dark:bg-transparent" asChild>
+                  <Link href="#demo-videos">
+                    Watch product demos <Play className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </div>
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No credit card to start
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> CSV, Excel, JSON, Parquet
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Cleaned files and reports
-                </div>
+              <div className="mt-8 grid gap-3 text-sm text-zinc-600 dark:text-zinc-300 sm:grid-cols-3">
+                {["No credit card to start", "CSV, Excel, JSON, Parquet", "Downloadable outputs"].map((item) => (
+                  <div key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    {item}
+                  </div>
+                ))}
               </div>
             </div>
+            <ProductPreview />
           </div>
         </section>
 
-        {/* Features Grid */}
-        <section id="features" className="py-24 border-y border-zinc-200/50 dark:border-white/5 bg-zinc-50/50 dark:bg-white/[0.01]">
+        <section id="features" className="py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center max-w-3xl mx-auto mb-20">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
-                From messy file to clean output in minutes
+            <div className="max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                Capabilities
+              </p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                Everything a buyer should understand before logging in.
               </h2>
-              <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-                A no-code data workflow for inspecting, cleaning, analyzing, testing models, and exporting datasets from one browser workspace.
+              <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                Acutize brings data preparation, exploration, forecasting, model previews, and exports into one
+                practical workspace for business datasets.
               </p>
             </div>
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((f) => (
-                <div
-                  key={f.title}
-                  className="group relative rounded-3xl border border-zinc-200/50 bg-white p-8 dark:border-white/5 dark:bg-zinc-900/50 hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 mb-6 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                    <f.icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">{f.title}</h3>
-                  <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed text-sm">
-                    {f.description}
-                  </p>
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {capabilityGroups.map((item) => (
+                <div key={item.title} className="border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-950">
+                  <item.icon className="h-6 w-6 text-emerald-700 dark:text-emerald-300" />
+                  <h3 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* How it Works / Workflow Section */}
-        <section id="how-it-works" className="py-24 overflow-hidden">
+        <section id="how-it-works" className="border-y border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="lg:flex lg:items-center lg:gap-16">
-              <div className="lg:w-1/2">
-                <h2 className="text-3xl font-bold tracking-tight sm:text-4xl text-zinc-900 dark:text-white mb-8">
-                  A simple dataset workflow from upload to export.
+            <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                  Product workflow
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                  From raw file to useful output in one guided flow.
                 </h2>
-                <div className="space-y-12">
-                  {[
-                    {
-                      step: "01",
-                      title: "Upload Your Dataset",
-                      content: "Start with CSV, Excel, JSON, or Parquet files. Acutize reads the structure so you can inspect the data before changing it."
-                    },
-                    {
-                      step: "02",
-                      title: "Preview Data Quality",
-                      content: "Review rows, columns, data types, missing values, duplicates, and quality signals before running analysis or models."
-                    },
-                    {
-                      step: "03",
-                      title: "Clean Only What You Need",
-                      content: "Fill missing values, handle duplicates, choose encoding or scaling, or leave steps as none when you only need one fix."
-                    },
-                    {
-                      step: "04",
-                      title: "Analyze, Test, and Export",
-                      content: "Run quick model previews, review useful metrics, then export cleaned files, PDF reports, or ZIP bundles when you are ready."
-                    },
-                  ].map((item) => (
-                    <div key={item.step} className="flex gap-6">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white text-xs font-bold dark:bg-zinc-800 dark:text-zinc-400">
-                        {item.step}
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-zinc-900 dark:text-white">{item.title}</h4>
-                        <p className="mt-2 text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">{item.content}</p>
+                <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                  Acutize is built for teams that need practical results: better data, clearer insights, exportable
+                  files, and faster model exploration.
+                </p>
+              </div>
+              <div className="grid gap-3">
+                {workflowSteps.map((item) => (
+                  <div key={item.step} className="grid gap-4 border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-[#050505] sm:grid-cols-[72px_1fr]">
+                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{item.step}</div>
+                    <div>
+                      <h3 className="font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="demo-videos" className="py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+              <div className="max-w-3xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                  Demo videos
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                  Short product tours for the most important workflows.
+                </h2>
+                <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                  Preview the core Acutize experience before creating an account: profile a dataset, clean it,
+                  generate insights, forecast trends, and prepare files for export.
+                </p>
+              </div>
+              <Button variant="outline" className="h-11 rounded-lg border-zinc-300 dark:border-white/15" asChild>
+                <Link href="/help">Open Help Center</Link>
+              </Button>
+            </div>
+
+            <div className="mt-12 grid gap-6 lg:grid-cols-2">
+              {demoTours.map((demo) => (
+                <div key={demo.title} className="border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
+                  <div className="border-b border-zinc-200 bg-zinc-900 text-white dark:border-white/10">
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-2 text-xs text-zinc-400">
+                        <span className="h-2 w-2 rounded-full bg-red-400" />
+                        <span className="h-2 w-2 rounded-full bg-amber-400" />
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      </div>
+                      <span className="text-xs text-zinc-300">{demo.duration}</span>
+                    </div>
+                    <div className="relative">
+                      <video
+                        aria-label={`${demo.title} product demo`}
+                        className="aspect-video w-full bg-zinc-950 object-cover"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                      >
+                        <source src={demo.videoSrc} type="video/mp4" />
+                      </video>
+                      <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
+                        <div className="flex items-center gap-3 bg-zinc-950/85 px-4 py-3 backdrop-blur">
+                          <demo.icon className="h-5 w-5 text-emerald-300" />
+                          <h3 className="text-base font-semibold">{demo.title}</h3>
+                        </div>
+                        <div className="hidden border border-white/15 bg-zinc-950/85 p-3 text-right backdrop-blur sm:block">
+                          <p className="text-2xl font-bold">{demo.metric}</p>
+                          <p className="text-xs text-zinc-300">{demo.metricLabel}</p>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-16 lg:mt-0 lg:w-1/2 relative">
-                <div className="aspect-square rounded-3xl bg-linear-to-br from-indigo-500/20 via-purple-500/10 to-transparent p-1">
-                  <div className="h-full w-full rounded-[calc(1.5rem-1px)] bg-white dark:bg-zinc-950 border border-zinc-200/50 dark:border-white/5 flex items-center justify-center overflow-hidden relative shadow-2xl">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(99,102,241,0.15),transparent)]" />
-                    {/* Placeholder for an actual app screenshot or illustration */}
-                    <div className="text-center p-8 z-10">
-                      <BarChart3 className="h-16 w-16 text-indigo-500 mx-auto mb-4 opacity-50" />
-                      <p className="text-sm font-medium text-zinc-400">Upload, clean, preview, export</p>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{demo.description}</p>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {demo.highlights.map((item) => (
+                        <span key={item} className="border border-zinc-200 px-3 py-1 text-xs text-zinc-600 dark:border-white/10 dark:text-zinc-300">
+                          {item}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
-                {/* Float Elements */}
-                <div className="absolute -top-6 -right-6 h-24 w-24 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200/50 dark:border-white/5 shadow-xl flex items-center justify-center animate-bounce [animation-duration:4s]">
-                  <Zap className="h-8 w-8 text-amber-500" />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* Why Acutize Section */}
-        <section id="why-acutize" className="py-24 bg-zinc-900 text-white dark:bg-white dark:text-black rounded-[3rem] mx-4 sm:mx-6 lg:mx-8 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-1/2 h-full bg-indigo-600/20 blur-[120px] -z-0" />
-          <div className="mx-auto max-w-7xl px-8 relative z-10">
-            <div className="max-w-3xl">
-              <h2 className="text-4xl font-extrabold tracking-tight mb-8">
-                Stop switching between spreadsheets, notebooks, and reporting tools.
+        <section id="outputs" className="border-y border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
+          <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                Sample outcomes
+              </p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                Know exactly what you can take away from Acutize.
               </h2>
-              <div className="grid gap-10 sm:grid-cols-2">
-                <div>
-                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Built for real data prep</h4>
-                  <p className="text-zinc-400 dark:text-zinc-500 text-sm leading-relaxed">
-                    See dataset issues early, clean with transparent settings, and keep the latest cleaned version available when you come back.
-                  </p>
+              <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                Buyers should not have to guess what the platform produces. Acutize creates practical artifacts that
+                can be reviewed, downloaded, and shared with a team.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {sampleOutputs.map((item) => (
+                <div key={item} className="flex items-center gap-3 border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-[#050505]">
+                  <Download className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item}</span>
                 </div>
-                <div>
-                  <h4 className="text-indigo-400 dark:text-indigo-600 font-bold mb-2">Useful for more than one task</h4>
-                  <p className="text-zinc-400 dark:text-zinc-500 text-sm leading-relaxed">
-                    Use the same workspace for data cleaning, no-code analysis, quick ML model testing, exports, and reports.
-                  </p>
-                </div>
-              </div>
-              <Button size="lg" className="mt-12 rounded-full px-10 bg-white text-black hover:bg-zinc-200 dark:bg-black dark:text-white" asChild>
-                <Link href="/signup">Start Free</Link>
-              </Button>
+              ))}
             </div>
           </div>
         </section>
 
-        <PricingSection hideCTA={true} />
+        <section id="why-acutize" className="py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-6 lg:grid-cols-3">
+              {[
+                {
+                  icon: Database,
+                  title: "Built around the latest dataset state",
+                  text: "Acutize keeps the latest uploaded, cleaned, engineered, and generated outputs available inside the workspace so users can continue where they left off.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Clear retention posture",
+                  text: "Datasets and generated reports are retained for active workspace use and removed under the published retention policy after inactivity.",
+                },
+                {
+                  icon: LockKeyhole,
+                  title: "Private account access",
+                  text: "Dataset records and exports are tied to the authenticated account. Public marketing content should never imply that customer datasets are sold or exposed.",
+                },
+              ].map((item) => (
+                <div key={item.title} className="border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-950">
+                  <item.icon className="h-6 w-6 text-emerald-700 dark:text-emerald-300" />
+                  <h3 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        {/* CTA Section */}
-        <section className="py-32">
-          <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center">
-            <h2 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6">
-              Ready to try Acutize with your first dataset?
+        <section id="faq" className="border-t border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                Buyer FAQ
+              </p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                Questions visitors ask before signing up.
+              </h2>
+            </div>
+            <div className="mt-10 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-white/10 dark:border-white/10">
+              {faqs.map((item) => (
+                <div key={item.q} className="py-6">
+                  <h3 className="font-semibold text-zinc-950 dark:text-white">{item.q}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.a}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="py-20">
+          <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+              See what Acutize can do with your first dataset.
             </h2>
-            <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10">
-              Start free, upload a file, preview the workflow, and see whether it fits the way you work with data.
+            <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+              Start with a real business file, inspect the data, clean what needs fixing, and export the results when
+              they are ready.
             </p>
-            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Button size="lg" className="h-14 min-w-[240px] rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/25 transition-all hover:scale-105" asChild>
-                <Link href="/signup">Get Started Now</Link>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button size="lg" className="h-12 rounded-lg bg-zinc-900 px-6 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200" asChild>
+                <Link href="/signup">
+                  Start free <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button size="lg" variant="outline" className="h-12 rounded-lg border-zinc-300 bg-white px-6 dark:border-white/15 dark:bg-transparent" asChild>
+                <Link href="/help">Read Help Center</Link>
               </Button>
             </div>
           </div>

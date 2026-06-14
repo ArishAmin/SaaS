@@ -45,13 +45,13 @@ export function Navbar() {
               Capabilities
             </Link>
             <Link href="/#how-it-works" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
-              The Process
+              Workflow
             </Link>
-            <Link href="/pricing" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
-              Pricing
+            <Link href="/#demo-videos" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
+              Demos
             </Link>
             <Link href="/#why-acutize" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
-              Why Us
+              Security
             </Link>
           </nav>
         )}
