@@ -39,7 +39,7 @@ const capabilityGroups = [
     icon: BarChart3,
     title: "Business insights and EDA",
     description:
-      "Generate charts, summaries, patterns, and business-friendly recommendations that help teams understand what the data is saying.",
+      "Generate charts, summaries, patterns, and business-friendly recommendations that help you understand what the data is saying.",
   },
   {
     icon: Sparkles,
@@ -84,7 +84,7 @@ const workflowSteps = [
   },
   {
     step: "05",
-    title: "Export what the team needs",
+    title: "Export what you need",
     detail: "Download files, reports, scripts, or bundles so the output can move into your next workflow.",
   },
 ];
@@ -147,8 +147,8 @@ const faqs = [
     a: "Yes. The public page explains the main workflow, supported file types, core capabilities, sample outputs, data handling, and common use cases before signup.",
   },
   {
-    q: "Is Acutize a replacement for a data science team?",
-    a: "No. Acutize is designed to help teams move faster on common data preparation, exploration, recommendations, and model-preview tasks. Critical business decisions should still be reviewed by qualified people.",
+    q: "Is Acutize a replacement for a data scientist or analyst?",
+    a: "No. Acutize is designed to help users move faster on common data preparation, exploration, recommendations, and model-preview tasks. Critical business decisions should still be reviewed by qualified people.",
   },
   {
     q: "What kind of datasets work best?",
@@ -260,13 +260,13 @@ export function LandingPage() {
           <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-24">
             <div className="flex flex-col justify-center">
               <p className="mb-5 text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
-                AI data workspace for business teams
+                Data workspace 
               </p>
               <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-5xl lg:text-6xl">
                 Clean, analyze, compare models, and report on datasets without writing scripts.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Acutize helps teams turn raw tabular files into clean datasets, business insights, model recommendations,
+                Acutize helps turn raw tabular files into clean datasets, business insights, model recommendations,
                 preview comparisons, and export-ready reports from one secure browser workspace.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -331,8 +331,8 @@ export function LandingPage() {
                   From raw file to useful output in one guided flow.
                 </h2>
                 <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                  Acutize is built for teams that need practical results: better data, clearer insights, exportable
-                  files, and faster model exploration.
+                  Acutize is built for practical data work: better data, clearer insights, exportable files, and faster
+                  model exploration.
                 </p>
               </div>
               <div className="grid gap-3">
@@ -422,7 +422,7 @@ export function LandingPage() {
                 Pricing
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
-                Start free, then choose the workspace size that fits your team.
+                Start free, then choose the workspace size that fits your work.
               </h2>
               <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
                 Plans are designed around dataset size, active workspace capacity, export needs, and support level.
@@ -510,8 +510,8 @@ export function LandingPage() {
                 Know exactly what you can take away from Acutize.
               </h2>
               <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Buyers should not have to guess what the platform produces. Acutize creates practical artifacts that
-                can be reviewed, downloaded, and shared with a team.
+                You should not have to guess what the platform produces. Acutize creates practical artifacts that can
+                be reviewed, downloaded, and shared when needed.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -559,10 +559,10 @@ export function LandingPage() {
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
             <div className="text-center">
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
-                Buyer FAQ
+                Product FAQ
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
-                Questions visitors ask before signing up.
+                Questions people ask before signing up.
               </h2>
             </div>
             <div className="mt-10 divide-y divide-zinc-200 border-y border-zinc-200 dark:divide-white/10 dark:border-white/10">
