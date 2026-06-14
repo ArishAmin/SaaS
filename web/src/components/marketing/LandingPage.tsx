@@ -11,7 +11,6 @@ import {
   FileSpreadsheet,
   LineChart,
   LockKeyhole,
-  Play,
   ShieldCheck,
   Sparkles,
   Table2,
@@ -92,7 +91,6 @@ const workflowSteps = [
 const demoTours = [
   {
     title: "Analyze dataset quality",
-    duration: "60 sec demo",
     description:
       "See how Acutize profiles a dataset, surfaces missing values, identifies column types, and helps you choose the next step.",
     highlights: ["File preview", "Quality summary", "Column-level signals"],
@@ -103,7 +101,6 @@ const demoTours = [
   },
   {
     title: "Clean and prepare data",
-    duration: "75 sec demo",
     description:
       "Walk through guided cleaning settings for missing values, duplicates, category handling, and numeric scaling.",
     highlights: ["Cleaning controls", "Processed copy", "Download-ready CSV"],
@@ -114,7 +111,6 @@ const demoTours = [
   },
   {
     title: "Generate business insights",
-    duration: "90 sec demo",
     description:
       "Review dashboard-style charts, plain-English findings, and recommendations generated from uploaded data.",
     highlights: ["EDA charts", "Business summary", "PDF report"],
@@ -124,11 +120,10 @@ const demoTours = [
     videoSrc: "/demos/business-insights.mp4",
   },
   {
-    title: "Forecast and test models",
-    duration: "90 sec demo",
+    title: "Compare model performance",
     description:
-      "Preview model direction, compare results, inspect important features, and forecast future values from dated metrics.",
-    highlights: ["Model preview", "Feature importance", "Forecast chart"],
+      "Compare model candidates, review score differences, and inspect the features that most influenced the preview.",
+    highlights: ["Model comparison", "Score review", "Feature importance"],
     metric: "4",
     metricLabel: "models compared",
     icon: LineChart,
@@ -143,6 +138,51 @@ const sampleOutputs = [
   "Forecast result",
   "Model comparison report",
   "Python training script",
+];
+
+const landingPlans = [
+  {
+    name: "Free",
+    price: "$0",
+    description: "For trying Acutize with a real dataset before choosing a paid plan.",
+    features: [
+      "Upload and inspect supported tabular files",
+      "Analyze data quality and column structure",
+      "Try the core cleaning and insight workflow",
+      "Download selected outputs",
+    ],
+    href: "/signup",
+    cta: "Start free",
+  },
+  {
+    name: "Pro",
+    price: "$25",
+    period: "/mo",
+    description: "For practitioners who work with multiple datasets and need more room to operate.",
+    features: [
+      "Larger files and more active datasets",
+      "Full workflow access for cleaning and insights",
+      "Model previews, generated features, and reports",
+      "Standard email support",
+    ],
+    href: "/pricing",
+    cta: "View Pro",
+    featured: true,
+  },
+  {
+    name: "Business",
+    price: "$70",
+    period: "/mo",
+    description: "For teams that need higher-volume workspace capacity and priority support.",
+    features: [
+      "Largest supported files and unlimited active datasets",
+      "Everything in Pro",
+      "Python full-training export script",
+      "Priority email support",
+    ],
+    href: "/pricing",
+    cta: "View Business",
+  },
 ];
 
 const faqs = [
@@ -280,8 +320,8 @@ export function LandingPage() {
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 rounded-lg border-zinc-300 bg-white px-6 dark:border-white/15 dark:bg-transparent" asChild>
-                  <Link href="#demo-videos">
-                    Watch product demos <Play className="ml-2 h-4 w-4" />
+                  <Link href="#pricing">
+                    View pricing <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
               </div>
@@ -365,8 +405,9 @@ export function LandingPage() {
                   Short product tours for the most important workflows.
                 </h2>
                 <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                  Preview the core Acutize experience before creating an account: profile a dataset, clean it,
-                  generate insights, forecast trends, and prepare files for export.
+                  These guided previews use Acutize-style product screens to show the real capabilities available in
+                  the platform. Exact layouts may evolve as the product improves, but the workflows and outputs shown
+                  here reflect what Acutize is built to help you do.
                 </p>
               </div>
               <Button variant="outline" className="h-11 rounded-lg border-zinc-300 dark:border-white/15" asChild>
@@ -378,14 +419,6 @@ export function LandingPage() {
               {demoTours.map((demo) => (
                 <div key={demo.title} className="border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
                   <div className="border-b border-zinc-200 bg-zinc-900 text-white dark:border-white/10">
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <div className="flex items-center gap-2 text-xs text-zinc-400">
-                        <span className="h-2 w-2 rounded-full bg-red-400" />
-                        <span className="h-2 w-2 rounded-full bg-amber-400" />
-                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      </div>
-                      <span className="text-xs text-zinc-300">{demo.duration}</span>
-                    </div>
                     <div className="relative">
                       <video
                         aria-label={`${demo.title} product demo`}
@@ -420,6 +453,67 @@ export function LandingPage() {
                       ))}
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="border-y border-zinc-200 bg-zinc-50 py-20 dark:border-white/10 dark:bg-zinc-950">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                Pricing
+              </p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-4xl">
+                Start free, then choose the workspace size that fits your team.
+              </h2>
+              <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-300">
+                Plans are designed around dataset size, active workspace capacity, export needs, and support level.
+                Detailed limits are available on the pricing page.
+              </p>
+            </div>
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {landingPlans.map((plan) => (
+                <div
+                  key={plan.name}
+                  className={`flex flex-col border bg-white p-6 dark:bg-[#050505] ${
+                    plan.featured
+                      ? "border-emerald-600 shadow-xl shadow-emerald-900/10 dark:border-emerald-400"
+                      : "border-zinc-200 dark:border-white/10"
+                  }`}
+                >
+                  {plan.featured && (
+                    <div className="mb-5 w-fit bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200">
+                      Popular
+                    </div>
+                  )}
+                  <h3 className="text-xl font-semibold text-zinc-950 dark:text-white">{plan.name}</h3>
+                  <div className="mt-4 flex items-end gap-1">
+                    <span className="text-4xl font-bold text-zinc-950 dark:text-white">{plan.price}</span>
+                    {plan.period && <span className="pb-1 text-sm text-zinc-500 dark:text-zinc-400">{plan.period}</span>}
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{plan.description}</p>
+                  <div className="mt-6 flex-1 space-y-3">
+                    {plan.features.map((feature) => (
+                      <div key={feature} className="flex gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    className={`mt-8 h-11 rounded-lg ${
+                      plan.featured
+                        ? "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                        : "bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+                    }`}
+                    asChild
+                  >
+                    <Link href={plan.href}>
+                      {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
                 </div>
               ))}
             </div>
