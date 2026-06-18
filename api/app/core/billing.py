@@ -107,6 +107,10 @@ def is_billing_enforcement_enabled() -> bool:
     return get_settings().billing_enforcement_enabled
 
 
+def is_testing_mode() -> bool:
+    return bool(get_settings().testing)
+
+
 def get_plan_limits(plan_name: str) -> PlanLimits:
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
@@ -119,6 +123,8 @@ def get_plan_limits(plan_name: str) -> PlanLimits:
 
 
 def has_active_subscription(status: str) -> bool:
+    if is_testing_mode():
+        return True
     if not is_billing_enforcement_enabled():
         return True
     return status in ("active", "past_due", "trialing")
@@ -145,6 +151,8 @@ def plan_from_paddle_price_id(price_id: str) -> PlanType:
 
 
 async def get_user_plan_limits(user_id: str) -> PlanLimits:
+    if is_testing_mode():
+        return PLAN_CONFIGS[PlanType.BUSINESS]
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
 

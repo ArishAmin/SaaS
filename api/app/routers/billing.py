@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..core.auth import get_current_user
-from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled
+from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled, is_testing_mode
 from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
 from ..core.billing import get_user_plan_limits
@@ -57,7 +57,7 @@ async def list_plans() -> dict:
                 "credit_costs": credit_costs,
             }
         )
-    return {"plans": plans, "enforcement_enabled": is_billing_enforcement_enabled()}
+    return {"plans": plans, "enforcement_enabled": is_billing_enforcement_enabled(), "testing_mode": is_testing_mode()}
 
 
 @router.get("/credits")
@@ -137,14 +137,22 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
 
 @router.post("/checkout")
 async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
+    user_id = str(user["user_id"])
+    success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
+
+    if is_testing_mode() and req.plan == "custom":
+        from ..services.workspaces import get_active_workspace
+
+        await get_active_workspace(user_id)
+        company_success = f"{settings.app_public_url.rstrip('/')}/dashboard/company?checkout=success"
+        return {"url": company_success, "testing_mode": True}
+
     if not settings.paddle_api_key:
         raise HTTPException(status_code=500, detail="Paddle is not configured on this server.")
-    user_id = user["user_id"]
     email = user.get("claims", {}).get("email") if isinstance(user.get("claims"), dict) else None
-    success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
     custom_credits = req.custom_credits if req.plan == "custom" else None
     url = await create_checkout(
-        user_id=str(user_id),
+        user_id=user_id,
         email=email,
         plan=req.plan,
         interval=req.interval,

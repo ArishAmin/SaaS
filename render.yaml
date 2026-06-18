@@ -73,6 +73,9 @@ services:
         value: "200"
       - key: JOB_STALE_TIMEOUT_MINUTES
         value: "120"
+      # QA only — set to "true" on a staging API service to bypass Paddle and test company workspace.
+      - key: TESTING
+        value: "false"
 
   # -------------------------
   # 1.25. Background Job Worker
