@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from ..worker.tasks_ttl_cleanup import run_ttl_cleanup
+from ..services.app_logs import log_to_supabase
 from ..services.supabase import rest_list
 import os
 
@@ -7,7 +8,6 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/cleanup-ttl")
 async def trigger_ttl_cleanup(authorization: str | None = Header(None)) -> dict:
-    # Use environment variable directly or via config
     admin_token = os.environ.get("ADMIN_CLEANUP_TOKEN")
     
     if not admin_token:
@@ -23,8 +23,20 @@ async def trigger_ttl_cleanup(authorization: str | None = Header(None)) -> dict:
             detail="Invalid or missing admin token."
         )
 
-    result = await run_ttl_cleanup()
-    return result
+    try:
+        return await run_ttl_cleanup()
+    except Exception as exc:
+        await log_to_supabase(
+            level="error",
+            event="admin_ttl_cleanup_failed",
+            message=str(exc),
+            source="admin",
+            error={"type": exc.__class__.__name__, "detail": str(exc)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="TTL cleanup failed. Check app_logs for admin_ttl_cleanup_failed.",
+        ) from exc
 
 
 @router.get("/scaling-health")

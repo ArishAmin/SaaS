@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from ..services.jobs import cancel_job, validate_job_id
 from ..services.supabase import rest_list, storage_download
-from ..services.workspaces import require_billing_access, require_workspace_admin
+from ..services.workspaces import require_workspace_admin, require_workspace_member
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 

@@ -16,9 +16,9 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _iso(dt: datetime) -> str:
-    # PostgREST expects an ISO8601 timestamp; keep timezone.
-    return dt.isoformat()
+def _postgrest_ts(dt: datetime) -> str:
+    """URL-safe UTC timestamp for PostgREST filters (+ in offsets breaks query strings)."""
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 async def run_ttl_cleanup() -> dict:
@@ -41,7 +41,7 @@ async def run_ttl_cleanup() -> dict:
     ds_rows = await rest_list(
         "datasets",
         query=(
-            f"updated_at=lt.{_iso(dataset_cutoff)}"
+            f"updated_at=lt.{_postgrest_ts(dataset_cutoff)}"
             f"&select=dataset_id,user_id,updated_at"
             f"&order=updated_at.asc"
             f"&limit=200"
@@ -51,6 +51,19 @@ async def run_ttl_cleanup() -> dict:
     for ds in ds_rows:
         dataset_id = ds["dataset_id"]
         user_id = ds["user_id"]
+
+        active_jobs = await rest_list(
+            "processing_jobs",
+            query=(
+                f"dataset_id=eq.{dataset_id}"
+                "&status=in.(queued,running)"
+                "&select=job_id"
+                "&limit=1"
+            ),
+        )
+        if active_jobs:
+            skipped_busy += 1
+            continue
 
         runs = await rest_list(
             "training_runs",
@@ -116,7 +129,7 @@ async def run_ttl_cleanup() -> dict:
     # Optional: expire old share links even if dataset stays.
     try:
         share_cutoff = now.replace(microsecond=0) - timedelta(hours=settings.shared_report_ttl_hours)
-        await rest_delete("shared_reports", where_query=f"created_at=lt.{_iso(share_cutoff)}")
+        await rest_delete("shared_reports", where_query=f"created_at=lt.{_postgrest_ts(share_cutoff)}")
     except Exception:
         pass
 

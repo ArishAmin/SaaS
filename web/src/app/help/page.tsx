@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BarChart3,
   Brain,
+  Building2,
   CalendarClock,
   CheckCircle2,
   Database,
@@ -17,11 +18,14 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
+  Users,
   Wand2,
 } from "lucide-react";
 
 import { Footer } from "@/components/layout/Footer";
 import { HelpHeroActions } from "@/components/help/HelpHeroActions";
+import { HelpContactButton } from "@/components/help/HelpContactButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 
@@ -31,6 +35,7 @@ const categories = [
   { href: "#analysis-cleaning", label: "Analysis & cleaning" },
   { href: "#insights-modeling", label: "Insights & modeling" },
   { href: "#exports-sharing", label: "Exports & sharing" },
+  { href: "#team-workspace", label: "Team workspace" },
   { href: "#data-security", label: "Data storage & retention" },
   { href: "#account-billing", label: "Account & billing" },
   { href: "#troubleshooting", label: "Troubleshooting" },
@@ -202,6 +207,27 @@ const faqGroups = [
       {
         q: "Where does full model training happen?",
         a: "Instant preview runs in Acutize. Full training is exported as a Python script that you run on your own machine using the dataset path you choose.",
+      },
+    ],
+  },
+  {
+    title: "Team workspace",
+    questions: [
+      {
+        q: "Who gets a company workspace?",
+        a: "Company workspaces are included with custom pricing plans only. Free, Pro, and Business plans are individual accounts. Contact us or choose a custom credit package on the pricing page to provision a shared team workspace.",
+      },
+      {
+        q: "How do teammates join?",
+        a: "An owner or admin invites colleagues by email from Company workspace. When the invitee creates an account with that same email address, they are added to the team automatically. Existing users are added the next time they sign in.",
+      },
+      {
+        q: "Who pays and who manages billing?",
+        a: "The workspace owner—the person who purchased the custom plan—retains billing access and Paddle subscription management. Admins and members cannot open the billing portal or change the subscription.",
+      },
+      {
+        q: "Can members see what the team is working on?",
+        a: "Yes. All team members can open Company workspace, view the shared credit pool, see the team roster, and read recent background job activity. Only owners and admins can invite people, change roles, cancel queued jobs, or rename the portal.",
       },
     ],
   },
@@ -425,6 +451,145 @@ export default function HelpPage() {
             </div>
           </Section>
 
+          <Section id="team-workspace" eyebrow="Collaboration" title="Company team workspace (custom plans)">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">
+                A company workspace lets multiple employees share one credit pool, one dataset library, and one
+                company portal. It is available on <strong className="text-slate-900 dark:text-white">custom pricing</strong>{" "}
+                only—not on Free, Pro, or Business individual plans. After purchase, the buyer becomes the{" "}
+                <strong className="text-slate-900 dark:text-white">workspace owner</strong> and can invite teammates
+                from <strong className="text-slate-900 dark:text-white">Company workspace</strong> in the dashboard sidebar.
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-5 lg:grid-cols-3">
+              {[
+                {
+                  icon: Building2,
+                  title: "One shared company portal",
+                  detail:
+                    "Set your company name at the top of Company workspace. Everyone on the team sees the same name, shared credit balance, team roster, and recent activity feed.",
+                },
+                {
+                  icon: Users,
+                  title: "Shared credits & datasets",
+                  detail:
+                    "Credits are deducted from one company pool when anyone runs analyze, clean, forecast, business insights, or other paid actions. Datasets belong to the company workspace so the team works from the same library.",
+                },
+                {
+                  icon: UserPlus,
+                  title: "Email invitations",
+                  detail:
+                    "Owners and admins invite colleagues by email. Invites last 14 days. New users sign up with the invited address and land in the company workspace automatically.",
+                },
+              ].map((card) => (
+                <div
+                  key={card.title}
+                  className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <card.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="mt-4 font-bold">{card.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{card.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                <h3 className="font-bold">Roles and permissions</h3>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                        <th className="py-2 pr-4 font-semibold">Action</th>
+                        <th className="py-2 px-2 font-semibold">Owner</th>
+                        <th className="py-2 px-2 font-semibold">Admin</th>
+                        <th className="py-2 pl-2 font-semibold">Member</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-600 dark:text-slate-300">
+                      {[
+                        ["Use datasets & run analyses", "Yes", "Yes", "Yes"],
+                        ["View shared credits", "Yes", "Yes", "Yes"],
+                        ["View team activity (read-only for members)", "Yes", "Yes", "Yes"],
+                        ["Invite teammates", "Yes", "Yes", "No"],
+                        ["Promote / demote admin ↔ member", "Yes", "No", "No"],
+                        ["Remove members", "Yes", "Members only*", "No"],
+                        ["Rename company portal", "Yes", "Yes", "No"],
+                        ["Cancel queued team jobs", "Yes", "Yes", "No"],
+                        ["Manage Paddle billing", "Yes", "No", "No"],
+                      ].map(([action, owner, admin, member]) => (
+                        <tr key={action} className="border-b border-slate-100 dark:border-slate-800/80">
+                          <td className="py-2.5 pr-4">{action}</td>
+                          <td className="py-2.5 px-2">{owner}</td>
+                          <td className="py-2.5 px-2">{admin}</td>
+                          <td className="py-2.5 pl-2">{member}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  * Admins can remove members but not other admins. The owner cannot be removed and always keeps billing control.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/60 dark:bg-blue-950/20">
+                <h3 className="font-bold text-blue-950 dark:text-blue-100">Owner onboarding checklist</h3>
+                <ol className="mt-4 space-y-3 text-sm leading-6 text-blue-950/80 dark:text-blue-100/80">
+                  {[
+                    "Complete custom plan checkout—you are redirected to Company workspace.",
+                    "Set your company name (top-left, pencil icon). This name is visible to all teammates.",
+                    "Invite colleagues by email and choose Member or Admin for each invite.",
+                    "Teammates sign up with the invited email and appear on the team list automatically.",
+                    "Promote trusted colleagues to Admin if they should help invite others or manage activity.",
+                    "Use Usage & credits or Company workspace to monitor the shared credit pool.",
+                  ].map((step, index) => (
+                    <li key={step} className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                        {index + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {[
+                {
+                  title: "What teammates experience",
+                  detail:
+                    "After accepting an invite, members see Company workspace in the sidebar, the shared credit meter, the team list, and read-only recent activity. They run the same Analyze, Clean, Insights, and Export workflows against the company dataset library.",
+                },
+                {
+                  title: "Billing stays with the owner",
+                  detail:
+                    "Only the workspace owner can open Manage Billing in Settings or change the Paddle subscription. Admins and members who need plan changes should contact the owner or use Contact Support for account questions.",
+                },
+                {
+                  title: "Getting a company workspace",
+                  detail:
+                    "Choose a custom credit tier on the Pricing page or contact us about custom pricing. Free, Pro, and Business plans remain single-user workspaces.",
+                },
+                {
+                  title: "Revoking access",
+                  detail:
+                    "Owners and admins can cancel pending invites or remove active members from Company workspace. Removed users lose access to the shared workspace; the owner role and billing relationship never transfer automatically.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-xl border border-slate-200 p-5 dark:border-slate-800"
+                >
+                  <p className="font-semibold">{item.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
           <Section id="data-security" eyebrow="Data Handling" title="Storage, access, deletion, and retention">
             <div className="grid gap-5 lg:grid-cols-2">
               {[
@@ -529,16 +694,13 @@ export default function HelpPage() {
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-900/60 dark:bg-blue-950/20">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-blue-950 dark:text-blue-100">Need help with a specific dataset?</h2>
+                  <h2 className="text-xl font-bold text-blue-950 dark:text-blue-100">Still need help?</h2>
                   <p className="mt-2 text-sm leading-6 text-blue-900/70 dark:text-blue-100/70">
-                    Include the dataset name, the step you were running, and the error message if one appeared.
+                    Reach out for product questions, billing, custom team plans, onboarding, or anything else—we&apos;re
+                    happy to help. Include what you were trying to do and any error message you saw.
                   </p>
                 </div>
-                <Button asChild>
-                  <Link href="/dashboard/contact">
-                    Contact support <Mail className="h-4 w-4" />
-                  </Link>
-                </Button>
+                <HelpContactButton />
               </div>
             </div>
           </section>

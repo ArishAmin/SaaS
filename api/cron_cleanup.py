@@ -21,6 +21,13 @@ def main():
     if response.status_code >= 400:
         print(f"Failed to trigger cleanup. Status code: {response.status_code}")
         print(f"Response: {response.text}")
+        try:
+            body = response.json()
+            request_id = body.get("request_id")
+            if request_id:
+                print(f"Request ID (check app_logs): {request_id}")
+        except Exception:
+            pass
         response.raise_for_status()
     else:
         print("Cleanup triggered successfully.")

@@ -34,17 +34,18 @@ export function HelpHeroActions() {
   }, []);
 
   const signedIn = loaded && !!session;
+  const contactHref = signedIn ? "/dashboard/contact" : "/login?next=/dashboard/contact";
 
   return (
     <div className="mt-8 flex flex-wrap gap-3">
       <Button asChild>
         <Link href={signedIn ? "/dashboard" : "/signup"}>
-          {signedIn ? "Go to dashboard" : "Start free"}
+          {signedIn ? "Go to dashboard" : "Create free account"}
           {signedIn ? <LayoutGrid className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
         </Link>
       </Button>
       <Button asChild variant="outline">
-        <Link href="/dashboard/contact">
+        <Link href={contactHref}>
           Contact support <Mail className="h-4 w-4" />
         </Link>
       </Button>
