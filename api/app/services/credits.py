@@ -191,6 +191,106 @@ async def _has_credit_transactions(user_id: str) -> bool:
         return True
 
 
+async def _has_org_credit_transactions(organization_id: str) -> bool:
+    try:
+        rows = await rest_list(
+            "credit_transactions",
+            f"organization_id=eq.{organization_id}&select=id&limit=1",
+        )
+        return bool(rows)
+    except Exception:
+        return True
+
+
+async def _normalize_hobby_credits(
+    *,
+    user_id: str,
+    record: dict,
+    table: str,
+    id_field: str,
+    id_value: str,
+) -> dict:
+    """Ensure hobby accounts show the current starter pack (200/200) on workspace or profile rows."""
+    limits = get_plan_limits(PlanType.HOBBY.value)
+    target_quota = limits.monthly_credits
+    stored_quota = int(record.get("credits_monthly_quota") or target_quota)
+    balance = int(record.get("credits_balance") or 0)
+    now = _utcnow()
+
+    if stored_quota > target_quota or balance > target_quota:
+        new_balance = min(balance, target_quota)
+        payload = {
+            "credits_balance": new_balance,
+            "credits_monthly_quota": target_quota,
+            "credits_period_end": None,
+            "updated_at": now.isoformat(),
+        }
+        await rest_patch(table, f"{id_field}=eq.{id_value}", payload)
+        return {**record, **payload}
+
+    has_history = (
+        await _has_org_credit_transactions(id_value)
+        if table == "organizations"
+        else await _has_credit_transactions(user_id)
+    )
+    legacy_start_balance = (
+        stored_quota == target_quota
+        and balance == 60
+        and not has_history
+    )
+    unmigrated_starter = (
+        stored_quota == target_quota
+        and balance < target_quota
+        and not has_history
+    )
+    if stored_quota < target_quota or legacy_start_balance or unmigrated_starter:
+        old_quota = 60 if legacy_start_balance else stored_quota
+        used_credits = max(0, old_quota - balance)
+        new_balance = max(0, target_quota - used_credits)
+        if unmigrated_starter and not legacy_start_balance and stored_quota >= target_quota:
+            new_balance = target_quota
+        payload = {
+            "credits_balance": new_balance,
+            "credits_monthly_quota": target_quota,
+            "credits_period_end": None,
+            "updated_at": now.isoformat(),
+        }
+        await rest_patch(table, f"{id_field}=eq.{id_value}", payload)
+        return {**record, **payload}
+
+    return record
+
+
+async def ensure_workspace_hobby_credits(user_id: str, workspace: dict) -> dict:
+    if not is_billing_enforcement_enabled():
+        return workspace
+    if _effective_plan(workspace) != PlanType.HOBBY.value:
+        return workspace
+    org_id = workspace.get("organization_id")
+    if not org_id:
+        return workspace
+    workspace = await _normalize_hobby_credits(
+        user_id=user_id,
+        record=workspace,
+        table="organizations",
+        id_field="organization_id",
+        id_value=str(org_id),
+    )
+    # Keep profile row aligned when workspace credits are corrected.
+    try:
+        profile = await _get_profile(user_id)
+        await _normalize_hobby_credits(
+            user_id=user_id,
+            record=profile,
+            table="profiles",
+            id_field="id",
+            id_value=user_id,
+        )
+    except HTTPException:
+        pass
+    return workspace
+
+
 async def ensure_credits_period(user_id: str) -> dict:
     """Paid plans: refill credits every 30 days. Free (hobby): one-time pack, never auto-refill."""
     profile = await _get_profile(user_id)
@@ -202,7 +302,7 @@ async def ensure_credits_period(user_id: str) -> dict:
     if plan_name == PlanType.HOBBY.value:
         limits = get_plan_limits(plan_name)
         target_quota = limits.monthly_credits
-        stored_quota = int(profile.get("credits_monthly_quota") or 60)
+        stored_quota = int(profile.get("credits_monthly_quota") or target_quota)
         balance = int(profile.get("credits_balance") or 0)
         if stored_quota > target_quota or balance > target_quota:
             new_balance = min(balance, target_quota)
@@ -221,17 +321,23 @@ async def ensure_credits_period(user_id: str) -> dict:
                 metadata={"previous_quota": stored_quota, "new_quota": target_quota},
             )
             return {**profile, **payload}
+        has_history = await _has_credit_transactions(user_id)
         legacy_start_balance = (
             stored_quota == target_quota
             and balance == 60
-            and not await _has_credit_transactions(user_id)
+            and not has_history
         )
-        if stored_quota < target_quota or legacy_start_balance:
-            # Preserve credits already spent under the old free quota while moving
-            # the account to the current starter pack.
+        unmigrated_starter = (
+            stored_quota == target_quota
+            and balance < target_quota
+            and not has_history
+        )
+        if stored_quota < target_quota or legacy_start_balance or unmigrated_starter:
             old_quota = 60 if legacy_start_balance else stored_quota
             used_credits = max(0, old_quota - balance)
             new_balance = max(0, target_quota - used_credits)
+            if unmigrated_starter and not legacy_start_balance and stored_quota >= target_quota:
+                new_balance = target_quota
             payload = {
                 "credits_balance": new_balance,
                 "credits_monthly_quota": target_quota,
@@ -350,6 +456,7 @@ async def get_credits_summary(user_id: str) -> dict:
 
     try:
         workspace = await get_active_workspace(user_id)
+        workspace = await ensure_workspace_hobby_credits(user_id, workspace)
         plan_name = _effective_plan(workspace)
         limits = get_plan_limits(plan_name)
         monthly_quota = int(workspace.get("credits_monthly_quota") or limits.monthly_credits)

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { apiRequest, getUserFacingError, getUserFacingJobError } from "@/lib/api";
@@ -90,6 +91,7 @@ function formatWhen(value?: string | null) {
 }
 
 export default function CompanyWorkspacePage() {
+  const searchParams = useSearchParams();
   const [companyAccount, setCompanyAccount] = useState<CompanyAccount | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -156,6 +158,18 @@ export default function CompanyWorkspacePage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("checkout") !== "success") return;
+    toast.success("Payment complete — your company workspace is ready.");
+    window.dispatchEvent(new Event("acutize:credits-updated"));
+    const retryDelays = [0, 2000, 5000, 10000];
+    const timers = retryDelays.map((delay) => window.setTimeout(() => void load(), delay));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("checkout");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [searchParams]);
 
   async function saveCompanyName() {
     if (!activeId) return;

@@ -4,7 +4,6 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ..core.billing import is_testing_mode
 from .supabase import rest_insert, rest_list, rest_patch, rest_rpc
 
 
@@ -73,8 +72,6 @@ async def get_pending_invitation_count(organization_id: str) -> int:
 
 async def is_company_account(org: dict[str, Any]) -> bool:
     """Company workspace is only for custom-pricing customers (provisioned by Acutize)."""
-    if is_testing_mode():
-        return True
     return str(org.get("plan") or "hobby").lower() == "custom"
 
 

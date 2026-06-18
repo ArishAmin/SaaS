@@ -73,8 +73,6 @@ services:
         value: "200"
       - key: JOB_STALE_TIMEOUT_MINUTES
         value: "120"
-      - key: TESTING
-        value: "false"
 
   # -------------------------
   # 1.25. Background Job Worker
@@ -105,7 +103,7 @@ services:
       - key: PADDLE_WEBHOOK_SECRET
         sync: false
       - key: PADDLE_ENVIRONMENT
-        value: sandbox
+        value: production
       - key: OPENAI_API_KEY
         sync: false
       - key: APP_ENV

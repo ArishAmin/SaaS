@@ -12,6 +12,7 @@ class PlanType(str, Enum):
     HOBBY = "hobby"
     PRO = "pro"
     BUSINESS = "business"
+    CUSTOM = "custom"
 
 
 class PlanLimits(BaseModel):
@@ -106,15 +107,11 @@ def is_billing_enforcement_enabled() -> bool:
     return get_settings().billing_enforcement_enabled
 
 
-def is_testing_mode() -> bool:
-    return bool(get_settings().testing)
-
-
 def get_plan_limits(plan_name: str) -> PlanLimits:
-    if is_testing_mode():
-        return PLAN_CONFIGS[PlanType.BUSINESS]
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
+    if plan_name == PlanType.CUSTOM.value:
+        return PLAN_CONFIGS[PlanType.BUSINESS]
     try:
         return PLAN_CONFIGS[PlanType(plan_name)]
     except (ValueError, KeyError):
@@ -122,8 +119,6 @@ def get_plan_limits(plan_name: str) -> PlanLimits:
 
 
 def has_active_subscription(status: str) -> bool:
-    if is_testing_mode():
-        return True
     if not is_billing_enforcement_enabled():
         return True
     return status in ("active", "past_due", "trialing")
@@ -143,15 +138,13 @@ def plan_from_paddle_price_id(price_id: str) -> PlanType:
         return PlanType.BUSINESS
     for intervals in get_custom_credit_price_ids().values():
         if price_id and price_id in {x for x in intervals.values() if x}:
-            return PlanType.BUSINESS
+            return PlanType.CUSTOM
     if price_id and price_id in {x for x in pro_ids if x}:
         return PlanType.PRO
     return PlanType.HOBBY
 
 
 async def get_user_plan_limits(user_id: str) -> PlanLimits:
-    if is_testing_mode():
-        return PLAN_CONFIGS[PlanType.BUSINESS]
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
 

@@ -184,8 +184,11 @@ async def create_checkout(
         )
 
     checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
+    if is_custom_tier:
+        sep = "&" if "?" in checkout_url else "?"
+        checkout_url = f"{checkout_url}{sep}after=company"
 
-    plan_for_profile = PlanType.BUSINESS.value if is_custom_tier else plan
+    plan_for_profile = PlanType.CUSTOM.value if is_custom_tier else plan
     custom_data: dict[str, Any] = {
         "user_id": user_id,
         "organization_id": workspace.get("organization_id"),
@@ -358,12 +361,14 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
         patch["paddle_subscription_id"] = subscription_id
 
     plan_hint = custom.get("plan")
-    if plan_hint in ("pro", "business"):
+    if plan_hint in ("pro", "business", "custom"):
         patch["plan"] = plan_hint
         patch["subscription_status"] = "active"
     custom_credits = custom.get("custom_credits")
     if custom_credits:
+        patch["plan"] = PlanType.CUSTOM.value
         patch["credits_monthly_quota"] = int(custom_credits)
+        patch["subscription_status"] = "active"
 
     items = transaction.get("items") or []
     if items:
@@ -376,7 +381,20 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
                 patch["billing_interval"] = interval
             if not custom_credits:
                 custom_credits = _custom_credits_for_price_id(price_id)
+            if custom_credits and patch.get("plan") != PlanType.CUSTOM.value:
+                patch["plan"] = PlanType.CUSTOM.value
 
     await rest_patch("profiles", f"id=eq.{user_id}", patch)
     if organization_id:
         await rest_patch("organizations", f"organization_id=eq.{organization_id}", patch)
+
+    plan_name = str(patch.get("plan") or plan_hint or PlanType.HOBBY.value)
+    if custom_credits and plan_name == PlanType.CUSTOM.value:
+        await reset_credits_for_plan(str(user_id), plan_name, int(custom_credits))
+        if organization_id:
+            await reset_workspace_credits_for_plan(
+                organization_id=str(organization_id),
+                user_id=str(user_id),
+                plan_name=plan_name,
+                monthly_credits=int(custom_credits),
+            )

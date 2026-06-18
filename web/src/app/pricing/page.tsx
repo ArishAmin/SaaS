@@ -92,7 +92,7 @@ export default function PricingPage() {
           plan: "custom",
           custom_credits: credits,
           interval,
-          success_url: `${window.location.origin}/dashboard?checkout=success`,
+          success_url: `${window.location.origin}/dashboard/company?checkout=success`,
           cancel_url: `${window.location.origin}/pricing`,
         },
       });

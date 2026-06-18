@@ -46,6 +46,11 @@ const paddleEnvironment = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT;
 export function CheckoutLauncher() {
   const searchParams = useSearchParams();
   const transactionId = searchParams.get("_ptxn") ?? searchParams.get("transaction_id");
+  const afterCheckout = searchParams.get("after");
+  const successPath =
+    afterCheckout === "company"
+      ? "/dashboard/company?checkout=success"
+      : "/dashboard?checkout=success";
   const [scriptReady, setScriptReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -88,7 +93,7 @@ export function CheckoutLauncher() {
             setCompleted(true);
             setRedirectingToDashboard(true);
             window.setTimeout(() => {
-              window.location.assign("/dashboard?checkout=success");
+              window.location.assign(successPath);
             }, 800);
           }
           if (eventName === "checkout.closed") {
@@ -107,7 +112,7 @@ export function CheckoutLauncher() {
           variant: "one-page",
           theme: "light",
           locale: "en",
-          successUrl: `${window.location.origin}/dashboard?checkout=success`,
+          successUrl: `${window.location.origin}${successPath}`,
         },
       });
     } catch (err) {
@@ -116,7 +121,7 @@ export function CheckoutLauncher() {
         setError(err instanceof Error ? err.message : "Unable to open Paddle checkout.");
       });
     }
-  }, [scriptReady, setupError, transactionId]);
+  }, [scriptReady, setupError, transactionId, successPath]);
 
   useEffect(() => {
     const onPageHide = () => {
