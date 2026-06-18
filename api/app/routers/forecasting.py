@@ -15,7 +15,9 @@ from ..services.activity_logs import log_user_activity
 from ..services.credits import CreditAction, require_credits
 from ..services.dataframe_io import load_for_user
 from ..services.forecasting import ForecastRequestOptions, detect_forecast_columns, run_forecast
+from ..services.jobs import enqueue_processing_job, should_enqueue_background_job
 from ..services.supabase import rest_list, rest_patch, storage_download
+from ..services.workspaces import is_workspace_member
 from ..core.config import get_settings
 
 
@@ -37,13 +39,20 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
         "datasets",
         query=(
             f"dataset_id=eq.{dataset_id}"
-            f"&select=dataset_id,user_id,storage_path,original_file_name,original_extension,"
+            f"&select=dataset_id,user_id,organization_id,storage_path,original_file_name,original_extension,"
             f"analysis_json,analyzed_at,cleaned_storage_path,engineered_storage_path,forecast_json,forecasted_at"
         ),
     )
     if not rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found")
     return rows[0]
+
+
+async def _user_can_access_dataset(dataset: dict[str, Any], user_id: str) -> bool:
+    if str(dataset.get("user_id")) == str(user_id):
+        return True
+    org_id = dataset.get("organization_id")
+    return bool(org_id and await is_workspace_member(str(org_id), str(user_id)))
 
 
 def _storage_path_for_source(dataset: dict[str, Any], source: str) -> str:
@@ -80,7 +89,7 @@ async def forecast_schema(
 ) -> dict[str, Any]:
     user_id = user["user_id"]
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     df = await _load_forecast_frame(dataset, user_id, source)
@@ -108,12 +117,21 @@ async def run_dataset_forecast(
 ) -> dict[str, Any]:
     user_id = user["user_id"]
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     if not (dataset.get("analyzed_at") or dataset.get("analysis_json")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Run dataset analysis first so forecasting can use a verified column profile.",
+        )
+
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="forecast",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
         )
 
     await require_credits(user_id, CreditAction.FORECAST, dataset_id=str(dataset_id))

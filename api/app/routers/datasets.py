@@ -47,6 +47,8 @@ from ..core.billing import get_user_plan_limits
 from ..core.data_limits import LoadMode, PREVIEW_MAX_ROWS, enforce_file_size, get_user_data_limits
 from ..services.credits import CreditAction, check_dataset_slot, refund_credits, require_credits
 from ..services.dataframe_io import load_for_user, read_tabular_bytes, sample_for_preview
+from ..services.jobs import enqueue_processing_job, should_enqueue_background_job
+from ..services.workspaces import get_active_workspace, is_workspace_member
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 _rate = get_settings().rate_limit_per_minute
@@ -248,7 +250,7 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
         "datasets",
         query=(
             f"dataset_id=eq.{dataset_id}"
-            f"&select=dataset_id,user_id,storage_path,original_file_name,original_extension,mime_type,"
+            f"&select=dataset_id,user_id,organization_id,storage_path,original_file_name,original_extension,mime_type,"
             f"analysis_json,status,created_at,updated_at,analyzed_at,error,"
             f"cleaned_storage_path,cleaned_params,cleaned_target_column,cleaned_at,"
             f"engineered_storage_path,engineered_params,engineered_at,"
@@ -259,6 +261,15 @@ async def _get_dataset(dataset_id: UUID) -> dict[str, Any]:
     if not rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found")
     return rows[0]
+
+
+async def _user_can_access_dataset(dataset: dict[str, Any], user_id: str) -> bool:
+    if str(dataset.get("user_id")) == str(user_id):
+        return True
+    org_id = dataset.get("organization_id")
+    if not org_id:
+        return False
+    return await is_workspace_member(str(org_id), str(user_id))
 
 
 def _quick_evaluation_is_displayable(quick: Any) -> bool:
@@ -417,9 +428,11 @@ async def create_dataset_record(request: Request,
     user_id = user["user_id"]
     dataset_id = req.dataset_id
     storage_path = req.storage_path
+    workspace = await get_active_workspace(user_id)
+    organization_id = str(workspace["organization_id"])
 
     # Plan: dataset slot limit (Business = unlimited)
-    existing_datasets = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
+    existing_datasets = await rest_list("datasets", f"organization_id=eq.{organization_id}&select=dataset_id")
     await check_dataset_slot(user_id, len(existing_datasets))
 
     # 2) Validation
@@ -439,6 +452,7 @@ async def create_dataset_record(request: Request,
                 {
                     "dataset_id": str(req.dataset_id),
                     "user_id": user_id,
+                    "organization_id": organization_id,
                     "storage_path": req.storage_path,
                     "original_file_name": req.original_file_name,
                     "original_extension": req.original_extension,
@@ -471,11 +485,13 @@ async def list_datasets(
     Lists datasets for the current user (most recent first).
     """
     user_id = user["user_id"]
+    workspace = await get_active_workspace(user_id)
+    organization_id = str(workspace["organization_id"])
     rows = await rest_list(
         "datasets",
         query=(
-            f"user_id=eq.{user_id}"
-            f"&select=dataset_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at,forecasted_at,business_insights_at"
+            f"organization_id=eq.{organization_id}"
+            f"&select=dataset_id,user_id,organization_id,original_file_name,original_extension,status,created_at,updated_at,cleaned_at,engineered_at,quick_trained_at,forecasted_at,business_insights_at"
             f"&order=updated_at.desc"
         ),
     )
@@ -494,7 +510,7 @@ async def get_single_dataset(
     """
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     quick = dataset.get("quick_evaluation_json")
@@ -542,17 +558,18 @@ async def delete_dataset(
         "datasets",
         query=(
             f"dataset_id=eq.{dataset_id}"
-            f"&select=dataset_id,user_id,storage_path,cleaned_storage_path,engineered_storage_path"
+            f"&select=dataset_id,user_id,organization_id,storage_path,cleaned_storage_path,engineered_storage_path"
         ),
     )
     if not ds_rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found")
     ds = ds_rows[0]
-    if str(ds["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(ds, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     # Delete dataset folder objects (raw/cleaned/engineered + anything else).
-    prefix = f"{user_id}/datasets/{dataset_id}/"
+    storage_path = str(ds.get("storage_path") or "")
+    prefix = storage_path.rsplit("/", 1)[0] + "/" if "/" in storage_path else f"{ds['user_id']}/datasets/{dataset_id}/"
     try:
         objs = await storage_list("datasets", prefix, limit=1000, offset=0)
         for o in objs:
@@ -612,8 +629,16 @@ async def analyze_dataset(
     limits = await get_user_plan_limits(user_id)
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="analyze",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
 
     await require_credits(user_id, CreditAction.ANALYZE, dataset_id=str(dataset_id))
 
@@ -659,7 +684,7 @@ async def get_analysis(
 ) -> dict[str, Any]:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     analysis_json = dataset.get("analysis_json")
@@ -691,7 +716,7 @@ async def get_dataset_schema(
 ) -> dict[str, Any]:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     analysis_json = dataset.get("analysis_json")
@@ -728,8 +753,16 @@ async def get_eda_report(
     user_id = user["user_id"]
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="eda",
+            dataset_id=str(dataset_id),
+            payload={},
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
 
     raw = await storage_download("datasets", dataset["storage_path"])
     df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
@@ -823,8 +856,16 @@ async def get_dataset_quality(
     user_id = user["user_id"]
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="quality",
+            dataset_id=str(dataset_id),
+            payload={},
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
 
     raw = await storage_download("datasets", dataset["storage_path"])
     df = await _load_dataset_bytes(user_id, raw, dataset["original_extension"], LoadMode.PIPELINE)
@@ -967,12 +1008,20 @@ async def clean_dataset(
 ) -> dict[str, Any]:
     settings = get_settings()
     user_id = user["user_id"]
-    await require_credits(user_id, CreditAction.CLEAN, dataset_id=str(dataset_id))
 
     logger.info("clean_dataset start dataset_id=%s user_id=%s", dataset_id, user_id)
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="clean",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
+    await require_credits(user_id, CreditAction.CLEAN, dataset_id=str(dataset_id))
 
     target_column = payload.target_column
 
@@ -1148,7 +1197,6 @@ async def train_quick(
     run_id = str(uuid4())
     settings = get_settings()
     user_id = user["user_id"]
-    await require_credits(user_id, CreditAction.TRAIN_INSTANT, dataset_id=str(dataset_id))
 
     await log_to_supabase(
         level="info",
@@ -1158,8 +1206,17 @@ async def train_quick(
     )
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="train_instant",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
+    await require_credits(user_id, CreditAction.TRAIN_INSTANT, dataset_id=str(dataset_id))
 
     engineered_path = dataset.get("engineered_storage_path")
     cleaned_only_path = dataset.get("cleaned_storage_path")
@@ -1600,8 +1657,16 @@ async def suggest_generative_features(
 ) -> dict[str, Any]:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="feature_suggest",
+            dataset_id=str(dataset_id),
+            payload={},
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
 
     cleaned_path = dataset.get("cleaned_storage_path")
     if not cleaned_path:
@@ -1636,7 +1701,7 @@ async def apply_generative_features(
 ) -> dict[str, Any]:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     # No extra credits: saving engineered CSV is included in FEATURE_SUGGEST.
 
@@ -1700,7 +1765,7 @@ async def get_quick_evaluation(
 ) -> dict[str, Any]:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     quick = dataset.get("quick_evaluation_json")
@@ -1720,15 +1785,23 @@ async def download_dataset_pdf_report(
     dataset_id: UUID,
     sections: str | None = Query(None, description="Comma-separated list of sections to include (e.g. 'analysis,cleaning,training')."),
     user=Depends(get_current_user),
-) -> Response:
+) -> Any:
     """
     Comprehensive PDF report for sharing: metadata, analysis summary table, cleaning/engineering
     parameters, quick evaluation JSON, and async training run summaries.
     """
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="export_pdf",
+            dataset_id=str(dataset_id),
+            payload={"sections": sections},
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
     await require_credits(user_id, CreditAction.EXPORT_PDF, dataset_id=str(dataset_id))
 
     try:
@@ -1884,7 +1957,7 @@ async def export_cleaned(
 ) -> Any:
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     cleaned_path = dataset.get("cleaned_storage_path")
@@ -1962,12 +2035,20 @@ async def export_bundle(
     request: Request,
     dataset_id: UUID,
     user=Depends(get_current_user),
-) -> Response:
+) -> Any:
     """ZIP with PDF report, available CSVs, and cleaning script."""
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="export_bundle",
+            dataset_id=str(dataset_id),
+            payload={},
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
     await require_credits(user_id, CreditAction.EXPORT_BUNDLE, dataset_id=str(dataset_id))
 
     cleaned_path = dataset.get("cleaned_storage_path")
@@ -2021,7 +2102,7 @@ async def get_feature_importance(
     """
     dataset = await _get_dataset(dataset_id)
     user_id = user["user_id"]
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     quick = dataset.get("quick_evaluation_json")
@@ -2069,8 +2150,16 @@ async def feature_engineer(
     user_id = user["user_id"]
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="feature_engineer",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
 
     cleaned_path = dataset.get("cleaned_storage_path")
     target_column = dataset.get("cleaned_target_column")
@@ -2230,17 +2319,25 @@ async def recommend_models(
     dataset_id: UUID,
     payload: RecommendRequest,
     user=Depends(get_current_user),
-) -> RecommendResponse:
+) -> Any:
     """
     Model recommendations from target-column heuristics and dataset missingness.
     """
     settings = get_settings()
     user_id = user["user_id"]
-    await require_credits(user_id, CreditAction.RECOMMEND, dataset_id=str(dataset_id))
 
     dataset = await _get_dataset(dataset_id)
-    if str(dataset["user_id"]) != str(user_id):
+    if not await _user_can_access_dataset(dataset, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if should_enqueue_background_job(user):
+        return await enqueue_processing_job(
+            user_id=str(user_id),
+            action="recommend",
+            dataset_id=str(dataset_id),
+            payload=payload.model_dump(),
+            idempotency_key=request.headers.get("x-idempotency-key"),
+        )
+    await require_credits(user_id, CreditAction.RECOMMEND, dataset_id=str(dataset_id))
 
     raw = await storage_download("datasets", dataset["storage_path"])
     udl = await get_user_data_limits(user_id)
@@ -2359,3 +2456,5 @@ async def recommend_models(
         suggestions=suggestions,
         notes=extra_notes,
     )
+
+

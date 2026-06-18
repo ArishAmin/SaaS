@@ -117,6 +117,88 @@ Do not point the production Render services at sandbox Paddle values. If you nee
 
 Run Supabase migration `20260521100000_paddle_credits.sql` for credits + Paddle columns on `profiles`.
 
+## Team workspace + scaling readiness
+
+Run the latest workspace migration before inviting companies:
+
+```sql
+-- Supabase SQL editor
+-- Run: supabase/migrations/20260618120000_workspaces_atomic_jobs.sql
+```
+
+What this enables:
+
+- One default workspace per user, so solo users keep working.
+- Company workspaces with members and pending invitations.
+- Workspace-owned billing, credits, datasets, job records, and usage history.
+- Atomic workspace credit spending through Postgres RPCs.
+- Idempotency keys for credit-consuming API requests.
+- Queue/concurrency tables for background dataset processing.
+
+Important rollout note: `BACKGROUND_JOBS_ENABLED` should be `true` only when the `acutize-worker` service is deployed and healthy. If the worker is suspended, set it back to `false` or heavy actions will remain queued.
+
+### Render worker and cost
+
+The root `render.yaml` now includes `acutize-worker`.
+
+- Creating/deploying this worker is a paid always-running service on Render.
+- If you want zero extra worker cost while there are no users, do not create the worker service yet, or suspend it until you are ready.
+- Before company traffic, enable the worker and upgrade Redis from Free to at least Starter.
+- The worker starts on the Render **Starter** plan by default. Upgrade its plan in Render later when CPU/RAM demand grows.
+- `WORKER_CONCURRENCY` controls how many jobs one worker instance runs at once. Keep this at `1` for CPU/RAM-heavy Pandas/sklearn work unless load tests prove the instance has room.
+- `WEB_CONCURRENCY` controls Uvicorn worker processes for the API. Raise it from Render env vars after upgrading API RAM/CPU.
+
+Recommended launch path:
+
+1. Keep `BACKGROUND_JOBS_ENABLED=true` when the worker service is deployed.
+2. Run the workspace migration.
+3. Deploy API + web.
+4. Create the worker service only when you start migrating heavy actions to queued jobs.
+5. Before paid company onboarding, enable worker(s), upgrade Redis, and load test.
+
+### Render autoscaling
+
+Render supports manual scaling on all workspaces. Autoscaling requires a Pro workspace or higher. For autoscaling, configure each service in Render Dashboard -> service -> Scaling:
+
+- API web service: min 1, max 3 to start, CPU target around 60-70%.
+- Worker service: start manual at 1 worker; scale workers carefully because each worker runs CPU-heavy Pandas/sklearn jobs.
+- Redis: upgrade before scaling workers.
+
+Autoscaling changes instance count, not instance size. Heavy dataset jobs may still need vertical upgrades for RAM/CPU.
+
+### Render-only tuning checklist
+
+After this deployment, these changes should not require code edits:
+
+- Upgrade API instance type: Render service -> Settings -> Instance type.
+- Change API process count: Render API env var `WEB_CONCURRENCY`.
+- Increase/decrease API instances: Render service -> Scaling.
+- Enable API autoscaling: Render service -> Scaling, Pro workspace or higher.
+- Upgrade web instance type: Render web service -> Settings.
+- Upgrade worker instance type: Render worker -> Settings.
+- Change worker process concurrency: Render worker env var `WORKER_CONCURRENCY`.
+- Increase/decrease worker instances: Render worker -> Scaling.
+- Enable worker autoscaling: Render worker -> Scaling, Pro workspace or higher.
+- Upgrade Redis: Render Key Value service -> plan.
+- Increase queued job protection: Render API env var `MAX_QUEUED_JOBS_PER_WORKSPACE`.
+
+Use code changes only when adding new product behavior or when moving another heavy workflow into the background worker. Infra capacity should be Render-side tuning.
+
+### Load testing
+
+Use `api/load_test_flows.py` after creating a test account and uploading one or more datasets:
+
+```powershell
+$env:LOADTEST_API_URL="https://your-api.onrender.com"
+$env:LOADTEST_ACCESS_TOKEN="<supabase-access-token>"
+$env:LOADTEST_DATASET_IDS="<dataset-id-1>,<dataset-id-2>"
+$env:LOADTEST_CONCURRENCY="25"
+$env:LOADTEST_ROUNDS="3"
+python api/load_test_flows.py
+```
+
+Run this before marketing heavily, then repeat after every scaling change. Watch Render CPU/memory, Supabase API/database usage, `/admin/scaling-health`, and credit transaction history.
+
 ## Step 6: Verify
 
 - `https://<acutize-api>/health` → `{"status":"ok"}`  

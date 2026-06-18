@@ -63,6 +63,16 @@ async def rest_delete(table: str, where_query: str) -> None:
     res.raise_for_status()
 
 
+async def rest_rpc(function_name: str, payload: dict[str, Any] | None = None) -> Any:
+    url = f"{_clean_supabase_url()}/rest/v1/rpc/{function_name}"
+    client = HTTPClient.get_client()
+    res = await client.post(url, headers=_supabase_headers(), content=json.dumps(payload or {}))
+    res.raise_for_status()
+    if not res.content:
+        return None
+    return res.json()
+
+
 async def storage_list(bucket: str, prefix: str, *, limit: int = 1000, offset: int = 0) -> list[dict[str, Any]]:
     """
     Lists objects under a prefix. Returns objects with at least `name`.

@@ -10,10 +10,11 @@ import httpx
 from fastapi import HTTPException
 
 from ..core.billing import PlanType, get_custom_credit_price_ids, plan_from_paddle_price_id
-from .credits import reset_credits_for_plan
+from .credits import reset_credits_for_plan, reset_workspace_credits_for_plan
 from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
 from ..services.supabase import rest_list, rest_patch
+from ..services.workspaces import get_active_workspace
 
 PADDLE_API_BASE = "https://api.paddle.com"
 PADDLE_SANDBOX_API_BASE = "https://sandbox-api.paddle.com"
@@ -166,7 +167,13 @@ async def create_checkout(
     )
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     profile = profiles[0] if profiles else {}
+    try:
+        workspace = await get_active_workspace(user_id)
+    except Exception:
+        workspace = {}
     customer_id = profile.get("paddle_customer_id")
+    if not customer_id:
+        customer_id = workspace.get("paddle_customer_id")
     if _same_price_subscription_is_current(profile, price_id):
         raise HTTPException(
             status_code=409,
@@ -179,7 +186,12 @@ async def create_checkout(
     checkout_url = settings.paddle_checkout_url or f"{settings.app_public_url.rstrip('/')}/checkout"
 
     plan_for_profile = PlanType.BUSINESS.value if is_custom_tier else plan
-    custom_data: dict[str, Any] = {"user_id": user_id, "plan": plan_for_profile, "interval": interval}
+    custom_data: dict[str, Any] = {
+        "user_id": user_id,
+        "organization_id": workspace.get("organization_id"),
+        "plan": plan_for_profile,
+        "interval": interval,
+    }
     if is_custom_tier and custom_credits:
         custom_data["custom_credits"] = custom_credits
 
@@ -202,11 +214,17 @@ async def create_checkout(
 
 async def create_customer_portal(*, user_id: str, return_url: str) -> str:
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
-    if not profiles or not profiles[0].get("paddle_customer_id"):
+    profile = profiles[0] if profiles else {}
+    try:
+        workspace = await get_active_workspace(user_id)
+    except Exception:
+        workspace = {}
+    billing_record = workspace if workspace.get("paddle_customer_id") else profile
+    if not billing_record.get("paddle_customer_id"):
         raise HTTPException(status_code=400, detail="No Paddle billing account found. Upgrade first.")
 
-    customer_id = profiles[0]["paddle_customer_id"]
-    subscription_id = profiles[0].get("paddle_subscription_id")
+    customer_id = billing_record["paddle_customer_id"]
+    subscription_id = billing_record.get("paddle_subscription_id")
 
     body: dict[str, Any] = {
         "customer_id": customer_id,
@@ -224,7 +242,7 @@ async def create_customer_portal(*, user_id: str, return_url: str) -> str:
         pass
 
     # Fallback: subscription management link from profile if stored
-    mgmt = profiles[0].get("paddle_portal_url")
+    mgmt = billing_record.get("paddle_portal_url")
     if mgmt:
         return mgmt
     raise HTTPException(status_code=400, detail="Unable to open billing portal. Contact support.")
@@ -261,6 +279,7 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str | None) -> d
 async def apply_subscription_update(subscription: dict[str, Any]) -> None:
     custom = subscription.get("custom_data") or {}
     user_id = custom.get("user_id")
+    organization_id = custom.get("organization_id")
     custom_credits = custom.get("custom_credits")
     customer_id = subscription.get("customer_id", "")
     subscription_id = subscription.get("id", "")
@@ -302,9 +321,18 @@ async def apply_subscription_update(subscription: dict[str, Any]) -> None:
         payload["paddle_portal_url"] = mgmt.get("update")
 
     await rest_patch("profiles", where_query, payload)
+    if organization_id:
+        await rest_patch("organizations", f"organization_id=eq.{organization_id}", payload)
 
     if user_id and sub_status in ("active", "trialing", "past_due"):
         await reset_credits_for_plan(str(user_id), plan.value, int(custom_credits) if custom_credits else None)
+        if organization_id:
+            await reset_workspace_credits_for_plan(
+                organization_id=str(organization_id),
+                user_id=str(user_id),
+                plan_name=plan.value,
+                monthly_credits=int(custom_credits) if custom_credits else None,
+            )
 
     await log_to_supabase(
         level="info",
@@ -317,6 +345,7 @@ async def apply_subscription_update(subscription: dict[str, Any]) -> None:
 async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
     custom = transaction.get("custom_data") or {}
     user_id = custom.get("user_id")
+    organization_id = custom.get("organization_id")
     if not user_id:
         return
 
@@ -349,3 +378,5 @@ async def apply_transaction_completed(transaction: dict[str, Any]) -> None:
                 custom_credits = _custom_credits_for_price_id(price_id)
 
     await rest_patch("profiles", f"id=eq.{user_id}", patch)
+    if organization_id:
+        await rest_patch("organizations", f"organization_id=eq.{organization_id}", patch)

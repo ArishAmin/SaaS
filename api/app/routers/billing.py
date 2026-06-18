@@ -71,13 +71,22 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
     user_id = str(user["user_id"])
     from ..core.data_limits import PREVIEW_MAX_ROWS, get_user_data_limits
     from ..services.supabase import rest_list
+    from ..services.workspaces import get_active_workspace
 
-    profiles = await rest_list("profiles", f"id=eq.{user_id}")
-    profile = profiles[0] if profiles else {"plan": "hobby", "subscription_status": "none"}
+    try:
+        profile = await get_active_workspace(user_id)
+        org_id = profile.get("organization_id")
+    except Exception:
+        profiles = await rest_list("profiles", f"id=eq.{user_id}")
+        profile = profiles[0] if profiles else {"plan": "hobby", "subscription_status": "none"}
+        org_id = None
     plan_name = profile.get("plan", "hobby")
     data_limits = await get_user_data_limits(user_id)
     limits = await get_user_plan_limits(user_id)
-    dataset_rows = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
+    if org_id:
+        dataset_rows = await rest_list("datasets", f"organization_id=eq.{org_id}&select=dataset_id")
+    else:
+        dataset_rows = await rest_list("datasets", f"user_id=eq.{user_id}&select=dataset_id")
     credits_summary = await get_credits_summary(user_id)
 
     credit_rows = [
@@ -94,6 +103,8 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
 
     return {
         "plan": plan_name,
+        "organization_id": org_id,
+        "workspace_name": profile.get("name"),
         "subscription_status": profile.get("subscription_status", "none"),
         "credits": credits_summary,
         "plan_limits": {

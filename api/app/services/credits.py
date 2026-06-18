@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
@@ -8,7 +9,8 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from ..core.billing import PLAN_CONFIGS, PlanType, get_plan_limits, has_active_subscription, is_billing_enforcement_enabled
-from .supabase import rest_insert, rest_list, rest_patch
+from .supabase import rest_insert, rest_list, rest_patch, rest_rpc
+from .workspaces import get_active_workspace
 
 
 class CreditAction(str, Enum):
@@ -57,6 +59,36 @@ _request_credit_charges: ContextVar[list[dict[str, Any]] | None] = ContextVar(
     "request_credit_charges",
     default=None,
 )
+_request_idempotency_key: ContextVar[str | None] = ContextVar(
+    "request_idempotency_key",
+    default=None,
+)
+_credits_precharged: ContextVar[bool] = ContextVar("credits_precharged", default=False)
+
+
+@dataclass(frozen=True)
+class CreditCharge:
+    cost: int
+    transaction_id: str | None
+    already_processed: bool
+
+
+def build_credit_idempotency_key(
+    base_key: str | None,
+    action: CreditAction,
+    dataset_id: str | None,
+) -> str | None:
+    if not base_key:
+        return None
+    return f"{base_key}:{action.value}:{dataset_id or 'none'}"
+
+
+def set_credits_precharged(value: bool) -> Token[bool]:
+    return _credits_precharged.set(value)
+
+
+def reset_credits_precharged(token: Token[bool]) -> None:
+    _credits_precharged.reset(token)
 
 
 def _utcnow() -> datetime:
@@ -117,6 +149,37 @@ async def _log_transaction(
         )
     except Exception:
         pass
+
+
+def _rpc_first_row(result: Any) -> dict[str, Any] | None:
+    if isinstance(result, list) and result:
+        first = result[0]
+        return first if isinstance(first, dict) else None
+    if isinstance(result, dict):
+        return result
+    return None
+
+
+def _http_detail_from_rpc_error(exc: Exception, *, cost: int, plan_name: str = "hobby") -> dict[str, Any] | None:
+    detail = str(exc)
+    if "insufficient_credits:" not in detail:
+        return None
+    try:
+        tail = detail.split("insufficient_credits:", 1)[1]
+        parts = tail.replace('"', "").replace("'", "").split(":")
+        balance = int(parts[0])
+    except Exception:
+        balance = 0
+    return {
+        "code": "insufficient_credits",
+        "message": (
+            f"This action needs {cost} credits but you have {balance} left. "
+            "Upgrade for more credits and higher limits."
+        ),
+        "required_credits": cost,
+        "balance": balance,
+        "plan": plan_name,
+    }
 
 
 async def _has_credit_transactions(user_id: str) -> bool:
@@ -234,6 +297,45 @@ async def reset_credits_for_plan(user_id: str, plan_name: str, monthly_credits: 
     )
 
 
+async def reset_workspace_credits_for_plan(
+    *,
+    organization_id: str,
+    user_id: str,
+    plan_name: str,
+    monthly_credits: int | None = None,
+) -> None:
+    limits = get_plan_limits(plan_name)
+    quota = monthly_credits or limits.monthly_credits
+    now = _utcnow()
+    period_end = None if plan_name == PlanType.HOBBY.value else (now + timedelta(days=30)).isoformat()
+    await rest_patch(
+        "organizations",
+        f"organization_id=eq.{organization_id}",
+        {
+            "credits_balance": quota,
+            "credits_monthly_quota": quota,
+            "credits_period_end": period_end,
+            "updated_at": now.isoformat(),
+        },
+    )
+    try:
+        await rest_insert(
+            "credit_transactions",
+            [
+                {
+                    "organization_id": organization_id,
+                    "user_id": user_id,
+                    "action": "plan_upgrade",
+                    "credits_delta": quota,
+                    "balance_after": quota,
+                    "metadata": {"plan": plan_name, "credits_monthly_quota": quota},
+                }
+            ],
+        )
+    except Exception:
+        pass
+
+
 async def get_credits_summary(user_id: str) -> dict:
     if not is_billing_enforcement_enabled():
         limits = PLAN_CONFIGS[PlanType.BUSINESS]
@@ -245,6 +347,26 @@ async def get_credits_summary(user_id: str) -> dict:
             "credit_costs": {k.value: v for k, v in CREDIT_COSTS.items()},
             "credit_action_labels": CREDIT_ACTION_LABELS,
         }
+
+    try:
+        workspace = await get_active_workspace(user_id)
+        plan_name = _effective_plan(workspace)
+        limits = get_plan_limits(plan_name)
+        monthly_quota = int(workspace.get("credits_monthly_quota") or limits.monthly_credits)
+        mode = credits_refresh_mode(plan_name)
+        return {
+            "organization_id": workspace.get("organization_id"),
+            "workspace_name": workspace.get("name"),
+            "credits_balance": int(workspace.get("credits_balance") or 0),
+            "credits_quota": monthly_quota,
+            "credits_refresh_mode": mode,
+            "credits_period_end": workspace.get("credits_period_end") if mode == "monthly" else None,
+            "credit_costs": {k.value: v for k, v in CREDIT_COSTS.items()},
+            "credit_action_labels": CREDIT_ACTION_LABELS,
+        }
+    except Exception:
+        # Fallback for projects before the workspace migration is applied.
+        pass
 
     profile = await ensure_credits_period(user_id)
     plan_name = _effective_plan(profile)
@@ -262,10 +384,18 @@ async def get_credits_summary(user_id: str) -> dict:
 
 
 async def list_credit_transactions(user_id: str, limit: int = 50) -> list[dict]:
-    rows = await rest_list(
-        "credit_transactions",
-        f"user_id=eq.{user_id}&order=created_at.desc&limit={limit}",
-    )
+    try:
+        workspace = await get_active_workspace(user_id)
+        org_id = workspace.get("organization_id")
+        rows = await rest_list(
+            "credit_transactions",
+            f"organization_id=eq.{org_id}&order=created_at.desc&limit={limit}",
+        )
+    except Exception:
+        rows = await rest_list(
+            "credit_transactions",
+            f"user_id=eq.{user_id}&order=created_at.desc&limit={limit}",
+        )
     out = []
     for row in rows:
         action = row.get("action", "")
@@ -283,18 +413,64 @@ async def list_credit_transactions(user_id: str, limit: int = 50) -> list[dict]:
     return out
 
 
-async def require_credits(
+async def charge_credits(
     user_id: str,
     action: CreditAction,
     *,
     dataset_id: str | None = None,
-) -> int:
+    idempotency_key: str | None = None,
+    source: str = "api",
+) -> CreditCharge:
     if not is_billing_enforcement_enabled():
-        return 0
+        return CreditCharge(cost=0, transaction_id=None, already_processed=False)
 
     cost = CREDIT_COSTS[action]
     if cost <= 0:
-        return 0
+        return CreditCharge(cost=0, transaction_id=None, already_processed=False)
+
+    if idempotency_key is None:
+        base_key = _request_idempotency_key.get()
+        idempotency_key = build_credit_idempotency_key(base_key, action, dataset_id)
+
+    try:
+        workspace = await get_active_workspace(user_id)
+        org_id = str(workspace["organization_id"])
+        plan_name = _effective_plan(workspace)
+        result = await rest_rpc(
+            "spend_organization_credits",
+            {
+                "p_organization_id": org_id,
+                "p_user_id": user_id,
+                "p_action": action.value,
+                "p_cost": cost,
+                "p_dataset_id": dataset_id,
+                "p_idempotency_key": idempotency_key,
+                "p_metadata": {"source": source},
+            },
+        )
+        row = _rpc_first_row(result) or {}
+        transaction_id = str(row["transaction_id"]) if row.get("transaction_id") else None
+        already_processed = bool(row.get("already_processed"))
+        charges = _request_credit_charges.get()
+        if charges is not None and not already_processed:
+            charges.append(
+                {
+                    "user_id": user_id,
+                    "organization_id": org_id,
+                    "action": action,
+                    "credits": cost,
+                    "dataset_id": dataset_id,
+                    "transaction_id": transaction_id,
+                }
+            )
+        return CreditCharge(cost=cost, transaction_id=transaction_id, already_processed=already_processed)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        detail = _http_detail_from_rpc_error(exc, cost=cost, plan_name=locals().get("plan_name", "hobby"))
+        if detail:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=detail) from exc
+        # If the workspace migration has not been applied yet, keep old profile-based spending alive.
 
     profile = await ensure_credits_period(user_id)
     balance = int(profile.get("credits_balance") or 0)
@@ -341,7 +517,59 @@ async def require_credits(
                 "dataset_id": dataset_id,
             }
         )
-    return cost
+    return CreditCharge(cost=cost, transaction_id=None, already_processed=False)
+
+
+async def require_credits(
+    user_id: str,
+    action: CreditAction,
+    *,
+    dataset_id: str | None = None,
+    idempotency_key: str | None = None,
+) -> int:
+    if _credits_precharged.get():
+        return 0
+    charge = await charge_credits(
+        user_id,
+        action,
+        dataset_id=dataset_id,
+        idempotency_key=idempotency_key,
+    )
+    return charge.cost
+
+
+async def refund_job_charge(job: dict[str, Any], *, reason: str) -> None:
+    tx_id = job.get("credit_transaction_id")
+    if not tx_id or not is_billing_enforcement_enabled():
+        return
+    try:
+        rows = await rest_list(
+            "credit_transactions",
+            f"id=eq.{tx_id}&select=action,credits_delta,organization_id",
+        )
+        if not rows:
+            return
+        tx = rows[0]
+        credits = abs(int(tx.get("credits_delta") or 0))
+        if credits <= 0:
+            return
+        action_str = str(tx.get("action") or "")
+        try:
+            action = CreditAction(action_str)
+        except ValueError:
+            return
+        org_id = tx.get("organization_id") or job.get("organization_id")
+        await refund_credits(
+            str(job["user_id"]),
+            action,
+            credits,
+            dataset_id=str(job["dataset_id"]) if job.get("dataset_id") else None,
+            reason=reason,
+            organization_id=str(org_id) if org_id else None,
+            refunded_transaction_id=str(tx_id),
+        )
+    except Exception:
+        pass
 
 
 async def refund_credits(
@@ -351,11 +579,28 @@ async def refund_credits(
     *,
     dataset_id: str | None = None,
     reason: str = "action_failed",
+    organization_id: str | None = None,
+    refunded_transaction_id: str | None = None,
 ) -> None:
     if not is_billing_enforcement_enabled() or credits <= 0:
         return
 
     try:
+        if organization_id:
+            await rest_rpc(
+                "refund_organization_credits",
+                {
+                    "p_organization_id": organization_id,
+                    "p_user_id": user_id,
+                    "p_action": action.value,
+                    "p_credits": credits,
+                    "p_dataset_id": dataset_id,
+                    "p_reason": reason,
+                    "p_refunded_transaction_id": refunded_transaction_id,
+                },
+            )
+            return
+
         profile = await _get_profile(user_id)
         balance = int(profile.get("credits_balance") or 0)
         new_balance = balance + credits
@@ -380,8 +625,10 @@ async def refund_credits(
         pass
 
 
-def begin_credit_tracking() -> Token[list[dict[str, Any]] | None]:
-    return _request_credit_charges.set([])
+def begin_credit_tracking(idempotency_key: str | None = None) -> tuple[Token[list[dict[str, Any]] | None], Token[str | None]]:
+    charge_token = _request_credit_charges.set([])
+    idem_token = _request_idempotency_key.set(idempotency_key)
+    return charge_token, idem_token
 
 
 async def refund_tracked_credits(*, reason: str) -> None:
@@ -394,11 +641,15 @@ async def refund_tracked_credits(*, reason: str) -> None:
             int(charge["credits"]),
             dataset_id=charge.get("dataset_id"),
             reason=reason,
+            organization_id=charge.get("organization_id"),
+            refunded_transaction_id=charge.get("transaction_id"),
         )
 
 
-def end_credit_tracking(token: Token[list[dict[str, Any]] | None]) -> None:
-    _request_credit_charges.reset(token)
+def end_credit_tracking(token: tuple[Token[list[dict[str, Any]] | None], Token[str | None]]) -> None:
+    charge_token, idem_token = token
+    _request_credit_charges.reset(charge_token)
+    _request_idempotency_key.reset(idem_token)
 
 
 async def check_dataset_slot(user_id: str, current_count: int) -> None:

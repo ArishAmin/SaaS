@@ -6,6 +6,7 @@ import { Coins, ArrowRight, Loader2 } from "lucide-react";
 
 import { apiRequest } from "@/lib/api";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
+import { usePlan } from "@/components/providers/PlanProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -46,6 +47,7 @@ type BillingAccount = {
 
 export default function CreditsSettingsPage() {
   const [data, setData] = useState<BillingAccount | null>(null);
+  const { companyAccountEnabled } = usePlan();
   const enforcement = isBillingEnforcementEnabled();
   const [loading, setLoading] = useState(enforcement);
 
@@ -115,6 +117,13 @@ export default function CreditsSettingsPage() {
         <p className="text-muted-foreground mt-1 text-sm">
           Track your balance, plan limits, and credit spend history.
         </p>
+        {companyAccountEnabled ? (
+          <p className="mt-2 text-sm">
+            <Link href="/dashboard/company" className="text-blue-600 hover:underline dark:text-blue-400">
+              Open company workspace →
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <Card>

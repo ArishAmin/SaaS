@@ -36,6 +36,7 @@ class UserDataLimits:
 
 async def get_user_data_limits(user_id: str) -> UserDataLimits:
     from ..services.supabase import rest_list
+    from ..services.workspaces import get_active_workspace
 
     if not is_billing_enforcement_enabled():
         plan_limits = get_plan_limits(PlanType.BUSINESS.value)
@@ -49,14 +50,21 @@ async def get_user_data_limits(user_id: str) -> UserDataLimits:
             uses_full_dataset=True,
         )
 
-    rows = await rest_list("profiles", f"id=eq.{user_id}")
-    if not rows:
-        plan_name = PlanType.HOBBY.value
-    else:
-        plan_name = rows[0].get("plan", PlanType.HOBBY.value)
-        sub_status = rows[0].get("subscription_status", "inactive")
+    try:
+        workspace = await get_active_workspace(user_id)
+        plan_name = workspace.get("plan", PlanType.HOBBY.value)
+        sub_status = workspace.get("subscription_status", "inactive")
         if plan_name != PlanType.HOBBY.value and not has_active_subscription(sub_status):
             plan_name = PlanType.HOBBY.value
+    except Exception:
+        rows = await rest_list("profiles", f"id=eq.{user_id}")
+        if not rows:
+            plan_name = PlanType.HOBBY.value
+        else:
+            plan_name = rows[0].get("plan", PlanType.HOBBY.value)
+            sub_status = rows[0].get("subscription_status", "inactive")
+            if plan_name != PlanType.HOBBY.value and not has_active_subscription(sub_status):
+                plan_name = PlanType.HOBBY.value
 
     plan_limits = get_plan_limits(plan_name)
 

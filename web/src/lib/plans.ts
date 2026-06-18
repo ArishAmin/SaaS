@@ -42,6 +42,16 @@ export const STARTER_FULL_WORKFLOW_CREDITS = 200;
 
 export const YEARLY_DISCOUNT_PERCENT = 17;
 
+export const CUSTOM_PLAN_FEATURES = [
+  "Starts at 5,000 credits per month",
+  "Monthly and yearly billing options",
+  "Business-level file limits and priority support",
+  "Shared company workspace for your team",
+  "Invite colleagues to one credit pool and dataset library",
+  "Company admins can monitor team activity",
+  "100k+ credits are handled with support-assisted setup",
+] as const;
+
 export const CUSTOM_CREDIT_TIERS: CustomCreditTier[] = [
   { credits: 5_000, priceMonthly: 125, priceYearly: 1245, contactSupport: false },
   { credits: 10_000, priceMonthly: 225, priceYearly: 2241, contactSupport: false },

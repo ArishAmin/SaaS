@@ -3,10 +3,9 @@
 #
 # Cost-focused layout (May 2026):
 #   - API + Web on Starter ($7/mo each) = $14/mo compute
-#   - Redis Free for shared rate limits (upgrade to Starter $10/mo if you scale API replicas)
-#   - No Celery worker (full training runs on the user's machine via export; TTL cleanup runs by cron)
-#   - Supabase (auth/DB/storage) billed separately — Free tier OK for launch, Pro ~$25/mo when you grow
-#   - Render workspace: Hobby $0 (cold starts) or Pro $25/mo for always-on production
+#   - Redis Free for shared rate limits + Celery job queue
+#   - Celery worker (acutize-worker) processes background jobs with concurrency limits
+#   - Supabase (auth/DB/storage) billed separately
 
 services:
   # -------------------------
@@ -18,7 +17,7 @@ services:
     plan: starter
     rootDir: api
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2}
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -64,8 +63,63 @@ services:
         sync: false
       - key: API_VERSION
         value: "0.1.0"
+      - key: WEB_CONCURRENCY
+        value: "2"
       - key: ADMIN_CLEANUP_TOKEN
         sync: false
+      - key: BACKGROUND_JOBS_ENABLED
+        value: "true"
+      - key: MAX_QUEUED_JOBS_PER_WORKSPACE
+        value: "200"
+      - key: JOB_STALE_TIMEOUT_MINUTES
+        value: "120"
+      - key: TESTING
+        value: "false"
+
+  # -------------------------
+  # 1.25. Background Job Worker
+  # -------------------------
+  - type: worker
+    name: acutize-worker
+    runtime: python
+    plan: starter
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.worker.celery_worker worker --beat --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.13"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: acutize-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_ENVIRONMENT
+        value: sandbox
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: BILLING_ENFORCEMENT_ENABLED
+        value: "true"
+      - key: WORKER_ID
+        value: render-worker
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: JOB_STALE_TIMEOUT_MINUTES
+        value: "120"
+      - key: JOB_RECOVERY_INTERVAL_MINUTES
+        value: "15"
       - key: TTL_CLEANUP_ENABLED
         value: "true"
       - key: DATASET_TTL_HOURS

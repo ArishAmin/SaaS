@@ -1,6 +1,8 @@
 "use client";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getUserFacingError, getUserFacingJobError, normalizeApiErrorMessage } from "@/lib/userErrors";
+import type { InsufficientCreditsDetail } from "@/lib/userErrors";
 
 const defaultApiBaseUrl = "http://127.0.0.1:8001";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl;
@@ -16,13 +18,8 @@ function getClientSessionId() {
   return id;
 }
 
-export type InsufficientCreditsDetail = {
-  code: "insufficient_credits";
-  message: string;
-  required_credits?: number;
-  balance?: number;
-  plan?: string;
-};
+export type { InsufficientCreditsDetail } from "@/lib/userErrors";
+export { getUserFacingError, getUserFacingJobError, normalizeApiErrorMessage } from "@/lib/userErrors";
 
 export class ApiError extends Error {
   status: number;
@@ -81,6 +78,77 @@ async function fetchWithTimeout(url: string, options: RequestInit & { timeout?: 
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type JobEnvelope = {
+  job_id?: string;
+  status?: "queued" | "running" | "completed" | "failed" | "canceled";
+  queued?: boolean;
+  result_json?: unknown;
+  error?: string | null;
+};
+
+function isQueuedJob(value: unknown): value is JobEnvelope {
+  if (typeof value !== "object" || value === null || !("job_id" in value)) {
+    return false;
+  }
+  const envelope = value as JobEnvelope;
+  const status = envelope.status;
+  if (status === "completed" || status === "failed" || status === "canceled") {
+    return false;
+  }
+  return (
+    envelope.queued === true ||
+    status === "queued" ||
+    status === "running"
+  );
+}
+
+function isCompletedJob(value: unknown): value is JobEnvelope & { result_json: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as JobEnvelope).status === "completed" &&
+    "result_json" in value
+  );
+}
+
+async function pollJobResult<T>(jobId: string, accessToken: string | undefined, timeoutMs: number): Promise<T> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const res = await fetch(`${apiBaseUrl}/jobs/${jobId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        "X-Acutize-Session-ID": getClientSessionId() ?? "",
+      },
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new ApiError(
+        res.status,
+        normalizeApiErrorMessage(res.status, text || `Job status failed (${res.status})`),
+      );
+    }
+    const job = JSON.parse(text) as JobEnvelope;
+    if (job.status === "completed") {
+      return job.result_json as T;
+    }
+    if (job.status === "failed" || job.status === "canceled") {
+      throw new ApiError(
+        500,
+        getUserFacingJobError(job.error) || "This task didn't complete. Please try again.",
+        job,
+      );
+    }
+    await sleep(1500);
+  }
+  throw new Error("This job is still running. Please check the page again in a moment.");
+}
+
 async function sendApiErrorLog(
   accessToken: string | undefined,
   path: string,
@@ -131,6 +199,9 @@ export async function apiRequest<T>(
   if (clientSessionId) {
     headers["X-Acutize-Session-ID"] = clientSessionId;
   }
+  if (method !== "GET" && typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    headers["X-Idempotency-Key"] = crypto.randomUUID();
+  }
 
   if (session?.access_token) {
     headers["Authorization"] = `Bearer ${session.access_token}`;
@@ -158,15 +229,19 @@ export async function apiRequest<T>(
         path.includes("/recommend") ||
         path.includes("/forecasting") ||
         path.includes("/business-insights") ||
+        path.includes("/eda") ||
+        path.includes("/quality") ||
+        path.includes("/feature-engineer") ||
         path.includes("/report/pdf") ||
         path.includes("/export")
           ? 120000
           : 30000),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Check if backend is running on 8001";
     console.error(`[api] Network Error fetching ${url}:`, err);
-    throw new Error(message);
+    throw new Error(
+      getUserFacingError(err, "We couldn't reach the server. Check your connection and try again."),
+    );
   }
 
   const text = await res.text();
@@ -188,7 +263,8 @@ export async function apiRequest<T>(
       /* not JSON */
     }
     await sendApiErrorLog(session?.access_token, path, res.status, message);
-    const apiErr = new ApiError(res.status, message, detail);
+    const friendly = normalizeApiErrorMessage(res.status, message, detail);
+    const apiErr = new ApiError(res.status, friendly, detail);
     if (res.status === 402) {
       dispatchInsufficientCredits(apiErr);
     }
@@ -201,6 +277,14 @@ export async function apiRequest<T>(
     parsed = JSON.parse(text) as T;
   } catch {
     parsed = text as unknown as T;
+  }
+
+  if (isCompletedJob(parsed)) {
+    return parsed.result_json as T;
+  }
+
+  if (isQueuedJob(parsed) && parsed.job_id && !path.startsWith("/jobs/")) {
+    parsed = await pollJobResult<T>(parsed.job_id, session?.access_token, timeout ?? 180000);
   }
 
   if (

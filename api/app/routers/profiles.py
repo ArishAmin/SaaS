@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.auth import get_current_user
 from ..services.credits import get_credits_summary
 from ..services.supabase import rest_list
+from ..services.workspaces import get_active_workspace, get_company_account_summary
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -25,6 +26,22 @@ async def get_my_profile(user: dict = Depends(get_current_user)):
 
         profile = rows[0]
         credits = await get_credits_summary(user_id)
-        return {**profile, **credits}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        company_account = await get_company_account_summary(user_id)
+        try:
+            workspace = await get_active_workspace(user_id)
+        except Exception:
+            workspace = None
+        return {
+            **profile,
+            **credits,
+            "workspace": workspace,
+            "company_account": company_account,
+            "active_organization_id": (workspace or {}).get("organization_id") or profile.get("active_organization_id"),
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": "We couldn't load your profile right now. Please refresh and try again.",
+            },
+        )

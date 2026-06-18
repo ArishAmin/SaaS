@@ -106,7 +106,13 @@ def is_billing_enforcement_enabled() -> bool:
     return get_settings().billing_enforcement_enabled
 
 
+def is_testing_mode() -> bool:
+    return bool(get_settings().testing)
+
+
 def get_plan_limits(plan_name: str) -> PlanLimits:
+    if is_testing_mode():
+        return PLAN_CONFIGS[PlanType.BUSINESS]
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
     try:
@@ -116,6 +122,8 @@ def get_plan_limits(plan_name: str) -> PlanLimits:
 
 
 def has_active_subscription(status: str) -> bool:
+    if is_testing_mode():
+        return True
     if not is_billing_enforcement_enabled():
         return True
     return status in ("active", "past_due", "trialing")
@@ -142,10 +150,23 @@ def plan_from_paddle_price_id(price_id: str) -> PlanType:
 
 
 async def get_user_plan_limits(user_id: str) -> PlanLimits:
+    if is_testing_mode():
+        return PLAN_CONFIGS[PlanType.BUSINESS]
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
 
     from ..services.supabase import rest_list
+    from ..services.workspaces import get_active_workspace
+
+    try:
+        workspace = await get_active_workspace(user_id)
+        plan_name = workspace.get("plan", "hobby")
+        status = workspace.get("subscription_status", "inactive")
+        if plan_name != "hobby" and not has_active_subscription(status):
+            return PLAN_CONFIGS[PlanType.HOBBY]
+        return get_plan_limits(plan_name)
+    except Exception:
+        pass
 
     profiles = await rest_list("profiles", f"id=eq.{user_id}")
     if not profiles:

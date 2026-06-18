@@ -11,6 +11,7 @@ interface PlanContextType {
   creditsBalance: number;
   creditsQuota: number;
   creditsRefreshMode: "one_time" | "monthly" | null;
+  companyAccountEnabled: boolean;
   loading: boolean;
   refreshPlan: () => Promise<void>;
 }
@@ -23,6 +24,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [creditsBalance, setCreditsBalance] = useState(200);
   const [creditsQuota, setCreditsQuota] = useState(200);
   const [creditsRefreshMode, setCreditsRefreshMode] = useState<"one_time" | "monthly" | null>("one_time");
+  const [companyAccountEnabled, setCompanyAccountEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchPlan = async () => {
@@ -35,6 +37,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       setStatus("none");
       setCreditsBalance(200);
       setCreditsQuota(200);
+      setCompanyAccountEnabled(false);
       setLoading(false);
       return;
     }
@@ -47,6 +50,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         credits_quota?: number;
         credits_monthly_quota?: number;
         credits_refresh_mode?: "one_time" | "monthly";
+        company_account?: { enabled?: boolean };
       }>("/profiles/me");
 
       setPlan((profile?.plan || "hobby") as PlanId);
@@ -54,6 +58,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       setCreditsBalance(profile?.credits_balance ?? 200);
       setCreditsQuota(profile?.credits_quota ?? profile?.credits_monthly_quota ?? 200);
       setCreditsRefreshMode(profile?.credits_refresh_mode ?? "one_time");
+      setCompanyAccountEnabled(Boolean(profile?.company_account?.enabled));
     } catch (err) {
       if (process.env.NODE_ENV === "development") {
         console.warn("[PlanProvider] Could not load plan", err);
@@ -89,6 +94,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         creditsBalance,
         creditsQuota,
         creditsRefreshMode,
+        companyAccountEnabled,
         loading,
         refreshPlan: fetchPlan,
       }}

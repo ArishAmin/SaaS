@@ -57,15 +57,22 @@ celery_app.conf.update(
 )
 
 # Periodic jobs (Celery beat)
+beat_schedule: dict[str, dict[str, object]] = {}
 if settings.ttl_cleanup_enabled:
-    celery_app.conf.beat_schedule = {
-        "ttl-cleanup": {
-            "task": "acutizeai.cleanup_ttl",
-            "schedule": settings.ttl_cleanup_interval_minutes * 60,
-        }
+    beat_schedule["ttl-cleanup"] = {
+        "task": "acutizeai.cleanup_ttl",
+        "schedule": settings.ttl_cleanup_interval_minutes * 60,
     }
+if settings.background_jobs_enabled:
+    beat_schedule["recover-stale-jobs"] = {
+        "task": "acutizeai.recover_stale_jobs",
+        "schedule": settings.job_recovery_interval_minutes * 60,
+    }
+if beat_schedule:
+    celery_app.conf.beat_schedule = beat_schedule
 
 # Ensure tasks are registered when running a worker/beat.
 from . import tasks_full_training as _tasks_full_training  # noqa: E402,F401
+from . import tasks_processing as _tasks_processing  # noqa: E402,F401
+from . import tasks_job_recovery as _tasks_job_recovery  # noqa: E402,F401
 from . import tasks_ttl_cleanup as _tasks_ttl_cleanup  # noqa: E402,F401
-

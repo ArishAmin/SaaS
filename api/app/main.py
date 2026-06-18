@@ -21,6 +21,8 @@ from .routers.assistant import router as assistant_router
 from .routers.telemetry import router as telemetry_router
 from .routers.billing import router as billing_router
 from .routers.profiles import router as profiles_router
+from .routers.workspaces import router as workspaces_router
+from .routers.jobs import router as jobs_router
 from .routers.admin import router as admin_router
 from .routers.support import router as support_router
 from .routers.forecasting import router as forecasting_router
@@ -95,6 +97,8 @@ app.include_router(assistant_router)
 app.include_router(telemetry_router)
 app.include_router(billing_router)
 app.include_router(profiles_router)
+app.include_router(workspaces_router)
+app.include_router(jobs_router)
 app.include_router(admin_router)
 app.include_router(support_router)
 app.include_router(forecasting_router)
@@ -109,7 +113,7 @@ def rate_limit_handler(_request, _exc):
 async def request_logging_middleware(request: Request, call_next):
     request_id = str(uuid4())
     start = time.perf_counter()
-    credit_token = begin_credit_tracking()
+    credit_token = begin_credit_tracking(request.headers.get("x-idempotency-key"))
     user_id = _user_id_from_auth_header(request)
     user_agent = request.headers.get("user-agent")
     ip_hash = _hash_ip(_client_ip(request))

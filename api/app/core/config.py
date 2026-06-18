@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Set True in production (Render blueprint enables this). False only for local dev without billing.
     billing_enforcement_enabled: bool = True
 
+    # Temporary: TESTING=true bypasses Paddle subscription checks and enables company workspace for QA.
+    testing: bool = False
+
     # production | development
     app_env: str = "development"
     # Comma-separated origins for CORS, e.g. https://app.example.com,https://www.example.com
@@ -35,6 +38,14 @@ class Settings(BaseSettings):
     # Rate limiting
     redis_url: str = "redis://localhost:6379"
     rate_limit_per_minute: str = "30/minute"
+
+    # Background jobs / team scaling
+    background_jobs_enabled: bool = False
+    worker_id: str = "worker"
+    worker_concurrency: int = 1
+    max_queued_jobs_per_workspace: int = 200
+    job_stale_timeout_minutes: int = 120
+    job_recovery_interval_minutes: int = 15
 
     # Global safety ceilings (per-plan caps applied in data_limits.py)
     max_columns: int = 200
@@ -78,6 +89,15 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_testing_env(cls, data: object) -> object:
+        if isinstance(data, dict):
+            raw = data.get("testing") or data.get("TESTING")
+            if isinstance(raw, str):
+                data = {**data, "testing": raw.strip().lower() in {"1", "true", "yes", "on"}}
+        return data
 
     @model_validator(mode="after")
     def validate_production_billing_environment(self) -> "Settings":

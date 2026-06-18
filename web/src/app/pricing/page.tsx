@@ -18,6 +18,7 @@ import { isBillingEnforcementEnabled } from "@/lib/billing";
 import {
   CREDIT_USAGE_ROWS,
   CUSTOM_CREDIT_TIERS,
+  CUSTOM_PLAN_FEATURES,
   PLANS,
   YEARLY_DISCOUNT_PERCENT,
   formatPlanPrice,
@@ -260,10 +261,11 @@ export default function PricingPage() {
                   <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">credits/month</span>
                 </div>
                 <p className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400">
-                  For higher-volume teams
+                  Custom pricing for organizations
                 </p>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Add more monthly credits on Business-level infrastructure without changing the core workflow.
+                  Higher monthly credit packages on Business-level infrastructure, plus an optional shared
+                  company workspace for your team.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
@@ -278,12 +280,7 @@ export default function PricingPage() {
               </div>
 
               <div className="flex-grow space-y-3 mb-6">
-                {[
-                  "Starts at 5,000 credits per month",
-                  "Monthly and yearly billing options",
-                  "Business plan limits and priority support",
-                  "100k+ credits are handled with support-assisted setup",
-                ].map((feature) => (
+                {CUSTOM_PLAN_FEATURES.map((feature) => (
                   <div key={feature} className="flex items-start gap-3">
                     <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                       <Check className="w-3 h-3 text-blue-600 dark:text-blue-400" />
@@ -415,6 +412,10 @@ export default function PricingPage() {
               {
                 q: "Is full model training included?",
                 a: "Instant preview runs in the cloud (37 credits). Full training is a Python script you run locally—no extra cloud training charge.",
+              },
+              {
+                q: "Do Pro or Business plans include a company workspace?",
+                a: "No. Shared company workspaces (multiple employees, one credit pool) are included with custom pricing packages only. Contact us to set one up for your organization.",
               },
             ].map((faq, idx) => (
               <div
