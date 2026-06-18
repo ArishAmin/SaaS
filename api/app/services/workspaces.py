@@ -23,6 +23,36 @@ async def ensure_default_workspace(user_id: str, name: str | None = None) -> str
     raise HTTPException(status_code=500, detail="Could not create default workspace")
 
 
+async def accept_pending_invitations(user_id: str, email: str | None) -> str | None:
+    if not email or not str(email).strip():
+        return None
+    result = await rest_rpc(
+        "accept_pending_organization_invitations",
+        {"p_user_id": user_id, "p_email": str(email).strip()},
+    )
+    if isinstance(result, str) and result:
+        return result
+    if isinstance(result, list) and result:
+        return str(result[0]) if result[0] else None
+    return None
+
+
+async def _load_organization(org_id: str) -> dict[str, Any]:
+    rows = await rest_list(
+        "organizations",
+        (
+            f"organization_id=eq.{org_id}"
+            "&select=organization_id,name,owner_user_id,plan,subscription_status,current_period_end,"
+            "cancel_at_period_end,credits_balance,credits_monthly_quota,credits_period_end,"
+            "paddle_customer_id,paddle_subscription_id,paddle_price_id,paddle_portal_url,billing_interval,"
+            "max_concurrent_jobs,max_concurrent_jobs_per_user,created_at,updated_at"
+        ),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return rows[0]
+
+
 async def provision_testing_company_workspace(user_id: str, workspace: dict[str, Any]) -> dict[str, Any]:
     """When TESTING=true, simulate a successful custom Paddle purchase for QA."""
     if not is_testing_mode():
@@ -75,6 +105,15 @@ async def provision_testing_company_workspace(user_id: str, workspace: dict[str,
 async def get_active_workspace(user_id: str) -> dict[str, Any]:
     profiles = await rest_list("profiles", f"id=eq.{user_id}&select=active_organization_id,full_name,email")
     profile = profiles[0] if profiles else {}
+
+    if profile.get("email"):
+        await accept_pending_invitations(user_id, profile.get("email"))
+        profiles = await rest_list(
+            "profiles",
+            f"id=eq.{user_id}&select=active_organization_id,full_name,email",
+        )
+        profile = profiles[0] if profiles else {}
+
     active_org_id = profile.get("active_organization_id")
 
     if active_org_id:
@@ -92,19 +131,8 @@ async def get_active_workspace(user_id: str) -> dict[str, Any]:
             return await provision_testing_company_workspace(user_id, rows[0])
 
     org_id = await ensure_default_workspace(user_id, profile.get("full_name") or profile.get("email"))
-    rows = await rest_list(
-        "organizations",
-        (
-            f"organization_id=eq.{org_id}"
-            "&select=organization_id,name,owner_user_id,plan,subscription_status,current_period_end,"
-            "cancel_at_period_end,credits_balance,credits_monthly_quota,credits_period_end,"
-            "paddle_customer_id,paddle_subscription_id,paddle_price_id,paddle_portal_url,billing_interval,"
-            "max_concurrent_jobs,max_concurrent_jobs_per_user,created_at,updated_at"
-        ),
-    )
-    if not rows:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    return await provision_testing_company_workspace(user_id, rows[0])
+    workspace = await _load_organization(org_id)
+    return await provision_testing_company_workspace(user_id, workspace)
 
 
 async def get_organization_member_count(organization_id: str) -> int:
@@ -157,15 +185,22 @@ async def get_company_account_summary(user_id: str) -> dict[str, Any]:
         f"organization_id=eq.{org_id}&user_id=eq.{user_id}&status=eq.active&select=role",
     )
     role = memberships[0].get("role") if memberships else None
+    owner_user_id = str(workspace.get("owner_user_id") or "")
     return {
         "enabled": enabled,
         "organization_id": org_id,
         "organization_name": workspace.get("name"),
+        "owner_user_id": owner_user_id or None,
+        "is_owner": owner_user_id == str(user_id),
         "member_count": member_count,
         "pending_invitations": pending_invites,
         "plan": workspace.get("plan"),
         "role": role,
         "can_manage_members": enabled and role in ("owner", "admin"),
+        "can_manage_billing": enabled and owner_user_id == str(user_id),
+        "can_update_member_roles": enabled and owner_user_id == str(user_id),
+        "credits_balance": int(workspace.get("credits_balance") or 0),
+        "credits_monthly_quota": int(workspace.get("credits_monthly_quota") or 0),
     }
 
 
@@ -208,6 +243,33 @@ async def require_workspace_admin(organization_id: str, user_id: str) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace admin access required")
 
 
+async def require_workspace_owner(organization_id: str, user_id: str) -> None:
+    rows = await rest_list(
+        "organizations",
+        f"organization_id=eq.{organization_id}&select=owner_user_id",
+    )
+    if not rows or str(rows[0].get("owner_user_id")) != str(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "owner_required", "message": "Only the workspace owner can perform this action."},
+        )
+
+
+async def require_billing_access(user_id: str) -> None:
+    """Company billing is owner-only; individual plans keep self-serve billing."""
+    workspace = await get_active_workspace(user_id)
+    if not await is_company_account(workspace):
+        return
+    if str(workspace.get("owner_user_id")) != str(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "billing_owner_required",
+                "message": "Billing is managed by your company workspace owner. Contact them for plan changes.",
+            },
+        )
+
+
 async def list_user_workspaces(user_id: str) -> list[dict[str, Any]]:
     await ensure_default_workspace(user_id)
     memberships = await rest_list(
@@ -233,6 +295,30 @@ async def list_user_workspaces(user_id: str) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+async def enrich_members_with_profiles(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    user_ids = [str(row["user_id"]) for row in members if row.get("user_id")]
+    if not user_ids:
+        return members
+    id_filter = ",".join(user_ids)
+    profiles = await rest_list(
+        "profiles",
+        f"id=in.({id_filter})&select=id,email,full_name,username",
+    )
+    profile_map = {str(row["id"]): row for row in profiles}
+    enriched: list[dict[str, Any]] = []
+    for member in members:
+        profile = profile_map.get(str(member.get("user_id")), {})
+        enriched.append(
+            {
+                **member,
+                "email": profile.get("email") or member.get("invited_email"),
+                "full_name": profile.get("full_name"),
+                "username": profile.get("username"),
+            }
+        )
+    return enriched
 
 
 async def create_workspace(user_id: str, name: str) -> dict[str, Any]:

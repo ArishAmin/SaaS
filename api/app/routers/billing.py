@@ -13,6 +13,7 @@ from ..services.credits import (
     get_credits_summary,
     list_credit_transactions,
 )
+from ..services.workspaces import require_billing_access
 from ..services.paddle_billing import (
     apply_subscription_update,
     apply_transaction_completed,
@@ -138,6 +139,7 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
 @router.post("/checkout")
 async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
     user_id = str(user["user_id"])
+    await require_billing_access(user_id)
     success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
 
     if is_testing_mode() and req.plan == "custom":
@@ -166,8 +168,10 @@ async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current
 async def paddle_customer_portal(req: PortalRequest | None = None, user: dict = Depends(get_current_user)):
     if not settings.paddle_api_key:
         raise HTTPException(status_code=500, detail="Paddle is not configured on this server.")
+    user_id = str(user["user_id"])
+    await require_billing_access(user_id)
     return_url = (req.return_url if req else None) or f"{settings.app_public_url}/dashboard/settings"
-    url = await create_customer_portal(user_id=str(user["user_id"]), return_url=return_url)
+    url = await create_customer_portal(user_id=user_id, return_url=return_url)
     return {"url": url}
 
 

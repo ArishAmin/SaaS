@@ -12,6 +12,8 @@ interface PlanContextType {
   creditsQuota: number;
   creditsRefreshMode: "one_time" | "monthly" | null;
   companyAccountEnabled: boolean;
+  companyIsOwner: boolean;
+  canManageBilling: boolean;
   loading: boolean;
   refreshPlan: () => Promise<void>;
 }
@@ -25,6 +27,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [creditsQuota, setCreditsQuota] = useState(200);
   const [creditsRefreshMode, setCreditsRefreshMode] = useState<"one_time" | "monthly" | null>("one_time");
   const [companyAccountEnabled, setCompanyAccountEnabled] = useState(false);
+  const [companyIsOwner, setCompanyIsOwner] = useState(false);
+  const [canManageBilling, setCanManageBilling] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const fetchPlan = async () => {
@@ -38,6 +42,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       setCreditsBalance(200);
       setCreditsQuota(200);
       setCompanyAccountEnabled(false);
+      setCompanyIsOwner(false);
+      setCanManageBilling(true);
       setLoading(false);
       return;
     }
@@ -50,7 +56,11 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         credits_quota?: number;
         credits_monthly_quota?: number;
         credits_refresh_mode?: "one_time" | "monthly";
-        company_account?: { enabled?: boolean };
+        company_account?: {
+          enabled?: boolean;
+          is_owner?: boolean;
+          can_manage_billing?: boolean;
+        };
       }>("/profiles/me");
 
       setPlan((profile?.plan || "hobby") as PlanId);
@@ -59,6 +69,10 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       setCreditsQuota(profile?.credits_quota ?? profile?.credits_monthly_quota ?? 200);
       setCreditsRefreshMode(profile?.credits_refresh_mode ?? "one_time");
       setCompanyAccountEnabled(Boolean(profile?.company_account?.enabled));
+      setCompanyIsOwner(Boolean(profile?.company_account?.is_owner));
+      setCanManageBilling(profile?.company_account?.enabled
+        ? Boolean(profile?.company_account?.can_manage_billing)
+        : true);
     } catch (err) {
       if (process.env.NODE_ENV === "development") {
         console.warn("[PlanProvider] Could not load plan", err);
@@ -95,6 +109,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         creditsQuota,
         creditsRefreshMode,
         companyAccountEnabled,
+        companyIsOwner,
+        canManageBilling,
         loading,
         refreshPlan: fetchPlan,
       }}

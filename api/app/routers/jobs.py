@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from ..services.jobs import cancel_job, validate_job_id
 from ..services.supabase import rest_list, storage_download
-from ..services.workspaces import require_workspace_member
+from ..services.workspaces import require_billing_access, require_workspace_admin
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -31,8 +31,16 @@ async def _get_job_for_user(job_id: str, user_id: str) -> dict:
 
 @router.post("/{job_id}/cancel")
 async def cancel_job_status(job_id: str, user: dict = Depends(get_current_user)) -> dict:
+    user_id = str(user["user_id"])
     valid_job_id = validate_job_id(job_id)
-    return await cancel_job(valid_job_id, str(user["user_id"]))
+    rows = await rest_list(
+        "processing_jobs",
+        f"job_id=eq.{valid_job_id}&select=organization_id&limit=1",
+    )
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    await require_workspace_admin(str(rows[0]["organization_id"]), user_id)
+    return await cancel_job(valid_job_id, user_id)
 
 
 @router.get("/{job_id}")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -69,13 +69,21 @@ type SignupValues = z.infer<typeof signupSchema>;
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteEmail = searchParams.get("email")?.trim() ?? "";
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [awaitingEmail, setAwaitingEmail] = useState<{ email: string } | null>(null);
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: "", email: "", password: "", confirmPassword: "", acceptedTOS: false },
+    defaultValues: {
+      name: "",
+      email: inviteEmail,
+      password: "",
+      confirmPassword: "",
+      acceptedTOS: false,
+    },
   });
 
   const acceptedTOS = form.watch("acceptedTOS");

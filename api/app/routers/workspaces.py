@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 from ..core.auth import get_current_user
 from ..services.supabase import rest_insert, rest_list, rest_patch
+from ..services.workspace_invites import send_workspace_invite_email
 from ..services.workspaces import (
+    enrich_members_with_profiles,
     get_active_workspace,
     get_company_account_summary,
     list_user_workspaces,
@@ -13,6 +15,7 @@ from ..services.workspaces import (
     require_company_account,
     require_workspace_admin,
     require_workspace_member,
+    require_workspace_owner,
 )
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -33,6 +36,10 @@ class InviteMemberRequest(BaseModel):
 
 class WorkspaceRenameRequest(BaseModel):
     name: str = Field(min_length=2, max_length=80)
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: str = Field(..., pattern="^(admin|member)$")
 
 
 @router.get("")
@@ -91,7 +98,17 @@ async def list_members(organization_id: str, user: dict = Depends(get_current_us
             "&order=created_at.desc"
         ),
     )
-    return {"members": rows, "invitations": invitations}
+    members = await enrich_members_with_profiles(rows)
+    org_rows = await rest_list("organizations", f"organization_id=eq.{organization_id}&select=owner_user_id")
+    owner_user_id = org_rows[0].get("owner_user_id") if org_rows else None
+
+    summary = await get_company_account_summary(user_id)
+    show_invitations = bool(summary.get("can_manage_members"))
+    return {
+        "members": members,
+        "invitations": invitations if show_invitations else [],
+        "owner_user_id": owner_user_id,
+    }
 
 
 @router.post("/{organization_id}/members")
@@ -105,6 +122,44 @@ async def invite_member(
     await require_workspace_admin(organization_id, user_id)
 
     email = req.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail={"message": "Enter a valid email address."})
+
+    existing_member = await rest_list(
+        "organization_members",
+        f"organization_id=eq.{organization_id}&invited_email=eq.{email}&status=eq.active&select=user_id&limit=1",
+    )
+    profile_match = await rest_list(
+        "profiles",
+        f"email=eq.{email}&select=id&limit=1",
+    )
+    if profile_match:
+        already_in = await rest_list(
+            "organization_members",
+            (
+                f"organization_id=eq.{organization_id}"
+                f"&user_id=eq.{profile_match[0]['id']}&status=eq.active&select=user_id&limit=1"
+            ),
+        )
+        if already_in:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "This person is already on your team."},
+            )
+
+    pending = await rest_list(
+        "organization_invitations",
+        (
+            f"organization_id=eq.{organization_id}&email=eq.{email}"
+            "&status=eq.pending&select=invitation_id&limit=1"
+        ),
+    )
+    if pending:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "An invite is already pending for this email."},
+        )
+
     invited = await rest_insert(
         "organization_invitations",
         [
@@ -116,22 +171,153 @@ async def invite_member(
             }
         ],
     )
-    return {"member": invited}
+
+    org_rows = await rest_list(
+        "organizations",
+        f"organization_id=eq.{organization_id}&select=name",
+    )
+    inviter_rows = await rest_list("profiles", f"id=eq.{user_id}&select=full_name,email")
+    inviter = inviter_rows[0] if inviter_rows else {}
+    email_sent = await send_workspace_invite_email(
+        to_email=email,
+        organization_name=(org_rows[0].get("name") if org_rows else "Your company") or "Your company",
+        inviter_name=inviter.get("full_name") or inviter.get("email"),
+        role=req.role,
+    )
+    return {"invitation": invited, "email_sent": email_sent}
+
+
+@router.delete("/{organization_id}/invitations/{invitation_id}")
+async def revoke_invitation(
+    organization_id: str,
+    invitation_id: str,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    user_id = str(user["user_id"])
+    await require_company_account(user_id)
+    await require_workspace_admin(organization_id, user_id)
+    rows = await rest_list(
+        "organization_invitations",
+        (
+            f"invitation_id=eq.{invitation_id}&organization_id=eq.{organization_id}"
+            "&status=eq.pending&select=invitation_id&limit=1"
+        ),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail={"message": "Invite not found."})
+    await rest_patch(
+        "organization_invitations",
+        f"invitation_id=eq.{invitation_id}",
+        {"status": "revoked"},
+    )
+    return {"status": "revoked"}
+
+
+@router.delete("/{organization_id}/members/{member_user_id}")
+async def remove_member(
+    organization_id: str,
+    member_user_id: str,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    user_id = str(user["user_id"])
+    await require_company_account(user_id)
+    await require_workspace_admin(organization_id, user_id)
+
+    org_rows = await rest_list(
+        "organizations",
+        f"organization_id=eq.{organization_id}&select=owner_user_id",
+    )
+    owner_id = str(org_rows[0].get("owner_user_id")) if org_rows else ""
+    if member_user_id == owner_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"message": "The workspace owner cannot be removed."},
+        )
+    if member_user_id == user_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"message": "You cannot remove yourself. Transfer ownership or ask another admin."},
+        )
+
+    member_rows = await rest_list(
+        "organization_members",
+        (
+            f"organization_id=eq.{organization_id}&user_id=eq.{member_user_id}"
+            "&status=eq.active&select=role&limit=1"
+        ),
+    )
+    if not member_rows:
+        raise HTTPException(status_code=404, detail={"message": "Team member not found."})
+    if member_rows[0].get("role") == "owner":
+        raise HTTPException(status_code=403, detail={"message": "The workspace owner cannot be removed."})
+
+    target_role = member_rows[0].get("role")
+    actor_rows = await rest_list(
+        "organization_members",
+        f"organization_id=eq.{organization_id}&user_id=eq.{user_id}&status=eq.active&select=role&limit=1",
+    )
+    actor_role = actor_rows[0].get("role") if actor_rows else None
+    if actor_role == "admin" and target_role == "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"message": "Only the workspace owner can remove another admin."},
+        )
+
+    await rest_patch(
+        "organization_members",
+        f"organization_id=eq.{organization_id}&user_id=eq.{member_user_id}",
+        {"status": "disabled"},
+    )
+    return {"status": "removed"}
+
+
+@router.patch("/{organization_id}/members/{member_user_id}")
+async def update_member_role(
+    organization_id: str,
+    member_user_id: str,
+    req: UpdateMemberRoleRequest,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    user_id = str(user["user_id"])
+    await require_company_account(user_id)
+    await require_workspace_owner(organization_id, user_id)
+
+    org_rows = await rest_list(
+        "organizations",
+        f"organization_id=eq.{organization_id}&select=owner_user_id",
+    )
+    owner_id = str(org_rows[0].get("owner_user_id")) if org_rows else ""
+    if member_user_id == owner_id:
+        raise HTTPException(status_code=403, detail={"message": "The owner role cannot be changed."})
+    if member_user_id == user_id:
+        raise HTTPException(status_code=403, detail={"message": "You cannot change your own role."})
+
+    member_rows = await rest_list(
+        "organization_members",
+        (
+            f"organization_id=eq.{organization_id}&user_id=eq.{member_user_id}"
+            "&status=eq.active&select=role&limit=1"
+        ),
+    )
+    if not member_rows:
+        raise HTTPException(status_code=404, detail={"message": "Team member not found."})
+    if member_rows[0].get("role") == "owner":
+        raise HTTPException(status_code=403, detail={"message": "The owner role cannot be changed."})
+
+    await rest_patch(
+        "organization_members",
+        f"organization_id=eq.{organization_id}&user_id=eq.{member_user_id}",
+        {"role": req.role},
+    )
+    return {"user_id": member_user_id, "role": req.role}
 
 
 @router.get("/{organization_id}/jobs")
 async def list_workspace_jobs(organization_id: str, user: dict = Depends(get_current_user)) -> dict:
     user_id = str(user["user_id"])
-    summary = await require_company_account(user_id)
+    await require_company_account(user_id)
     await require_workspace_member(organization_id, user_id)
-    if not summary.get("can_manage_members"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "admin_required",
-                "message": "Only company admins can view team activity.",
-            },
-        )
+    summary = await get_company_account_summary(user_id)
     rows = await rest_list(
         "processing_jobs",
         (
@@ -140,7 +326,7 @@ async def list_workspace_jobs(organization_id: str, user: dict = Depends(get_cur
             "&order=queued_at.desc&limit=100"
         ),
     )
-    return {"jobs": rows}
+    return {"jobs": rows, "can_cancel_jobs": bool(summary.get("can_manage_members"))}
 
 
 @router.patch("/{organization_id}")

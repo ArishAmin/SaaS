@@ -21,6 +21,7 @@ import {
   CalendarClock,
   PieChart,
   HelpCircle,
+  Building2,
 } from "lucide-react";
 
 import {
@@ -106,6 +107,14 @@ function NavLinks({
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { companyAccountEnabled } = usePlan();
+
+  const generalNav: NavItem[] = [
+    ...(companyAccountEnabled
+      ? [{ href: "/dashboard/company", label: "Company workspace", icon: Building2 }]
+      : []),
+    ...moreNav,
+  ];
 
   const [user, setUser] = useState<UserLite | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -182,7 +191,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/45">
                   General
                 </p>
-                <NavLinks items={moreNav} pathname={pathname} />
+                <NavLinks items={generalNav} pathname={pathname} />
               </div>
             </nav>
 
@@ -308,7 +317,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   <p className="px-1 mb-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/45">
                     General
                   </p>
-                  <NavLinks items={moreNav} pathname={pathname} onNavigate={closeMobile} />
+                  <NavLinks items={generalNav} pathname={pathname} onNavigate={closeMobile} />
                 </div>
               </div>
               <div className="mt-8 border-t border-black/5 dark:border-white/5 pt-4">

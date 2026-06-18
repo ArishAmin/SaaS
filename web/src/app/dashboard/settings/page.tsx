@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { StepHint } from "@/components/ui/step-hint";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
 import { apiRequest } from "@/lib/api";
+import { usePlan } from "@/components/providers/PlanProvider";
 
 type ProfileResponse = {
   plan?: string | null;
@@ -213,6 +214,7 @@ export default function SettingsPage() {
 }
 
 function SubscriptionCard() {
+  const { canManageBilling, companyAccountEnabled } = usePlan();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -282,15 +284,19 @@ function SubscriptionCard() {
           <div className="flex gap-3">
             {!enforcement && process.env.NODE_ENV === "development" ? (
               <p className="text-sm text-muted-foreground self-center">Billing enforcement off (local dev).</p>
-            ) : plan === "hobby" ? (
+            ) : plan === "hobby" && canManageBilling ? (
               <Button asChild variant="default">
                 <a href="/pricing">Upgrade Plan</a>
               </Button>
-            ) : (
+            ) : plan !== "hobby" && canManageBilling ? (
               <Button onClick={handleManage} disabled={portalLoading} variant="outline">
                 {portalLoading ? "Loading..." : "Manage Billing"}
               </Button>
-            )}
+            ) : companyAccountEnabled ? (
+              <p className="text-sm text-muted-foreground self-center max-w-xs">
+                Billing is managed by your company workspace owner.
+              </p>
+            ) : null}
           </div>
         </div>
 

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { LogoLockup } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SignupForm } from "@/components/auth/SignupForm";
@@ -14,7 +16,9 @@ export default function SignupPage() {
           <ThemeToggle />
         </div>
 
-        <SignupForm />
+        <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted/40" />}>
+          <SignupForm />
+        </Suspense>
       </div>
     </div>
   );
