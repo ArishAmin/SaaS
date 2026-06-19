@@ -66,11 +66,37 @@ async def rest_delete(table: str, where_query: str) -> None:
     res.raise_for_status()
 
 
+def rpc_error_message(exc: Exception) -> str:
+    """Best-effort Supabase/PostgREST error text for logging and user-facing mapping."""
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        try:
+            body = exc.response.json()
+            if isinstance(body, dict):
+                message = str(body.get("message") or body.get("details") or body.get("hint") or "").strip()
+                code = str(body.get("code") or "").strip()
+                if message and code:
+                    return f"{code}: {message}"
+                if message:
+                    return message
+        except Exception:
+            pass
+        text = (exc.response.text or "").strip()
+        if text:
+            return text[:500]
+    return str(exc)
+
+
 async def rest_rpc(function_name: str, payload: dict[str, Any] | None = None) -> Any:
     url = f"{_clean_supabase_url()}/rest/v1/rpc/{function_name}"
     client = HTTPClient.get_client()
     res = await client.post(url, headers=_supabase_headers(), content=json.dumps(payload or {}))
-    res.raise_for_status()
+    if res.status_code >= 400:
+        detail = rpc_error_message(httpx.HTTPStatusError("RPC failed", request=res.request, response=res))
+        raise httpx.HTTPStatusError(
+            f"{function_name} failed ({res.status_code}): {detail}",
+            request=res.request,
+            response=res,
+        )
     if not res.content:
         return None
     return res.json()

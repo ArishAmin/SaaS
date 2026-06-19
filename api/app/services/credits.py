@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from ..core.billing import PLAN_CONFIGS, PlanType, get_plan_limits, has_active_subscription, is_billing_enforcement_enabled
-from .supabase import rest_insert, rest_list, rest_patch, rest_rpc
+from .supabase import rest_insert, rest_list, rest_patch, rest_rpc, rpc_error_message
 from .workspaces import get_active_workspace
 
 logger = logging.getLogger(__name__)
@@ -163,26 +163,85 @@ def _rpc_first_row(result: Any) -> dict[str, Any] | None:
     return None
 
 
-def _http_detail_from_rpc_error(exc: Exception, *, cost: int, plan_name: str = "hobby") -> dict[str, Any] | None:
-    detail = str(exc)
-    if "insufficient_credits:" not in detail:
-        return None
-    try:
-        tail = detail.split("insufficient_credits:", 1)[1]
-        parts = tail.replace('"', "").replace("'", "").split(":")
-        balance = int(parts[0])
-    except Exception:
-        balance = 0
-    return {
-        "code": "insufficient_credits",
-        "message": (
-            f"This action needs {cost} credits but you have {balance} left. "
-            "Upgrade for more credits and higher limits."
-        ),
-        "required_credits": cost,
-        "balance": balance,
-        "plan": plan_name,
+def build_spend_organization_credits_payload(
+    *,
+    organization_id: str,
+    user_id: str,
+    action: CreditAction,
+    cost: int,
+    dataset_id: str | None = None,
+    idempotency_key: str | None = None,
+    source: str = "api",
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "p_organization_id": organization_id,
+        "p_user_id": user_id,
+        "p_action": action.value,
+        "p_cost": cost,
+        "p_metadata": {"source": source},
     }
+    if dataset_id is not None:
+        payload["p_dataset_id"] = dataset_id
+    if idempotency_key is not None:
+        payload["p_idempotency_key"] = idempotency_key
+    return payload
+
+
+def _http_detail_from_rpc_error(exc: Exception, *, cost: int, plan_name: str = "hobby") -> dict[str, Any] | None:
+    detail = rpc_error_message(exc).lower()
+
+    if "insufficient_credits:" in detail or "insufficient_credits" in detail:
+        balance = 0
+        try:
+            tail = detail.split("insufficient_credits", 1)[1]
+            parts = tail.replace('"', "").replace("'", "").split(":")
+            balance = int(parts[1] if parts[0] == "" else parts[0])
+        except Exception:
+            pass
+        return {
+            "code": "insufficient_credits",
+            "message": (
+                f"This action needs {cost} credits but you have {balance} left. "
+                "Upgrade for more credits and higher limits."
+            ),
+            "required_credits": cost,
+            "balance": balance,
+            "plan": plan_name,
+        }
+
+    if "not_org_member" in detail:
+        return {
+            "code": "workspace_access_denied",
+            "message": "You are not an active member of this workspace. Switch workspace or ask your admin for access.",
+        }
+
+    if "organization_not_found" in detail:
+        return {
+            "code": "workspace_not_found",
+            "message": "Workspace not found. Refresh the page or contact support.",
+        }
+
+    if "pgrst202" in detail or "could not find the function" in detail:
+        return {
+            "code": "billing_migration_required",
+            "message": "Workspace billing is not fully configured yet. Please contact support.",
+        }
+
+    return None
+
+
+def _http_status_from_rpc_error(exc: Exception) -> int:
+    detail = _http_detail_from_rpc_error(exc, cost=0)
+    if not detail:
+        return status.HTTP_500_INTERNAL_SERVER_ERROR
+    code = detail.get("code")
+    if code == "insufficient_credits":
+        return status.HTTP_402_PAYMENT_REQUIRED
+    if code in ("workspace_access_denied", "billing_migration_required"):
+        return status.HTTP_403_FORBIDDEN
+    if code == "workspace_not_found":
+        return status.HTTP_404_NOT_FOUND
+    return status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
 async def _has_credit_transactions(user_id: str) -> bool:
@@ -546,17 +605,21 @@ async def charge_credits(
         workspace = await get_active_workspace(user_id)
         org_id = str(workspace["organization_id"])
         plan_name = _effective_plan(workspace)
+        await rest_rpc(
+            "ensure_organization_membership",
+            {"p_organization_id": org_id, "p_user_id": user_id},
+        )
         result = await rest_rpc(
             "spend_organization_credits",
-            {
-                "p_organization_id": org_id,
-                "p_user_id": user_id,
-                "p_action": action.value,
-                "p_cost": cost,
-                "p_dataset_id": dataset_id,
-                "p_idempotency_key": idempotency_key,
-                "p_metadata": {"source": source},
-            },
+            build_spend_organization_credits_payload(
+                organization_id=org_id,
+                user_id=user_id,
+                action=action,
+                cost=cost,
+                dataset_id=dataset_id,
+                idempotency_key=idempotency_key,
+                source=source,
+            ),
         )
         row = _rpc_first_row(result) or {}
         transaction_id = str(row["transaction_id"]) if row.get("transaction_id") else None
@@ -579,12 +642,13 @@ async def charge_credits(
     except Exception as exc:
         detail = _http_detail_from_rpc_error(exc, cost=cost, plan_name=locals().get("plan_name", "hobby"))
         if detail:
-            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=detail) from exc
+            raise HTTPException(status_code=_http_status_from_rpc_error(exc), detail=detail) from exc
         logger.exception(
-            "Organization credit spend failed user_id=%s organization_id=%s action=%s",
+            "Organization credit spend failed user_id=%s organization_id=%s action=%s rpc_error=%s",
             user_id,
             locals().get("org_id"),
             action.value,
+            rpc_error_message(exc),
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
