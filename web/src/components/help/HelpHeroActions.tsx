@@ -40,7 +40,7 @@ export function HelpHeroActions() {
     <div className="mt-8 flex flex-wrap gap-3">
       <Button asChild>
         <Link href={signedIn ? "/dashboard" : "/signup"}>
-          {signedIn ? "Go to dashboard" : "Create free account"}
+          {signedIn ? "Go to dashboard" : "Start free"}
           {signedIn ? <LayoutGrid className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
         </Link>
       </Button>

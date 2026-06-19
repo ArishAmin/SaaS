@@ -134,8 +134,9 @@ begin
     coalesce(p_metadata, '{}'::jsonb),
     p_idempotency_key
   )
-  returning id, balance_after into transaction_id, balance_after;
+  returning id into transaction_id;
 
+  balance_after := new_balance;
   already_processed := false;
   return next;
 end;
