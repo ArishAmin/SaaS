@@ -13,8 +13,12 @@ export function HelpContactButton() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then((result) => setSession(result.data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, next) => setSession(next));
+    supabase.auth.getSession().then((result: { data: { session: Session | null } }) => {
+      setSession(result.data.session);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, nextSession: Session | null) => {
+      setSession(nextSession);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
