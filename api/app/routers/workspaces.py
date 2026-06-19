@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..core.auth import get_current_user
+from ..services.jobs import FEATURE_ACTIVITY_ACTIONS
 from ..services.supabase import rest_insert, rest_list, rest_patch
 from ..services.workspace_invites import send_workspace_invite_email
 from ..services.workspaces import (
@@ -323,6 +324,7 @@ async def list_workspace_jobs(organization_id: str, user: dict = Depends(get_cur
         "processing_jobs",
         (
             f"organization_id=eq.{organization_id}"
+            f"&action=in.({','.join(FEATURE_ACTIVITY_ACTIONS)})"
             "&select=job_id,user_id,dataset_id,action,status,error,attempts,queued_at,started_at,completed_at,updated_at"
             "&order=queued_at.desc&limit=100"
         ),

@@ -83,8 +83,6 @@ const ACTION_LABELS: Record<string, string> = {
   export_bundle: "Export bundle",
   feature_suggest: "Generate features",
   feature_engineer: "Feature engineering",
-  eda: "Exploratory analysis",
-  quality: "Data quality check",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -167,8 +165,24 @@ export default function CompanyWorkspacePage() {
   const creditPct = creditsQuota > 0 ? Math.min(100, Math.round((creditsBalance / creditsQuota) * 100)) : 0;
   const needsSetup = isAdmin && looksLikeDefaultCompanyName(companyName);
 
-  async function loadJobs(organizationId: string) {
-    setJobsLoading(true);
+  async function refreshWorkspaceSummary(organizationId?: string | null, options?: { silent?: boolean }) {
+    try {
+      const data = await apiRequest<{
+        company_account: CompanyAccount;
+      }>("/workspaces");
+      setCompanyAccount(data.company_account ?? null);
+      if (organizationId) {
+        await loadJobs(organizationId, options);
+      }
+    } catch (err) {
+      if (!options?.silent) {
+        toast.error(getUserFacingError(err, "Couldn't refresh workspace summary."));
+      }
+    }
+  }
+
+  async function loadJobs(organizationId: string, options?: { silent?: boolean }) {
+    if (!options?.silent) setJobsLoading(true);
     try {
       const data = await apiRequest<{ jobs: ProcessingJob[]; can_cancel_jobs?: boolean }>(
         `/workspaces/${organizationId}/jobs`
@@ -178,7 +192,7 @@ export default function CompanyWorkspacePage() {
     } catch (err) {
       toast.error(getUserFacingError(err, "Couldn't load recent activity."));
     } finally {
-      setJobsLoading(false);
+      if (!options?.silent) setJobsLoading(false);
     }
   }
 
@@ -223,6 +237,37 @@ export default function CompanyWorkspacePage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const onCreditsUpdated = () => {
+      if (activeId) void refreshWorkspaceSummary(activeId, { silent: true });
+    };
+    window.addEventListener("acutize:credits-updated", onCreditsUpdated);
+    return () => window.removeEventListener("acutize:credits-updated", onCreditsUpdated);
+  }, [activeId]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && activeId) {
+        void refreshWorkspaceSummary(activeId, { silent: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [activeId]);
+
+  useEffect(() => {
+    const hasActiveJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
+    if (!hasActiveJobs || !activeId) return;
+    const timer = window.setInterval(() => {
+      void refreshWorkspaceSummary(activeId, { silent: true });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [jobs, activeId]);
 
   useEffect(() => {
     if (searchParams.get("checkout") !== "success") return;
@@ -660,7 +705,7 @@ export default function CompanyWorkspacePage() {
               variant="outline"
               size="icon"
               disabled={jobsLoading}
-              onClick={() => activeId && void loadJobs(activeId)}
+              onClick={() => activeId && void refreshWorkspaceSummary(activeId)}
             >
               <RefreshCw className={cn("h-4 w-4", jobsLoading && "animate-spin")} />
             </Button>

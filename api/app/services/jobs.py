@@ -37,6 +37,22 @@ HEAVY_ACTIONS = {
     "quality",
 }
 
+# User-facing features shown in company "Recent activity" (not analyze sub-steps like eda/quality).
+FEATURE_ACTIVITY_ACTIONS = frozenset(
+    {
+        "analyze",
+        "clean",
+        "train_instant",
+        "forecast",
+        "business_insights",
+        "export_pdf",
+        "export_bundle",
+        "recommend",
+        "feature_suggest",
+        "feature_engineer",
+    }
+)
+
 JOB_ACTION_CREDITS: dict[str, CreditAction | None] = {
     "analyze": CreditAction.ANALYZE,
     "clean": CreditAction.CLEAN,

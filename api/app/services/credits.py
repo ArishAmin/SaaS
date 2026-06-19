@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,8 @@ from fastapi import HTTPException, status
 from ..core.billing import PLAN_CONFIGS, PlanType, get_plan_limits, has_active_subscription, is_billing_enforcement_enabled
 from .supabase import rest_insert, rest_list, rest_patch, rest_rpc
 from .workspaces import get_active_workspace
+
+logger = logging.getLogger(__name__)
 
 
 class CreditAction(str, Enum):
@@ -577,54 +580,20 @@ async def charge_credits(
         detail = _http_detail_from_rpc_error(exc, cost=cost, plan_name=locals().get("plan_name", "hobby"))
         if detail:
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=detail) from exc
-        # If the workspace migration has not been applied yet, keep old profile-based spending alive.
-
-    profile = await ensure_credits_period(user_id)
-    balance = int(profile.get("credits_balance") or 0)
-
-    if balance < cost:
-        plan_name = _effective_plan(profile)
+        logger.exception(
+            "Organization credit spend failed user_id=%s organization_id=%s action=%s",
+            user_id,
+            locals().get("org_id"),
+            action.value,
+        )
         raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
-                "code": "insufficient_credits",
-                "message": (
-                    f"This action needs {cost} credits but you have {balance} left. "
-                    "Upgrade for more credits and higher limits."
-                ),
-                "required_credits": cost,
-                "balance": balance,
-                "plan": plan_name,
+                "message": "Could not charge workspace credits. Please try again or contact support.",
             },
-        )
+        ) from exc
 
-    new_balance = balance - cost
-    await rest_patch(
-        "profiles",
-        f"id=eq.{user_id}",
-        {
-            "credits_balance": new_balance,
-            "updated_at": _utcnow().isoformat(),
-        },
-    )
-    await _log_transaction(
-        user_id=user_id,
-        action=action.value,
-        credits_delta=-cost,
-        balance_after=new_balance,
-        dataset_id=dataset_id,
-    )
-    charges = _request_credit_charges.get()
-    if charges is not None:
-        charges.append(
-            {
-                "user_id": user_id,
-                "action": action,
-                "credits": cost,
-                "dataset_id": dataset_id,
-            }
-        )
-    return CreditCharge(cost=cost, transaction_id=None, already_processed=False)
+    # Unreachable: workspace spend succeeded above.
 
 
 async def require_credits(
