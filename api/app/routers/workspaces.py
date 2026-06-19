@@ -8,6 +8,7 @@ from ..services.supabase import rest_insert, rest_list, rest_patch
 from ..services.workspace_invites import send_workspace_invite_email
 from ..services.workspaces import (
     enrich_members_with_profiles,
+    enrich_jobs_with_profiles,
     get_active_workspace,
     get_company_account_summary,
     list_user_workspaces,
@@ -326,7 +327,8 @@ async def list_workspace_jobs(organization_id: str, user: dict = Depends(get_cur
             "&order=queued_at.desc&limit=100"
         ),
     )
-    return {"jobs": rows, "can_cancel_jobs": bool(summary.get("can_manage_members"))}
+    jobs = await enrich_jobs_with_profiles(rows)
+    return {"jobs": jobs, "can_cancel_jobs": bool(summary.get("can_manage_members"))}
 
 
 @router.patch("/{organization_id}")

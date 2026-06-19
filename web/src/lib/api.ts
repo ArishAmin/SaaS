@@ -82,6 +82,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function jobPollDelayMs(elapsedMs: number): number {
+  if (elapsedMs < 3000) return 200;
+  if (elapsedMs < 10000) return 500;
+  return 1500;
+}
+
 type JobEnvelope = {
   job_id?: string;
   status?: "queued" | "running" | "completed" | "failed" | "canceled";
@@ -144,7 +150,7 @@ async function pollJobResult<T>(jobId: string, accessToken: string | undefined, 
         job,
       );
     }
-    await sleep(1500);
+    await sleep(jobPollDelayMs(Date.now() - started));
   }
   throw new Error("This job is still running. Please check the page again in a moment.");
 }

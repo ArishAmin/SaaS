@@ -227,7 +227,7 @@ const faqGroups = [
       },
       {
         q: "Can members see what the team is working on?",
-        a: "Yes. All team members can open Company workspace, view the shared credit pool, see the team roster, and read recent background job activity. Only owners and admins can invite people, change roles, cancel queued jobs, or rename the portal.",
+        a: "Yes. All team members can open Company workspace, view the shared credit pool, see the team roster, and read recent activity (who did what and when). Only owners and admins can invite people, change roles, cancel waiting tasks, or rename the portal.",
       },
     ],
   },

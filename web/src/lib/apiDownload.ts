@@ -116,6 +116,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function jobPollDelayMs(elapsedMs: number): number {
+  if (elapsedMs < 3000) return 200;
+  if (elapsedMs < 10000) return 500;
+  return 1500;
+}
+
 async function pollDownloadPath(jobId: string, headers: Record<string, string>) {
   const started = Date.now();
   while (Date.now() - started < 180000) {
@@ -145,7 +151,7 @@ async function pollDownloadPath(jobId: string, headers: Record<string, string>) 
         job,
       );
     }
-    await sleep(1500);
+    await sleep(jobPollDelayMs(Date.now() - started));
   }
   throw new Error(getUserFacingError(null, "This export is still running. Please try again in a moment."));
 }

@@ -8,10 +8,11 @@ Deploy with the **root** `render.yaml` only. The file `api/render.yaml` is outda
 |--------|------|--------------|----------|
 | `acutize-api` | FastAPI (analyze, clean, features, instant preview, export) | Starter | $7 |
 | `acutize-web` | Next.js dashboard | Starter | $7 |
-| `acutize-redis` | Rate-limit storage for API | Free → Starter if needed | $0 → $10 |
+| `acutize-redis` | Rate-limit storage + Celery job queue | Free → Starter if needed | $0 → $10 |
+| `acutize-worker` | Background jobs when workspace is at capacity | Starter | $7 |
 | **Supabase** (external) | Auth, Postgres, file storage | Free → Pro | $0 → $25 |
 
-**Not deployed:** Celery worker. Full model training is exported for the user’s machine (`train_full_model.py`). Background TTL cleanup is disabled by default (`TTL_CLEANUP_ENABLED=false`).
+Background TTL cleanup runs on the worker when `TTL_CLEANUP_ENABLED=true`. Full model training is exported for the user’s machine (`train_full_model.py`).
 
 ### Typical monthly stack cost
 
@@ -89,6 +90,18 @@ Set when prompted (or in each service → **Environment**):
 | `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | If billing on | Live Paddle client-side token for production; sandbox tokens are only for separate test services |
 
 After the API URL is live, update `NEXT_PUBLIC_API_BASE_URL` and redeploy the web service.
+
+### Worker (`acutize-worker`)
+
+The worker does **not** inherit env vars from the API automatically. Copy these from `acutize-api` → **Environment** into `acutize-worker` → **Environment**:
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `SUPABASE_URL` | Yes | Same value as API — **required** for job claim/complete |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Same service role key as API |
+| `OPENAI_API_KEY` | Optional | Only if jobs use AI features |
+
+`REDIS_URL` is wired automatically from `acutize-redis`. If `SUPABASE_URL` is missing, the worker crashes on startup with a clear error instead of failing mid-job.
 
 ### Paddle production checklist
 

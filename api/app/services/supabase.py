@@ -22,7 +22,10 @@ def _supabase_headers() -> dict[str, str]:
     }
 
 def _clean_supabase_url() -> str:
-    return get_settings().supabase_url.split('\n')[0].strip().rstrip('/')
+    settings = get_settings()
+    if not settings.supabase_url:
+        raise RuntimeError("Supabase configuration missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+    return settings.supabase_url.split('\n')[0].strip().rstrip('/')
 
 async def rest_list(table: str, query: str) -> list[dict[str, Any]]:
     url = f"{_clean_supabase_url()}/rest/v1/{table}?{query}"

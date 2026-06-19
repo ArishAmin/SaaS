@@ -160,6 +160,23 @@ async def create_processing_job(
     return row
 
 
+async def try_run_job_immediately(job_id: str) -> dict[str, Any] | None:
+    started, reason = await try_start_job(job_id)
+    if not started:
+        logger.info("Job %s not started inline: %s", job_id, reason)
+        return None
+
+    from .job_runner import run_claimed_processing_job
+
+    return await run_claimed_processing_job(job_id)
+
+
+async def dispatch_processing_job(job_id: str) -> None:
+    from ..worker.tasks_processing import process_job
+
+    process_job.delay(job_id)
+
+
 async def enqueue_processing_job(
     *,
     user_id: str,
@@ -175,13 +192,10 @@ async def enqueue_processing_job(
         existing = await _find_job_by_idempotency(organization_id, idempotency_key)
         if existing:
             if existing.get("status") == "queued":
-                job_id = str(existing["job_id"])
-                try:
-                    from ..worker.tasks_processing import process_job
-
-                    process_job.delay(job_id)
-                except Exception as exc:
-                    logger.warning("Re-dispatch failed for existing job_id=%s: %s", job_id, exc)
+                finished = await try_run_job_immediately(str(existing["job_id"]))
+                if finished:
+                    return job_response(finished)
+                await dispatch_processing_job(str(existing["job_id"]))
             return job_response(existing)
 
     credit_action = JOB_ACTION_CREDITS.get(action)
@@ -224,10 +238,12 @@ async def enqueue_processing_job(
         return job_response(row)
 
     job_id = str(row["job_id"])
-    try:
-        from ..worker.tasks_processing import process_job
+    finished = await try_run_job_immediately(job_id)
+    if finished:
+        return job_response(finished)
 
-        process_job.delay(job_id)
+    try:
+        await dispatch_processing_job(job_id)
     except Exception as exc:
         logger.exception("Failed to enqueue Celery task for job_id=%s", job_id)
         await fail_job(job_id, "Job queue unavailable. Please try again.", log=True)

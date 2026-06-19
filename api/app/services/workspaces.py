@@ -321,6 +321,33 @@ async def enrich_members_with_profiles(members: list[dict[str, Any]]) -> list[di
     return enriched
 
 
+async def enrich_jobs_with_profiles(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    user_ids = [str(row["user_id"]) for row in jobs if row.get("user_id")]
+    if not user_ids:
+        return jobs
+    id_filter = ",".join(user_ids)
+    profiles = await rest_list(
+        "profiles",
+        f"id=in.({id_filter})&select=id,email,full_name,username",
+    )
+    profile_map = {str(row["id"]): row for row in profiles}
+    enriched: list[dict[str, Any]] = []
+    for job in jobs:
+        profile = profile_map.get(str(job.get("user_id")), {})
+        full_name = profile.get("full_name")
+        email = profile.get("email")
+        username = profile.get("username")
+        performer_name = full_name or email or username
+        enriched.append(
+            {
+                **job,
+                "performer_name": performer_name,
+                "performer_email": email,
+            }
+        )
+    return enriched
+
+
 async def create_workspace(user_id: str, name: str) -> dict[str, Any]:
     await require_company_account(user_id)
     created = await rest_insert(

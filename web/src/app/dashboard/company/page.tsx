@@ -68,6 +68,8 @@ type ProcessingJob = {
   status: string;
   error?: string | null;
   queued_at?: string;
+  performer_name?: string | null;
+  performer_email?: string | null;
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -80,6 +82,9 @@ const ACTION_LABELS: Record<string, string> = {
   export_pdf: "PDF report",
   export_bundle: "Export bundle",
   feature_suggest: "Generate features",
+  feature_engineer: "Feature engineering",
+  eda: "Exploratory analysis",
+  quality: "Data quality check",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -101,11 +106,15 @@ function formatJobStatus(status: string) {
   const labels: Record<string, string> = {
     queued: "Waiting",
     running: "In progress",
-    completed: "Done",
+    completed: "Completed",
     failed: "Failed",
     canceled: "Canceled",
   };
   return labels[status] || status.replace(/_/g, " ");
+}
+
+function performerLabel(job: ProcessingJob) {
+  return job.performer_name || job.performer_email || "Team member";
 }
 
 function memberDisplayName(member: Member) {
@@ -643,8 +652,8 @@ export default function CompanyWorkspacePage() {
               <CardTitle className="text-lg">Recent activity</CardTitle>
               <CardDescription className="mt-1">
                 {isAdmin
-                  ? "Background jobs across your team."
-                  : "Read-only view of team background jobs."}
+                  ? "Actions performed across your team workspace."
+                  : "See what your teammates have been working on."}
               </CardDescription>
             </div>
             <Button
@@ -672,7 +681,7 @@ export default function CompanyWorkspacePage() {
                   <div>
                     <p className="font-medium">{ACTION_LABELS[job.action] || job.action}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatJobStatus(job.status)} · {formatWhen(job.queued_at)}
+                      by {performerLabel(job)} · {formatJobStatus(job.status)} · {formatWhen(job.queued_at)}
                     </p>
                     {job.error ? (
                       <p className="text-xs text-red-600 dark:text-red-400 mt-1">

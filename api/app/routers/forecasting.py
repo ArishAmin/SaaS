@@ -125,7 +125,7 @@ async def run_dataset_forecast(
             detail="Run dataset analysis first so forecasting can use a verified column profile.",
         )
 
-    if should_enqueue_background_job(user):
+    if await should_enqueue_background_job(user):
         return await enqueue_processing_job(
             user_id=str(user_id),
             action="forecast",
