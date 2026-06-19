@@ -7,6 +7,7 @@ import { PlanProvider } from "@/components/providers/PlanProvider";
 import { CreditsDialogProvider } from "@/components/providers/CreditsDialogProvider";
 import { PostHogProvider } from "@/components/providers/PostHogProvider";
 import { PostHogPageView } from "@/components/providers/PostHogPageView";
+import { HelpChatbot } from "@/components/help/HelpChatbot";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <CreditsDialogProvider>{children}</CreditsDialogProvider>
       </PlanProvider>
       <Toaster richColors />
+      <HelpChatbot />
     </PostHogProvider>
   );
 }
