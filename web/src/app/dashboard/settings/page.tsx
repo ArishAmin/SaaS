@@ -77,6 +77,15 @@ export default function SettingsPage() {
         data: { full_name: trimmed },
       });
       if (error) throw error;
+      
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        await supabase
+          .from("profiles")
+          .update({ full_name: trimmed })
+          .eq("id", userData.user.id);
+      }
+
       window.dispatchEvent(new Event("acutize:profile-updated"));
       toast.success("Profile updated. If email changed, verify it from your inbox.");
     } catch (err: unknown) {

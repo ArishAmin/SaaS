@@ -27,8 +27,6 @@ class Settings(BaseSettings):
     # Set True in production (Render blueprint enables this). False only for local dev without billing.
     billing_enforcement_enabled: bool = True
 
-    # QA only: TESTING=true bypasses Paddle checkout and auto-provisions a custom company workspace.
-    testing: bool = False
 
     # production | development
     app_env: str = "development"
@@ -90,14 +88,6 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"
 
-    @model_validator(mode="before")
-    @classmethod
-    def parse_testing_env(cls, data: object) -> object:
-        if isinstance(data, dict):
-            raw = data.get("testing") or data.get("TESTING")
-            if isinstance(raw, str):
-                data = {**data, "testing": raw.strip().lower() in {"1", "true", "yes", "on"}}
-        return data
 
     @model_validator(mode="after")
     def validate_production_billing_environment(self) -> "Settings":

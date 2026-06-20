@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..core.auth import get_current_user
-from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled, is_testing_mode
+from ..core.billing import PLAN_CONFIGS, PlanType, is_billing_enforcement_enabled
 from ..core.config import get_settings
 from ..services.app_logs import log_to_supabase
 from ..core.billing import get_user_plan_limits
@@ -58,7 +58,7 @@ async def list_plans() -> dict:
                 "credit_costs": credit_costs,
             }
         )
-    return {"plans": plans, "enforcement_enabled": is_billing_enforcement_enabled(), "testing_mode": is_testing_mode()}
+    return {"plans": plans, "enforcement_enabled": is_billing_enforcement_enabled()}
 
 
 @router.get("/credits")
@@ -142,12 +142,6 @@ async def paddle_checkout(req: CheckoutRequest, user: dict = Depends(get_current
     await require_billing_access(user_id)
     success = req.success_url or f"{settings.app_public_url}/dashboard?checkout=success"
 
-    if is_testing_mode() and req.plan == "custom":
-        from ..services.workspaces import get_active_workspace
-
-        await get_active_workspace(user_id)
-        company_success = f"{settings.app_public_url.rstrip('/')}/dashboard/company?checkout=success"
-        return {"url": company_success, "testing_mode": True}
 
     if not settings.paddle_api_key:
         raise HTTPException(status_code=500, detail="Paddle is not configured on this server.")
