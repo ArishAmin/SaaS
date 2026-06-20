@@ -29,6 +29,9 @@ async def get_my_profile(user: dict = Depends(get_current_user)):
         company_account = await get_company_account_summary(user_id)
         try:
             workspace = await get_active_workspace(user_id)
+            if workspace:
+                profile["plan"] = workspace.get("plan", profile.get("plan", "hobby"))
+                profile["subscription_status"] = workspace.get("subscription_status", profile.get("subscription_status", "inactive"))
         except Exception:
             workspace = None
         return {
