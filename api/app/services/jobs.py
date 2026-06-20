@@ -254,9 +254,18 @@ async def enqueue_processing_job(
         return job_response(row)
 
     job_id = str(row["job_id"])
-    finished = await try_run_job_immediately(job_id)
-    if finished:
-        return job_response(finished)
+    try:
+        finished = await try_run_job_immediately(job_id)
+        if finished:
+            return job_response(finished)
+    except BaseException as exc:
+        logger.exception("try_run_job_immediately failed or was cancelled for job_id=%s", job_id)
+        try:
+            await fail_job(job_id, "Job execution was interrupted.", log=False)
+            await refund_job_charge(row, reason="enqueue_failed")
+        except Exception as rollback_exc:
+            logger.error("Failed to fail_job during exception rollback: %s", rollback_exc)
+        raise
 
     try:
         await dispatch_processing_job(job_id)

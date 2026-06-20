@@ -124,8 +124,11 @@ export function DatasetsTable() {
 
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows.length]);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
   async function confirmDelete() {
     if (!deletingDatasetId) return;
+    setIsDeleting(true);
     try {
       await apiRequest(`/datasets/${deletingDatasetId}`, { method: "DELETE" });
       toast.success("Dataset deleted.");
@@ -135,6 +138,7 @@ export function DatasetsTable() {
       const message = err instanceof Error ? err.message : "Delete failed";
       toast.error(message);
     } finally {
+      setIsDeleting(false);
       setDeletingDatasetId(null);
     }
   }
@@ -257,11 +261,11 @@ export function DatasetsTable() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingDatasetId(null)}>
+            <Button variant="outline" onClick={() => setDeletingDatasetId(null)} disabled={isDeleting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Delete
+            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

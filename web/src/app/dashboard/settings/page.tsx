@@ -77,6 +77,7 @@ export default function SettingsPage() {
         data: { full_name: trimmed },
       });
       if (error) throw error;
+      window.dispatchEvent(new Event("acutize:profile-updated"));
       toast.success("Profile updated. If email changed, verify it from your inbox.");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Profile update failed";
@@ -303,7 +304,11 @@ function SubscriptionCard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                 <div className="text-xs text-slate-500 mb-1">Status</div>
-                <div className="font-medium capitalize">{status === "none" ? "Free Tier" : status}</div>
+                <div className="font-medium capitalize">
+                  {plan === "custom" && (status === "none" || status === "inactive") 
+                    ? "Active (Custom)" 
+                    : status === "none" ? "Free Tier" : status}
+                </div>
             </div>
             <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                 <div className="text-xs text-slate-500 mb-1">Credits remaining</div>

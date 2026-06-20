@@ -1,4 +1,4 @@
-export type PlanId = "hobby" | "pro" | "business";
+export type PlanId = "hobby" | "pro" | "business" | "custom";
 export type BillingInterval = "monthly" | "yearly";
 
 export const CREDIT_COST_LABELS: Record<string, number> = {

@@ -153,9 +153,28 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const loadUser = async () => {
+      if (!mounted) return;
+      const { data } = await supabase.auth.getUser();
+      if (data.user && mounted) {
+        setUser({
+          id: data.user.id,
+          name: (data.user.user_metadata?.full_name as string | undefined) ?? null,
+          email: data.user.email,
+        });
+      }
+    };
+
+    const handleProfileUpdate = () => {
+      void loadUser();
+    };
+
+    window.addEventListener("acutize:profile-updated", handleProfileUpdate);
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
+      window.removeEventListener("acutize:profile-updated", handleProfileUpdate);
     };
   }, []);
 

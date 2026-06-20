@@ -77,8 +77,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       if (process.env.NODE_ENV === "development") {
         console.warn("[PlanProvider] Could not load plan", err);
       }
-      setPlan("hobby");
-      setStatus("none");
+      // Only reset to hobby if we haven't successfully loaded a plan yet
+      setPlan((prev) => (prev ? prev : "hobby"));
     } finally {
       setLoading(false);
     }

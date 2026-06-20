@@ -172,6 +172,14 @@ async def run_claimed_processing_job(job_id: str) -> dict[str, Any]:
             action=action,
             error={"type": exc.__class__.__name__, "detail": str(exc)},
         )
+    except BaseException as exc:
+        logger.exception("Processing job interrupted (BaseException) job_id=%s action=%s", job_id, action)
+        try:
+            await fail_job(job_id, "Job was interrupted.", log=False)
+            await refund_job_charge(job, reason="job_interrupted")
+        except Exception:
+            pass
+        raise
     finally:
         if precharge_token is not None:
             reset_credits_precharged(precharge_token)

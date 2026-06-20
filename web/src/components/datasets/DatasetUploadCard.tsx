@@ -196,8 +196,14 @@ export function DatasetUploadCard() {
   }
 
   async function startUpload(pendingFile: PendingFile) {
+    if (result.kind !== "idle") return;
+    
     const { file } = pendingFile;
     if (!validateFile(file)) return;
+    
+    // Set uploading state synchronously to prevent double-clicks during the async getUser call
+    setResult({ kind: "uploading", fileId: pendingFile.id, progress: 0 });
+    
     const ext = getFileExtension(file.name);
 
     const supabase = getSupabaseBrowserClient();
@@ -205,10 +211,12 @@ export function DatasetUploadCard() {
     const user = data.user;
 
     if (userErr) {
+      setResult({ kind: "idle" });
       toast.error(userErr.message);
       return;
     }
     if (!user) {
+      setResult({ kind: "idle" });
       toast.error("Not authenticated");
       return;
     }
@@ -216,7 +224,6 @@ export function DatasetUploadCard() {
     let datasetId: string | null = null;
 
     try {
-      setResult({ kind: "uploading", fileId: pendingFile.id, progress: 0 });
 
       datasetId = crypto.randomUUID();
       const storagePath = `${user.id}/datasets/${datasetId}/${file.name}`;
