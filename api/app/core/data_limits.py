@@ -68,7 +68,7 @@ async def get_user_data_limits(user_id: str) -> UserDataLimits:
 
     plan_limits = get_plan_limits(plan_name)
 
-    paid = plan_name in (PlanType.PRO.value, PlanType.BUSINESS.value)
+    paid = plan_name in (PlanType.PRO.value, PlanType.BUSINESS.value, PlanType.CUSTOM.value)
 
     return UserDataLimits(
         plan=plan_name,

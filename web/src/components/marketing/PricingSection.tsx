@@ -178,7 +178,7 @@ export function PricingSection({ hideCTA = false }: PricingSectionProps) {
                   "5,000 – 100,000+ credits per month",
                   "Shared company workspace for your team",
                   "Invite colleagues to one credit pool",
-                  "Business-level file limits (75 MB)",
+                  "Custom-level file limits (200 MB)",
                   "Unlimited active datasets",
                   "Company admins monitor team activity",
                   "Priority support",

@@ -208,9 +208,6 @@ async def enqueue_processing_job(
         existing = await _find_job_by_idempotency(organization_id, idempotency_key)
         if existing:
             if existing.get("status") == "queued":
-                finished = await try_run_job_immediately(str(existing["job_id"]))
-                if finished:
-                    return job_response(finished)
                 await dispatch_processing_job(str(existing["job_id"]))
             return job_response(existing)
 
@@ -254,18 +251,9 @@ async def enqueue_processing_job(
         return job_response(row)
 
     job_id = str(row["job_id"])
-    try:
-        finished = await try_run_job_immediately(job_id)
-        if finished:
-            return job_response(finished)
-    except BaseException as exc:
-        logger.exception("try_run_job_immediately failed or was cancelled for job_id=%s", job_id)
-        try:
-            await fail_job(job_id, "Job execution was interrupted.", log=False)
-            await refund_job_charge(row, reason="enqueue_failed")
-        except Exception as rollback_exc:
-            logger.error("Failed to fail_job during exception rollback: %s", rollback_exc)
-        raise
+    
+    # Always dispatch to Celery to prevent API container OOM crashes
+    # since we are relying on the upgraded worker for heavy ML tasks.
 
     try:
         await dispatch_processing_job(job_id)

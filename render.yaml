@@ -83,7 +83,7 @@ services:
   - type: worker
     name: acutize-worker
     runtime: python
-    plan: starter
+    plan: standard
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.worker.celery_worker worker --beat --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}

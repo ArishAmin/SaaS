@@ -45,7 +45,7 @@ export const YEARLY_DISCOUNT_PERCENT = 17;
 export const CUSTOM_PLAN_FEATURES = [
   "Starts at 5,000 credits per month",
   "Monthly and yearly billing options",
-  "Business-level file limits and priority support",
+  "Up to 200 MB max file size per dataset",
   "Shared company workspace for your team",
   "Invite colleagues to one credit pool and dataset library",
   "Company admins can monitor team activity",

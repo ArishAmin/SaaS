@@ -65,10 +65,19 @@ PLAN_CONFIGS: dict[PlanType, PlanLimits] = {
         support_priority="priority_email",
         price_usd=70,
     ),
+    PlanType.CUSTOM: PlanLimits(
+        max_dataset_size_mb=200,
+        max_concurrent_datasets=None,
+        monthly_credits=2500,
+        allowed_models=["all"],
+        max_compute_seconds=7200,
+        support_priority="priority_email",
+        price_usd=None,
+    ),
 }
 
 UNRESTRICTED_PLAN_LIMITS = PlanLimits(
-    max_dataset_size_mb=75,
+    max_dataset_size_mb=200,
     max_concurrent_datasets=None,
     monthly_credits=999_999,
     allowed_models=["all"],
@@ -76,7 +85,6 @@ UNRESTRICTED_PLAN_LIMITS = PlanLimits(
     support_priority="dev",
     price_usd=None,
 )
-
 
 def get_custom_credit_price_ids() -> dict[int, dict[str, str]]:
     raw = get_settings().paddle_custom_credit_price_ids
@@ -114,8 +122,6 @@ def is_testing_mode() -> bool:
 def get_plan_limits(plan_name: str) -> PlanLimits:
     if not is_billing_enforcement_enabled():
         return UNRESTRICTED_PLAN_LIMITS
-    if plan_name == PlanType.CUSTOM.value:
-        return PLAN_CONFIGS[PlanType.BUSINESS]
     try:
         return PLAN_CONFIGS[PlanType(plan_name)]
     except (ValueError, KeyError):

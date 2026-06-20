@@ -474,12 +474,12 @@ export function LandingPage() {
                   <span className="text-sm font-medium text-slate-500 dark:text-slate-400">credits/month</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                  Add more monthly capacity on Business-level infrastructure without changing the core workflow.
+                  Add more monthly capacity with up to 200 MB file uploads and a shared company workspace for your team.
                 </p>
                 <div className="mt-6 flex-1 space-y-3">
                   {[
                     "Monthly and yearly packages",
-                    "Business-level file and dataset limits",
+                    "200 MB max file size per dataset",
                     "Priority support for high-volume use",
                   ].map((feature) => (
                     <div key={feature} className="flex gap-3 text-sm text-slate-700 dark:text-slate-300">

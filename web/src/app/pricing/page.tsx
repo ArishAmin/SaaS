@@ -264,13 +264,13 @@ export default function PricingPage() {
                   Custom pricing for organizations
                 </p>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Higher monthly credit packages on Business-level infrastructure, plus an optional shared
+                  Higher monthly credit packages with up to 200 MB file uploads, plus an optional shared
                   company workspace for your team.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
                     <FileSpreadsheet className="w-3 h-3" />
-                    75 MB max file
+                    200 MB max file
                   </span>
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
                     <Database className="w-3 h-3" />
