@@ -8,22 +8,16 @@ const testimonials = [
   {
     quote: "Acutize has completely transformed how our business analytics team prepares datasets. What used to take days of Python scripting now takes minutes. The model preview feature alone has saved us countless hours of iteration.",
     author: "Sarah Chen",
-    role: "VP of Data Science",
-    company: "TechFlow",
     rating: 5,
   },
   {
     quote: "The security posture is exactly what we needed. Being able to process sensitive customer data in a private workspace while giving our analysts access to powerful ML capabilities was the game-changer for our organization.",
     author: "Marcus Rodriguez",
-    role: "Chief Information Security Officer",
-    company: "Nexus Financial",
     rating: 5,
   },
   {
     quote: "We rolled out Acutize to our marketing and operations teams. The intuitive UI means even non-technical staff can now safely clean datasets and generate actionable insights without waiting on the core data team.",
     author: "Emma Thompson",
-    role: "Director of Operations",
-    company: "Global Retail Solutions",
     rating: 5,
   },
 ];
@@ -31,17 +25,28 @@ const testimonials = [
 export function TestimonialSlider() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [isManual, setIsManual] = useState(false);
 
   useEffect(() => {
-    if (isHovered) return;
+    if (isHovered || isManual) return;
     const timer = setInterval(() => {
       setCurrentIndex((current) => (current + 1) % testimonials.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [isHovered]);
+  }, [isHovered, isManual]);
 
-  const next = () => setCurrentIndex((current) => (current + 1) % testimonials.length);
-  const prev = () => setCurrentIndex((current) => (current - 1 + testimonials.length) % testimonials.length);
+  const next = () => {
+    setIsManual(true);
+    setCurrentIndex((current) => (current + 1) % testimonials.length);
+  };
+  const prev = () => {
+    setIsManual(true);
+    setCurrentIndex((current) => (current - 1 + testimonials.length) % testimonials.length);
+  };
+  const goTo = (idx: number) => {
+    setIsManual(true);
+    setCurrentIndex(idx);
+  };
 
   return (
     <section className="py-20 bg-zinc-50 dark:bg-zinc-950 overflow-hidden border-y border-zinc-200 dark:border-white/10">
@@ -60,7 +65,7 @@ export function TestimonialSlider() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative h-[300px] sm:h-[250px]">
+          <div className="relative min-h-[350px] sm:min-h-[300px]">
             {testimonials.map((testimonial, idx) => {
               const isActive = idx === currentIndex;
               return (
@@ -82,10 +87,7 @@ export function TestimonialSlider() {
                       "{testimonial.quote}"
                     </p>
                     <div>
-                      <p className="font-bold text-zinc-900 dark:text-white">{testimonial.author}</p>
-                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                        {testimonial.role}, <span className="text-blue-600 dark:text-blue-400">{testimonial.company}</span>
-                      </p>
+                      <p className="font-bold text-zinc-900 dark:text-white pb-6">{testimonial.author}</p>
                     </div>
                   </div>
                 </div>
@@ -113,7 +115,7 @@ export function TestimonialSlider() {
             {testimonials.map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => setCurrentIndex(idx)}
+                onClick={() => goTo(idx)}
                 className={cn(
                   "w-2.5 h-2.5 rounded-full transition-all",
                   idx === currentIndex 

@@ -64,7 +64,7 @@ export default function ContactPage() {
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <a href="mailto:support@acutize.com" className="text-sm font-medium hover:underline text-blue-600 dark:text-blue-400">support@acutize.com</a>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Average response time: &lt;2 hours</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Typical replies: within 24 hours</p>
                 </CardContent>
               </Card>
 
@@ -101,7 +101,7 @@ export default function ContactPage() {
             <Card className="md:col-span-2">
               <CardHeader>
                 <CardTitle>Send us a message</CardTitle>
-                <CardDescription>Questions, feedback, or need help? We typically respond within a few hours.</CardDescription>
+                <CardDescription>Questions, feedback, or need help? We typically respond within 24 hours.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
