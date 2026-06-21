@@ -387,7 +387,7 @@ export default function CompanyWorkspacePage() {
             one dataset library, and role-based access — while billing stays with the account owner.
           </p>
           <Button asChild className="mt-6">
-            <Link href="/dashboard/contact?topic=custom-credits">Contact us about custom pricing</Link>
+            <Link href="/contact?topic=custom-credits">Contact us about custom pricing</Link>
           </Button>
         </div>
       </div>

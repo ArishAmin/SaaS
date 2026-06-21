@@ -263,7 +263,7 @@ export function HelpChatbot() {
                       <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
                     </Link>
                     <Link
-                      href="/dashboard/contact"
+                      href="/contact"
                       onClick={() => setOpen(false)}
                       className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-700 transition-all hover:border-blue-400 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:border-blue-600 dark:hover:bg-blue-950/50"
                     >

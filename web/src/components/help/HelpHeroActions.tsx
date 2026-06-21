@@ -34,7 +34,7 @@ export function HelpHeroActions() {
   }, []);
 
   const signedIn = loaded && !!session;
-  const contactHref = signedIn ? "/dashboard/contact" : "/login?next=/dashboard/contact";
+  const contactHref = signedIn ? "/contact" : "/login?next=/contact";
 
   return (
     <div className="mt-8 flex flex-wrap gap-3">

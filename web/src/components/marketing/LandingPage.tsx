@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
 import { PLANS, formatPlanPrice } from "@/lib/plans";
+import { TestimonialSlider } from "./TestimonialSlider";
 
 const capabilityGroups = [
   {
@@ -293,6 +294,8 @@ export function LandingPage() {
             <ProductPreview />
           </div>
         </section>
+
+        <TestimonialSlider />
 
         <section id="features" className="py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

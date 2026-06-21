@@ -78,7 +78,7 @@ export default function PricingPage() {
 
   const handleSelectCustomTier = async (credits: number) => {
     if (credits >= 100_000) {
-      router.push("/dashboard/contact?topic=custom-credits");
+      router.push("/contact?topic=custom-credits");
       return;
     }
     if (!(await ensureAuthenticated())) return;
@@ -200,7 +200,9 @@ export default function PricingPage() {
                       )}
                     </div>
                     <p className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400">
-                      {plan.monthlyCredits.toLocaleString()} credits / month
+                      {plan.id === "hobby" 
+                        ? `${plan.monthlyCredits.toLocaleString()} credits` 
+                        : `${plan.monthlyCredits.toLocaleString()} credits / month`}
                     </p>
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                       {plan.description}
