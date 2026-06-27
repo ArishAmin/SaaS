@@ -12,9 +12,11 @@ from .billing import (
     is_billing_enforcement_enabled,
 )
 
+import sys
+
 PREVIEW_MAX_ROWS = 20_000
 FREE_PIPELINE_MAX_ROWS = 20_000
-PAID_PIPELINE_MAX_ROWS = 2_000_000
+PAID_PIPELINE_MAX_ROWS = sys.maxsize
 MAX_COLUMNS = 200
 
 

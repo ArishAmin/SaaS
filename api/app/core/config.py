@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: str = "30/minute"
 
     # Background jobs / team scaling
-    background_jobs_enabled: bool = False
+    background_jobs_enabled: bool = True
     worker_id: str = "worker"
     worker_concurrency: int = 1
     max_queued_jobs_per_workspace: int = 200
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     max_columns: int = 200
     preview_max_rows: int = 20_000
     free_pipeline_max_rows: int = 20_000
-    paid_pipeline_max_rows: int = 2_000_000
+    paid_pipeline_max_rows: int = 2**63 - 1
     cleaned_max_bytes: int = 80 * 1024 * 1024
 
     # Full async training limits (guardrails)
