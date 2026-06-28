@@ -24,21 +24,21 @@ export function LogoMark({ className }: { className?: string }) {
         width="32"
         height="32"
         rx="8"
-        className="fill-zinc-900 dark:fill-white"
+        className="fill-zinc-900"
       />
       <rect x="7" y="17" width="4" height="8" rx="1.2" className="fill-indigo-500/50" />
       <rect x="14" y="12" width="4" height="13" rx="1.2" className="fill-indigo-500/75" />
       <rect x="21" y="7" width="4" height="18" rx="1.2" className="fill-indigo-400" />
       <path
         d="M23 7h5v5"
-        className="stroke-white dark:stroke-zinc-900"
+        className="stroke-white"
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M28 7 23 12"
-        className="stroke-white dark:stroke-zinc-900"
+        className="stroke-white"
         strokeWidth="1.75"
         strokeLinecap="round"
       />
