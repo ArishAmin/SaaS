@@ -39,7 +39,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Logo href="/" markClassName="h-10 w-10 group-hover:scale-105 transition-transform" />
         
-        {!isPricingPage && (
+        {!(isPricingPage || (isLoggedIn && pathname === "/help")) && (
           <nav className="hidden items-center gap-10 text-sm font-medium text-zinc-500 dark:text-zinc-400 md:flex">
             <Link href="/#features" className="transition hover:text-indigo-600 dark:hover:text-indigo-400">
               Capabilities
