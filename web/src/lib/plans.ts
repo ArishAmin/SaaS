@@ -148,7 +148,7 @@ export const CREDIT_USAGE_ROWS = [
   { action: "Analyze / profile", credits: 7 },
   { action: "Clean and encode", credits: 14 },
   { action: "Generate features", credits: 17 },
-  { action: "Instant model preview", credits: 37 },
+  { action: "Model training", credits: 37 },
   { action: "Model ideas", credits: 10 },
   { action: "Forecast future values", credits: 34 },
   { action: "Business insights", credits: 54 },
