@@ -428,7 +428,7 @@ export default function PricingPage() {
               },
               {
                 q: "Is full model training included?",
-                a: "Instant preview runs in the cloud (37 credits). Full training is a Python script you run locally—no extra cloud training charge.",
+                a: "Model training runs in the cloud (37 credits). Full training is a Python script you run locally—no extra cloud training charge.",
               },
               {
                 q: "Do Pro or Business plans include a company workspace?",

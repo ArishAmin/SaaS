@@ -52,7 +52,7 @@ async def list_training_runs(
     dataset_id: UUID = Query(...),
     user=Depends(get_current_user),
 ) -> list[TrainRunListItem]:
-    """List instant-preview training runs for a dataset (newest first)."""
+    """List model-training training runs for a dataset (newest first)."""
     rows = await rest_list(
         "training_runs",
         query=(

@@ -130,7 +130,7 @@ const featureDocs = [
     icon: Brain,
     title: "Train Models and Model Comparison",
     items: [
-      "Instant preview trains several models on a sample so you can compare likely performance quickly.",
+      "Model training trains several models on a sample so you can compare likely performance quickly.",
       "Cleaning first is recommended because missing values and categorical encoding affect model quality.",
       "Model comparison displays saved preview results, charts, metrics, and recommendation context.",
       "The comparison page reads the latest saved preview; run Train Models first when no results are available.",
@@ -189,7 +189,7 @@ const faqGroups = [
       },
       {
         q: "Does Model Comparison train new models?",
-        a: "No. Model Comparison reads the latest saved instant-preview results. Use Train Models first, then open Model Comparison for charts, metrics, PDF, and sharing workflows.",
+        a: "No. Model Comparison reads the latest saved model-training results. Use Train Models first, then open Model Comparison for charts, metrics, PDF, and sharing workflows.",
       },
     ],
   },
@@ -206,7 +206,7 @@ const faqGroups = [
       },
       {
         q: "Where does full model training happen?",
-        a: "Instant preview runs in Acutize. Full training is exported as a Python script that you run on your own machine using the dataset path you choose.",
+        a: "Model training runs in Acutize. Full training is exported as a Python script that you run on your own machine using the dataset path you choose.",
       },
     ],
   },
@@ -252,7 +252,7 @@ const troubleshooting = [
   },
   {
     title: "Export button is disabled",
-    detail: "Some exports unlock only after the related step exists. For example, cleaned CSV requires cleaning, engineered CSV requires applied features, and full-training script requires instant preview.",
+    detail: "Some exports unlock only after the related step exists. For example, cleaned CSV requires cleaning, engineered CSV requires applied features, and full-training script requires model training.",
   },
 ];
 
@@ -606,7 +606,7 @@ export default function HelpPage() {
                 {
                   icon: Database,
                   title: "What metadata is stored",
-                  detail: "Acutize stores dataset metadata, file name, file extension, status, analysis summaries, cleaning settings, generated-feature settings, forecast results, business insights, instant-preview results, timestamps, and credit/activity events needed to operate the product.",
+                  detail: "Acutize stores dataset metadata, file name, file extension, status, analysis summaries, cleaning settings, generated-feature settings, forecast results, business insights, model-training results, timestamps, and credit/activity events needed to operate the product.",
                 },
                 {
                   icon: Trash2,

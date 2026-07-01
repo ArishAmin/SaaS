@@ -20,12 +20,12 @@ export default async function RecommendationPage({
       <div className="flex flex-col gap-6">
         <SectionGuide
           title="Model ideas"
-          subtitle="Heuristic recommendations based on your target column, missingness, and task type — use this before running an instant preview."
+          subtitle="Heuristic recommendations based on your target column, missingness, and task type — use this before running an model training."
           datasetId={datasetId}
           steps={[
             { title: "Task detection", detail: "Classification vs regression from your target column." },
             { title: "Suggested algorithms", detail: "Models ranked with short explanations." },
-            { title: "Train next", detail: "Run instant preview to score algorithms on your actual data." },
+            { title: "Train next", detail: "Run model training to score algorithms on your actual data." },
           ]}
           next={{ label: "Train models", href: next }}
         />

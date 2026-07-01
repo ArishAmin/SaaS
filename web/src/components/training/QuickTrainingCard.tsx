@@ -136,7 +136,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
         quick_trained_at?: string | null;
       }>(`/datasets/${datasetId}/quick-evaluation`, { method: "GET" });
       if (!res.quick_evaluation) {
-        toast.message("No saved preview found. Run instant preview first.");
+        toast.message("No saved preview found. Run model training first.");
         setHasStoredPreview(false);
         return;
       }
@@ -165,7 +165,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
       const meta = await apiRequest<DatasetPipelineMeta>(`/datasets/${datasetId}`, { method: "GET" });
       setEngineeredAt(meta.engineered_at ?? null);
       setTrainingSource(resolvePipelineSource(meta));
-      toast.success("Instant preview complete.");
+      toast.success("Model training complete.");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Training failed";
       if (
@@ -213,7 +213,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
         <div>
           <p className="font-medium text-foreground">Training uses your feature-engineered dataset</p>
           <p className="text-muted-foreground mt-1 leading-relaxed">
-            Instant preview trains on the version with generated features
+            Model training trains on the version with generated features
             {fmtWhen(engineeredAt) ? ` (applied ${fmtWhen(engineeredAt)})` : ""}, not the pre-feature cleaned CSV.
           </p>
         </div>
@@ -290,10 +290,10 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-amber-500" />
-            <CardTitle className="text-lg">Run instant preview</CardTitle>
+            <CardTitle className="text-lg">Run model training</CardTitle>
           </div>
           <CardDescription>
-            Compare algorithms on a sample. Nothing runs until you click the button below.
+            Compare algorithms on your dataset.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -315,7 +315,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
 
           <Button onClick={onTrain} disabled={loading || !datasetId} className="w-full gap-2">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            {loading ? "Running preview…" : "Run instant preview"}
+            {loading ? "Running preview…" : "Run model training"}
           </Button>
         </CardContent>
       </Card>
@@ -366,7 +366,7 @@ export function QuickTrainingCard({ datasetId }: { datasetId?: string }) {
 
           {metricsLookBroken ? (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-              Metrics look empty — try cleaning your dataset first, then run instant preview again.
+              Metrics look empty — try cleaning your dataset first, then run model training again.
             </div>
           ) : null}
 

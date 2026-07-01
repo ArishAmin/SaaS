@@ -228,7 +228,7 @@ export default function ExportPage() {
                   <strong>data/engineered.csv</strong> — With generated features (if you applied them)
                 </li>
                 <li>
-                  <strong>scripts/train_full_model.py</strong> — Train the winning model locally (after instant preview)
+                  <strong>scripts/train_full_model.py</strong> — Train the winning model locally (after model training)
                 </li>
                 <li>
                   <strong>scripts/cleaning_pipeline.py</strong> — Reproduce cleaning on a new raw file
@@ -288,7 +288,7 @@ export default function ExportPage() {
               Full training script (Python)
             </CardTitle>
             <CardDescription className="leading-relaxed">
-              Trains the <strong>best model from your instant preview</strong> on your entire dataset on your machine.
+              Trains the <strong>best model from your model training</strong> on your entire dataset on your machine.
               Requires a completed preview on Train models.
             </CardDescription>
           </CardHeader>
@@ -324,7 +324,7 @@ export default function ExportPage() {
                   href={`/dashboard/training?datasetId=${encodeURIComponent(datasetId ?? "")}`}
                   className="underline font-medium text-foreground"
                 >
-                  Run instant preview
+                  Run model training
                 </Link>{" "}
                 first to unlock this export.
               </p>

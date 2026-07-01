@@ -6,7 +6,7 @@ Deploy with the **root** `render.yaml` only. The file `api/render.yaml` is outda
 
 | Service | Role | Default plan | ~Monthly |
 |--------|------|--------------|----------|
-| `acutize-api` | FastAPI (analyze, clean, features, instant preview, export) | Starter | $7 |
+| `acutize-api` | FastAPI (analyze, clean, features, model training, export) | Starter | $7 |
 | `acutize-web` | Next.js dashboard | Starter | $7 |
 | `acutize-redis` | Rate-limit storage + Celery job queue | Free → Starter if needed | $0 → $10 |
 | `acutize-worker` | Background jobs when workspace is at capacity | Starter | $7 |
@@ -216,7 +216,7 @@ Run this before marketing heavily, then repeat after every scaling change. Watch
 
 - `https://<acutize-api>/health` → `{"status":"ok"}`  
 - Sign up / login on web  
-- Upload → clean → features → save → instant preview  
+- Upload → clean → features → save → model training  
 
 ---
 

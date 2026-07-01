@@ -219,7 +219,7 @@ def build_dataset_report_pdf(
     if isinstance(quick, dict) and quick.get("best_model"):
         pdf.ln(4)
         pdf.body_text(
-            f"Best performing model (instant preview): {quick.get('best_model')}  |  "
+            f"Best performing model (model training): {quick.get('best_model')}  |  "
             f"Task: {quick.get('task_type', '-')}  |  Target: {quick.get('target_column', '-')}"
         )
 
@@ -362,13 +362,13 @@ def build_dataset_report_pdf(
 
     if include("training"):
         quick = dataset.get("quick_evaluation_json") or {}
-        pdf.section_title("Model comparison (instant preview)", 6)
+        pdf.section_title("Model comparison (model training)", 6)
         pdf.body_text(
             "Several algorithms were trained on a random sample (up to 5,000 rows or 5% of data). "
             "Results are indicative; validate on held-out production data before deployment."
         )
         if not isinstance(quick, dict) or not quick.get("models"):
-            pdf.body_text("Instant preview has not been run.")
+            pdf.body_text("Model training has not been run.")
         else:
             task = str(quick.get("task_type") or "classification")
             pdf.key_value_table(

@@ -127,7 +127,7 @@ using (
   and auth.uid()::text = split_part(name, '/', 1)
 );
 
--- 3) Instant-preview training runs (one row per preview; full training is local Python export)
+-- 3) Model-training training runs (one row per preview; full training is local Python export)
 create table if not exists public.training_runs (
   run_id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

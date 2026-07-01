@@ -19,14 +19,14 @@ export default async function EvaluationPage({
       <NoDatasetGate
         datasetId={datasetId}
         featureName="Model comparison"
-        featureDescription="Deep dive into instant preview results: metric charts, per-model cards, PDF, and sharing. Run instant preview on Train models first."
+        featureDescription="Deep dive into model training results: metric charts, per-model cards, PDF, and sharing. Run model training on Train models first."
       >
         <SectionGuide
           title="Model comparison"
-          subtitle="Detailed view of your last instant preview: how each algorithm scored, visual comparisons, and recommendation context. This page does not train models; it reads saved preview results."
+          subtitle="Detailed view of your last model training: how each algorithm scored, visual comparisons, and recommendation context. This page does not train models; it reads saved preview results."
           datasetId={datasetId}
           steps={[
-            { title: "Run preview first", detail: "On Train models, click Run instant preview (required once per refresh)." },
+            { title: "Run preview first", detail: "On Train models, click Run model training (required once per refresh)." },
             { title: "Compare metrics", detail: "Bar charts and per-model breakdowns for accuracy, F1, R², etc." },
             { title: "Share or export", detail: "PDF report, share link, or download files from Export." },
           ]}

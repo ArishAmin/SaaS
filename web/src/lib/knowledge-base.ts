@@ -110,7 +110,7 @@ export const knowledgeBase: KBArticle[] = [
   {
     title: "Train Models & Model Comparison",
     content:
-      "Instant preview trains several models on a sample so you can compare likely performance quickly. Cleaning first is recommended because missing values and categorical encoding affect model quality. Model comparison displays saved preview results, charts, metrics, and recommendation context. Run Train Models first when no results are available.",
+      "Model training trains several models on a sample so you can compare likely performance quickly. Cleaning first is recommended because missing values and categorical encoding affect model quality. Model comparison displays saved preview results, charts, metrics, and recommendation context. Run Train Models first when no results are available.",
     keywords: ["train", "model", "comparison", "preview", "metrics", "performance", "accuracy", "compare", "instant"],
     category: "Insights & Modeling",
     href: "/help#insights-modeling",
@@ -144,7 +144,7 @@ export const knowledgeBase: KBArticle[] = [
   {
     title: "Full model training",
     content:
-      "Instant preview runs in Acutize. Full training is exported as a Python script that you run on your own machine using the dataset path you choose.",
+      "Model training runs in Acutize. Full training is exported as a Python script that you run on your own machine using the dataset path you choose.",
     keywords: ["full training", "python", "script", "local", "run", "machine", "export"],
     category: "Exports & Sharing",
     href: "/help#exports-sharing",
@@ -264,7 +264,7 @@ export const knowledgeBase: KBArticle[] = [
   {
     title: "Export button is disabled",
     content:
-      "Some exports unlock only after the related step exists. Cleaned CSV requires cleaning, engineered CSV requires applied features, and full-training script requires instant preview.",
+      "Some exports unlock only after the related step exists. Cleaned CSV requires cleaning, engineered CSV requires applied features, and full-training script requires model training.",
     keywords: ["export", "disabled", "greyed out", "cannot download", "button", "not working"],
     category: "Troubleshooting",
     href: "/help#troubleshooting",
@@ -290,7 +290,7 @@ export const knowledgeBase: KBArticle[] = [
   {
     title: "Does Model Comparison train new models?",
     content:
-      "No. Model Comparison reads the latest saved instant-preview results. Use Train Models first, then open Model Comparison for charts, metrics, PDF, and sharing workflows.",
+      "No. Model Comparison reads the latest saved model-training results. Use Train Models first, then open Model Comparison for charts, metrics, PDF, and sharing workflows.",
     keywords: ["model comparison", "train", "new", "retrain", "rerun"],
     category: "FAQ",
     href: "/help#faq",

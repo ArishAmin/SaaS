@@ -161,7 +161,7 @@ export default function CreditsSettingsPage() {
               <p className="font-semibold">{datasetsLabel}</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Instant preview models</p>
+              <p className="text-muted-foreground text-xs">Model training models</p>
               <p className="font-semibold text-xs leading-relaxed">
                 {limits.allowed_models.includes("all")
                   ? "All models"
@@ -183,7 +183,7 @@ export default function CreditsSettingsPage() {
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">Instant preview rows</p>
+                  <p className="text-muted-foreground text-xs">Model training rows</p>
                   <p className="font-semibold">{data.data_limits.preview_max_rows.toLocaleString()}</p>
                 </div>
               </>

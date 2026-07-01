@@ -77,7 +77,7 @@ def _readme(dataset: dict[str, Any], *, has_train_script: bool) -> str:
             f"  Preview run: {dataset.get('quick_trained_at') or '-'}",
             f"  Forecast:    {dataset.get('forecasted_at') or '-'}",
             "",
-            "Note: Instant preview in the app used a sample; full training uses every row in DATA_PATH.",
+            "Note: Model training in the app used a sample; full training uses every row in DATA_PATH.",
         ]
     )
     return "\n".join(lines)

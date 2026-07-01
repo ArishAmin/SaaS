@@ -1,12 +1,12 @@
 -- =============================================================================
 -- Acutize — Combined migration
--- Instant-preview training_runs, pipeline tracing, export support
+-- Model-training training_runs, pipeline tracing, export support
 -- Safe to run multiple times (idempotent where possible).
 -- Run in Supabase SQL Editor (or: supabase db push).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- 1) datasets — ensure columns used by exports & instant preview
+-- 1) datasets — ensure columns used by exports & model training
 -- -----------------------------------------------------------------------------
 alter table public.datasets
   add column if not exists analysis_json jsonb,
@@ -22,10 +22,10 @@ alter table public.datasets
   add column if not exists quick_trained_at timestamptz;
 
 comment on column public.datasets.quick_evaluation_json is
-  'Latest instant preview: models, metrics, best_model. Also copied into training_runs per run.';
+  'Latest model training: models, metrics, best_model. Also copied into training_runs per run.';
 
 comment on column public.datasets.quick_trained_at is
-  'Timestamp of the most recent instant preview (see training_runs for full history).';
+  'Timestamp of the most recent model training (see training_runs for full history).';
 
 create index if not exists datasets_user_updated_idx
   on public.datasets (user_id, updated_at desc);
@@ -35,7 +35,7 @@ create index if not exists datasets_quick_trained_at_idx
   where quick_trained_at is not null;
 
 -- -----------------------------------------------------------------------------
--- 2) training_runs — instant preview only (remove legacy full-training mode)
+-- 2) training_runs — model training only (remove legacy full-training mode)
 -- -----------------------------------------------------------------------------
 create table if not exists public.training_runs (
   run_id uuid primary key,
@@ -63,7 +63,7 @@ alter table public.training_runs
   add column if not exists duration_ms integer;
 
 comment on table public.training_runs is
-  'One row per instant-preview training run (synchronous). Full training is exported as a local Python script.';
+  'One row per model-training training run (synchronous). Full training is exported as a local Python script.';
 
 comment on column public.training_runs.data_source is
   'Which file was used: engineered | cleaned | raw';

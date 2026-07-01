@@ -102,7 +102,7 @@ def build_full_training_python_script(dataset: dict[str, Any]) -> str | None:
     if dataset.get("engineered_storage_path"):
         engineered_note = (
             "# Tip: point DATA_PATH to data/engineered.csv from your export ZIP "
-            "(includes generated features used in instant preview).\n"
+            "(includes generated features used in model training).\n"
         )
 
     metrics_block = (
@@ -141,7 +141,7 @@ y = y.fillna(y.median())
             "best_model": best_model,
             "task_type": task_type,
             "target_column": target,
-            "note": "Instant preview used a sample; this script trains on all rows in DATA_PATH.",
+            "note": "Model training used a sample; this script trains on all rows in DATA_PATH.",
         },
         indent=2,
     )
@@ -162,7 +162,7 @@ RECOMMENDED DATA_PATH (from export ZIP after unzip):
 
 You may also use your original raw file; set APPLY_acutize_CLEANING = True.
 
-Instant preview winner: {best_model} ({task_type})
+Model training winner: {best_model} ({task_type})
 Target column: {target!r}
 
 Output: acutize_model.pkl (saved next to this script)

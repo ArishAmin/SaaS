@@ -106,7 +106,7 @@ export function QuickEvaluationView({
         <CardHeader>
           <CardTitle>No preview yet</CardTitle>
           <CardDescription>
-            Run an instant preview on Train models first. Results appear here automatically.
+            Run an model training on Train models first. Results appear here automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -126,7 +126,7 @@ export function QuickEvaluationView({
   return (
     <div className="flex flex-col gap-4">
       <StepHint>
-        These metrics come from your last <strong>instant preview</strong> on Train models. Classification shows
+        These metrics come from your last <strong>model training</strong> on Train models. Classification shows
         accuracy / precision / recall / F1; regression shows R², MAE, and RMSE. Export a PDF or full project bundle from
         the Export page.
       </StepHint>

@@ -14,11 +14,11 @@ export default async function TrainingPage({
       <NoDatasetGate
         datasetId={datasetId}
         featureName="Train Models"
-        featureDescription="Compare machine learning algorithms with a fast instant preview on your dataset. Select a dataset from the Data Hub to begin."
+        featureDescription="Compare machine learning algorithms with a fast model training on your dataset. Select a dataset from the Data Hub to begin."
       >
         <SectionGuide
           title="Train models"
-          subtitle="Run a quick instant preview to see which algorithms perform best on a sample of your data. Results are saved for deeper analysis in Model comparison."
+          subtitle="Run a quick model training to see which algorithms perform best on a sample of your data. Results are saved for deeper analysis in Model comparison."
           datasetId={datasetId}
           steps={[
             {
@@ -26,7 +26,7 @@ export default async function TrainingPage({
               detail: "Missing values and encoding from Clean & Encode improve preview quality.",
             },
             {
-              title: "Run instant preview",
+              title: "Run model training",
               detail: "Trains several models on a sample in seconds — nothing runs until you click.",
             },
             {

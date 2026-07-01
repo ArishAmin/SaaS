@@ -1,4 +1,4 @@
-"""Persist instant-preview training runs and pipeline events to Supabase."""
+"""Persist model-training training runs and pipeline events to Supabase."""
 
 from __future__ import annotations
 

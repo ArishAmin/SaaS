@@ -2010,7 +2010,7 @@ async def export_cleaned(
         if not code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Run instant preview on Train models first, then export the full-training script.",
+                detail="Run model training on Train models first, then export the full-training script.",
             )
         from fastapi.responses import PlainTextResponse
 
