@@ -182,16 +182,29 @@ export function DatasetUploadCard() {
   async function openFilePicker(replaceFileId?: string) {
     if (checkingLimits || result.kind !== "idle") return;
     replacingFileIdRef.current = replaceFileId ?? null;
-    setCheckingLimits(true);
-    const account = await refreshAccount();
-    try {
-      if (!validateDatasetSlot(account?.dataset_usage ?? datasetUsage)) {
+
+    // Use cached usage data to avoid blocking the file dialog on a network call.
+    // Only fetch fresh data if we have no cached usage at all.
+    if (datasetUsage) {
+      if (!validateDatasetSlot(datasetUsage)) {
         replacingFileIdRef.current = null;
         return;
       }
       document.getElementById("file-upload")?.click();
-    } finally {
-      setCheckingLimits(false);
+      // Refresh in background for next time
+      refreshAccount();
+    } else {
+      setCheckingLimits(true);
+      try {
+        const account = await refreshAccount();
+        if (!validateDatasetSlot(account?.dataset_usage ?? null)) {
+          replacingFileIdRef.current = null;
+          return;
+        }
+        document.getElementById("file-upload")?.click();
+      } finally {
+        setCheckingLimits(false);
+      }
     }
   }
 

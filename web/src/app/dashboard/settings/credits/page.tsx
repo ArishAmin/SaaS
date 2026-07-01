@@ -129,7 +129,7 @@ export default function CreditsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="capitalize">{data.plan} plan</CardTitle>
-          
+
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-6">
@@ -157,11 +157,11 @@ export default function CreditsSettingsPage() {
               <p className="font-semibold">{limits.max_dataset_size_mb} MB</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Active datasets</p>
+              <p className="text-muted-foreground text-xs">Active datasets limit</p>
               <p className="font-semibold">{datasetsLabel}</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Model training models</p>
+              <p className="text-muted-foreground text-xs">Allowed Models</p>
               <p className="font-semibold text-xs leading-relaxed">
                 {limits.allowed_models.includes("all")
                   ? "All models"
@@ -183,7 +183,7 @@ export default function CreditsSettingsPage() {
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">Model training rows</p>
+                  <p className="text-muted-foreground text-xs">Model training row cap</p>
                   <p className="font-semibold">{data.data_limits.preview_max_rows.toLocaleString()}</p>
                 </div>
               </>
@@ -207,7 +207,7 @@ export default function CreditsSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Credit costs</CardTitle>
-          
+
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -230,7 +230,7 @@ export default function CreditsSettingsPage() {
               </tbody>
             </table>
           </div>
-          
+
         </CardContent>
       </Card>
 
@@ -261,9 +261,8 @@ export default function CreditsSettingsPage() {
                       </td>
                       <td className="py-2.5 pr-3">{tx.action_label}</td>
                       <td
-                        className={`py-2.5 pr-3 text-right tabular-nums font-medium ${
-                          tx.credits_delta < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"
-                        }`}
+                        className={`py-2.5 pr-3 text-right tabular-nums font-medium ${tx.credits_delta < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600"
+                          }`}
                       >
                         {tx.credits_delta > 0 ? "+" : ""}
                         {tx.credits_delta}

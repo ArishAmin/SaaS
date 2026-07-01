@@ -201,7 +201,7 @@ def build_dataset_report_pdf(
         ("Cleaning & encoding", dataset.get("cleaned_at")),
         ("Generated features applied", dataset.get("engineered_at")),
         ("Business insights", dataset.get("business_insights_at")),
-        ("Instant model preview", dataset.get("quick_trained_at")),
+        ("Model training", dataset.get("quick_trained_at")),
         ("Forecasting", dataset.get("forecasted_at")),
     ]
     pdf.set_font("helvetica", "B", 9)
