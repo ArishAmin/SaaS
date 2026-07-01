@@ -184,7 +184,7 @@ export default function CreditsSettingsPage() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-muted-foreground text-xs">Instant preview rows</p>
-                  <p className="font-semibold">{data.data_limits.preview_max_rows.toLocaleString()} (all plans)</p>
+                  <p className="font-semibold">{data.data_limits.preview_max_rows.toLocaleString()}</p>
                 </div>
               </>
             ) : null}

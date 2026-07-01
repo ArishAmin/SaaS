@@ -94,8 +94,8 @@ export const PLANS: PlanDefinition[] = [
     features: [
       "500 credits per month",
       "Enough credits for multiple full workflow runs per month",
-      "30 MB max file size, full file on pipeline steps",
-      "Instant preview trains on 20k rows (all plans)",
+      "30 MB max file size, up to 100,000 rows per step",
+      "Instant preview trains on up to 100K rows",
       "All instant-preview models",
       "Generate features (save and CSV download included)",
       "PDF/ZIP export and model ideas on demand",
@@ -117,8 +117,8 @@ export const PLANS: PlanDefinition[] = [
     features: [
       "2,500 credits per month",
       "Enough credits for high-volume workflow runs per month",
-      "75 MB max file size, full file on pipeline steps",
-      "Instant preview trains on 20k rows (all plans)",
+      "75 MB max file size, up to 100,000 rows per step",
+      "Instant preview trains on up to 100K rows",
       "Unlimited concurrent datasets",
       "Everything in Pro + Python full-training export script",
       "Priority email support",

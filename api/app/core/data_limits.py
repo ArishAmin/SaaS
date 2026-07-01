@@ -15,6 +15,7 @@ from .billing import (
 import sys
 
 PREVIEW_MAX_ROWS = 20_000
+PAID_PREVIEW_MAX_ROWS = 100_000
 FREE_PIPELINE_MAX_ROWS = 20_000
 PAID_PIPELINE_MAX_ROWS = sys.maxsize
 MAX_COLUMNS = 200
@@ -47,7 +48,7 @@ async def get_user_data_limits(user_id: str) -> UserDataLimits:
             max_dataset_size_mb=plan_limits.max_dataset_size_mb,
             max_file_bytes=plan_limits.max_dataset_size_mb * 1024 * 1024,
             pipeline_max_rows=PAID_PIPELINE_MAX_ROWS,
-            preview_max_rows=PREVIEW_MAX_ROWS,
+            preview_max_rows=PAID_PREVIEW_MAX_ROWS,
             max_columns=MAX_COLUMNS,
             uses_full_dataset=True,
         )
@@ -77,7 +78,7 @@ async def get_user_data_limits(user_id: str) -> UserDataLimits:
         max_dataset_size_mb=plan_limits.max_dataset_size_mb,
         max_file_bytes=plan_limits.max_dataset_size_mb * 1024 * 1024,
         pipeline_max_rows=PAID_PIPELINE_MAX_ROWS if paid else FREE_PIPELINE_MAX_ROWS,
-        preview_max_rows=PREVIEW_MAX_ROWS,
+        preview_max_rows=PAID_PREVIEW_MAX_ROWS if paid else PREVIEW_MAX_ROWS,
         max_columns=MAX_COLUMNS,
         uses_full_dataset=paid,
     )

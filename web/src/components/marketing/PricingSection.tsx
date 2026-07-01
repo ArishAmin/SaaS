@@ -35,8 +35,8 @@ const PLANS = [
     features: [
       "500 credits per month",
       "Enough credits for multiple full workflow runs per month",
-      "30 MB max file size, full file on pipeline steps",
-      "Instant preview trains on 20k rows",
+      "30 MB max file size, up to 100,000 rows per step",
+      "Instant preview trains on up to 100K rows",
       "Up to 12 active datasets",
       "All instant-preview models",
       "Generate features, model ideas, PDF/ZIP export",
@@ -56,8 +56,8 @@ const PLANS = [
     features: [
       "2,500 credits per month",
       "Enough credits for high-volume workflow runs per month",
-      "75 MB max file size, full file on pipeline steps",
-      "Instant preview trains on 20k rows",
+      "75 MB max file size, up to 100,000 rows per step",
+      "Instant preview trains on up to 100K rows",
       "Unlimited concurrent datasets",
       "Everything in Pro",
       "Python full-training export script",

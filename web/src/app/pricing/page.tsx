@@ -10,6 +10,7 @@ import {
   HelpCircle,
   Database,
   FileSpreadsheet,
+  Sparkles,
 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -361,6 +362,20 @@ export default function PricingPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+
+          <div className="max-w-3xl mx-auto mb-16 rounded-2xl border-2 border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/20 p-6 md:p-8 flex items-start gap-4">
+            <div className="mt-1 flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-300 mb-1">
+                Full Dataset Training — Coming Soon
+              </h3>
+              <p className="text-slate-700 dark:text-slate-300">
+                We're rolling out the ability for paid plans to train machine learning models on your entire dataset with no row limits. Stay tuned!
+              </p>
             </div>
           </div>
 

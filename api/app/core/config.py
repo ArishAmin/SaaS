@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # Global safety ceilings (per-plan caps applied in data_limits.py)
     max_columns: int = 200
     preview_max_rows: int = 20_000
+    paid_preview_max_rows: int = 100_000
     free_pipeline_max_rows: int = 20_000
     paid_pipeline_max_rows: int = 2**63 - 1
     cleaned_max_bytes: int = 80 * 1024 * 1024

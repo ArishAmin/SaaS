@@ -72,7 +72,7 @@ def evaluate_feature(df: pd.DataFrame, target_col: str, feature_series: pd.Serie
 def generate_features(
     df_full: pd.DataFrame,
     target_col: str | None = None,
-    max_rows: int = 20_000,
+    max_rows: int = 100_000,
 ) -> list[dict]:
     if len(df_full) > max_rows:
         df = df_full.sample(n=max_rows, random_state=42)

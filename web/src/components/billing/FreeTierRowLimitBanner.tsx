@@ -27,7 +27,7 @@ export function FreeTierRowLimitBanner() {
         <Link href="/pricing" className="font-medium text-slate-800 dark:text-slate-200 hover:underline">
           Upgrade
         </Link>{" "}
-        to process your full dataset on Pro or Business.
+        to process up to 100,000 rows on Pro or Business.
       </p>
     </div>
   );

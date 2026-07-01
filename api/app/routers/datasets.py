@@ -1242,7 +1242,7 @@ async def train_quick(
         df = read_tabular_bytes(
             raw,
             dataset["original_extension"],
-            PREVIEW_MAX_ROWS,
+            udl.preview_max_rows,
             udl.max_columns,
         )
         if target_column not in df.columns:
@@ -1272,11 +1272,11 @@ async def train_quick(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"Cleaned dataset too large to load (max {settings.cleaned_max_bytes // (1024 * 1024)} MB).",
             )
-        df = read_tabular_bytes(raw, "csv", PREVIEW_MAX_ROWS, udl.max_columns)
+        df = read_tabular_bytes(raw, "csv", udl.preview_max_rows, udl.max_columns)
         if target_column not in df.columns:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target column not found in cleaned data")
 
-    df = sample_for_preview(df, PREVIEW_MAX_ROWS)
+    df = sample_for_preview(df, udl.preview_max_rows)
     X, y = _prepare_training_matrix(df, target_column)
     feature_names = list(X.columns)
 

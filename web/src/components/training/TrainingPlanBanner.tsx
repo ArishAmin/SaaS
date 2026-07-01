@@ -19,15 +19,19 @@ export function TrainingPlanBanner() {
       <div className="space-y-1">
         <p>
           Instant preview trains on a <span className="text-slate-800 dark:text-slate-200">row sample</span> of your
-          dataset so results stay fast on every plan.
+          dataset (up to {plan === "hobby" ? "20,000" : "100,000"} rows) so results stay fast on every plan.
         </p>
-        {plan === "hobby" && (
+        {plan === "hobby" ? (
           <p>
             Free tier includes basic preview models only.{" "}
             <Link href="/pricing" className="font-medium text-slate-800 dark:text-slate-200 hover:underline">
               Upgrade
             </Link>{" "}
             to unlock advanced models like Random Forest and XGBoost.
+          </p>
+        ) : (
+          <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+            ✨ Full dataset training coming soon for paid plans!
           </p>
         )}
       </div>

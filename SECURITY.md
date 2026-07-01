@@ -17,8 +17,8 @@ This document describes how the app is hardened for production and what you shou
 ## Data handling (memory & cost)
 
 - **Plan file caps**: Free 10 MB, Pro **30 MB**, Business **75 MB** — enforced on upload and before parsing (`enforce_file_size`).
-- **Row caps**: Free tier pipeline steps use **20,000 rows** (`nrows` on CSV/Excel reads). Pro/Business use full file up to **2M** safety ceiling.
-- **Instant preview**: All plans train on a **20,000-row** random sample (`sample_for_preview`) to bound RAM and CPU.
+- **Row caps**: Free tier pipeline steps use **20,000 rows** (`nrows` on CSV/Excel reads). Pro/Business use up to **100,000 rows** per pipeline step.
+- **Instant preview**: Free tier trains on a **20,000-row** random sample (`sample_for_preview`). Paid plans train on a **100,000-row** sample to bound RAM and CPU.
 - **Column cap**: 200 columns max on ingest.
 
 ## Transport & headers

@@ -127,7 +127,7 @@ async def billing_account(user: dict = Depends(get_current_user)) -> dict:
         },
         "data_limits": {
             "pipeline_max_rows": data_limits.pipeline_max_rows,
-            "preview_max_rows": PREVIEW_MAX_ROWS,
+            "preview_max_rows": data_limits.preview_max_rows,
             "uses_full_dataset": data_limits.uses_full_dataset,
             "max_columns": data_limits.max_columns,
         },
