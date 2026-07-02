@@ -316,7 +316,7 @@ function SubscriptionCard() {
                 <div className="font-medium capitalize">
                   {plan === "custom" && (status === "none" || status === "inactive") 
                     ? "Active (Custom)" 
-                    : status === "none" ? "Free Tier" : status}
+                    : (status === "none" || status === "inactive") ? "Free Tier" : status}
                 </div>
             </div>
             <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">

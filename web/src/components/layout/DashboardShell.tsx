@@ -130,7 +130,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         ? (e) => {
             e.preventDefault();
             toast("Company workspaces are included with custom plans only.", {
-              action: { label: "Pricing", onClick: () => router.push("/pricing") },
+              action: { label: "Upgrade", onClick: () => router.push("/pricing") },
             });
           }
         : undefined,
@@ -386,39 +386,60 @@ function PlanIndicator() {
   if (!enforcement) return null;
 
   return (
-    <Link
-      href="/dashboard/settings/credits"
+    <div
       className={cn(
         "block p-4 rounded-xl border transition-colors",
         low
-          ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 hover:border-amber-300"
-          : "bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800/20 hover:border-blue-200"
+          ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40"
+          : "bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800/20"
       )}
     >
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-          Credits
-        </span>
-        <span
-          className={cn(
-            "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
-            plan === "hobby"
-              ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
-              : "bg-blue-600 text-white"
-          )}
-        >
-          {plan}
-        </span>
-      </div>
-      <p className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white leading-none">
-        {creditsBalance}
-        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">/{creditsQuota}</span>
-      </p>
-      {low ? (
-        <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1.5 font-medium">Running low — view usage</p>
-      ) : (
-        <p className="text-[10px] text-slate-500 mt-1.5">Usage & history</p>
+      <Link href="/dashboard/settings/credits" className="block group">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            Credits
+          </span>
+          <span
+            className={cn(
+              "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+              plan === "hobby"
+                ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                : "bg-blue-600 text-white"
+            )}
+          >
+            {plan}
+          </span>
+        </div>
+        <p className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white leading-none">
+          {creditsBalance}
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">/{creditsQuota}</span>
+        </p>
+        
+        {plan !== "hobby" && (
+          low ? (
+            <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1.5 font-medium group-hover:underline">Running low — view usage</p>
+          ) : (
+            <p className="text-[10px] text-slate-500 mt-1.5 group-hover:underline">Usage & history</p>
+          )
+        )}
+      </Link>
+
+      {plan === "hobby" && (
+        <div className="mt-2.5 pt-2.5 border-t border-black/5 dark:border-white/5 flex gap-2">
+          <Link
+            href="/dashboard/settings/credits"
+            className="flex-1 text-center py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+          >
+            Usage
+          </Link>
+          <Link
+            href="/pricing"
+            className="flex-1 text-center py-1.5 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+          >
+            Upgrade
+          </Link>
+        </div>
       )}
-    </Link>
+    </div>
   );
 }
