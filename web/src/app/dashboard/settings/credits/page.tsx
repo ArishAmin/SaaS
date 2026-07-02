@@ -153,11 +153,11 @@ export default function CreditsSettingsPage() {
 
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Max file size</p>
+              <p className="text-muted-foreground text-xs">File Size Limit</p>
               <p className="font-semibold">{limits.max_dataset_size_mb} MB</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">Active datasets limit</p>
+              <p className="text-muted-foreground text-xs">Active Datasets Limit</p>
               <p className="font-semibold">{datasetsLabel}</p>
             </div>
             <div className="rounded-lg border p-3">
@@ -175,7 +175,7 @@ export default function CreditsSettingsPage() {
             {data.data_limits ? (
               <>
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">Pipeline rows</p>
+                  <p className="text-muted-foreground text-xs">Other Features Row Cap</p>
                   <p className="font-semibold">
                     {data.data_limits.uses_full_dataset
                       ? "Full file (server cap)"
@@ -183,7 +183,7 @@ export default function CreditsSettingsPage() {
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground text-xs">Model training row cap</p>
+                  <p className="text-muted-foreground text-xs">Model Training Row Cap</p>
                   <p className="font-semibold">{data.data_limits.preview_max_rows.toLocaleString()}</p>
                 </div>
               </>
