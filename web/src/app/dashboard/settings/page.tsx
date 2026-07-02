@@ -77,7 +77,7 @@ export default function SettingsPage() {
         data: { full_name: trimmed },
       });
       if (error) throw error;
-      
+
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
         await supabase
@@ -263,8 +263,8 @@ function SubscriptionCard() {
 
   if (loading) return (
     <Card className="animate-pulse">
-        <CardHeader><div className="h-6 w-32 bg-slate-200 rounded" /></CardHeader>
-        <CardContent><div className="h-20 bg-slate-100 rounded" /></CardContent>
+      <CardHeader><div className="h-6 w-32 bg-slate-200 rounded" /></CardHeader>
+      <CardContent><div className="h-20 bg-slate-100 rounded" /></CardContent>
     </Card>
   );
 
@@ -283,12 +283,8 @@ function SubscriptionCard() {
           <div>
             <div className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Current Plan</div>
             <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold capitalize">{plan}</span>
-                {status !== "active" && status !== "none" && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 border border-yellow-200">
-                        {status.replace("_", " ")}
-                    </span>
-                )}
+              <span className="text-2xl font-bold capitalize">{plan}</span>
+
             </div>
           </div>
           <div className="flex gap-3">
@@ -311,39 +307,39 @@ function SubscriptionCard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                <div className="text-xs text-slate-500 mb-1">Status</div>
-                <div className="font-medium capitalize">
-                  {plan === "custom" && (status === "none" || status === "inactive") 
-                    ? "Active (Custom)" 
-                    : (status === "none" || status === "inactive") ? "Free Tier" : status}
-                </div>
+          <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+            <div className="text-xs text-slate-500 mb-1">Status</div>
+            <div className="font-medium capitalize">
+              {plan === "custom" && (status === "none" || status === "inactive")
+                ? "Active (Custom)"
+                : (status === "none" || status === "inactive") ? "Free Tier" : status}
             </div>
-            <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                <div className="text-xs text-slate-500 mb-1">Credits remaining</div>
-                <div className="font-medium">
-                  {profile?.credits_balance ?? "—"}
-                  <span className="text-slate-400 font-normal">
-                    {" "}/ {profile?.credits_quota ?? profile?.credits_monthly_quota ?? "—"}
-                  </span>
-                </div>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+            <div className="text-xs text-slate-500 mb-1">Credits remaining</div>
+            <div className="font-medium">
+              {profile?.credits_balance ?? "—"}
+              <span className="text-slate-400 font-normal">
+                {" "}/ {profile?.credits_quota ?? profile?.credits_monthly_quota ?? "—"}
+              </span>
             </div>
-            {profile?.credits_period_end && (
-              <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                <div className="text-xs text-slate-500 mb-1">Credits reset</div>
-                <div className="font-medium">
-                  {new Date(profile.credits_period_end).toLocaleDateString()}
-                </div>
+          </div>
+          {profile?.credits_period_end && (
+            <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="text-xs text-slate-500 mb-1">Credits reset</div>
+              <div className="font-medium">
+                {new Date(profile.credits_period_end).toLocaleDateString()}
               </div>
-            )}
-            {profile?.current_period_end && (
-                 <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <div className="text-xs text-slate-500 mb-1">Next billing date</div>
-                    <div className="font-medium">
-                        {new Date(profile.current_period_end).toLocaleDateString()}
-                    </div>
-                </div>
-            )}
+            </div>
+          )}
+          {profile?.current_period_end && (
+            <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="text-xs text-slate-500 mb-1">Next billing date</div>
+              <div className="font-medium">
+                {new Date(profile.current_period_end).toLocaleDateString()}
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
