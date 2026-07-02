@@ -22,6 +22,7 @@ import {
   PieChart,
   HelpCircle,
   Building2,
+  Lock,
 } from "lucide-react";
 
 import {
@@ -46,7 +47,13 @@ import { usePlan } from "@/components/providers/PlanProvider";
 
 type UserLite = { id: string; name?: string | null; email?: string | null };
 
-type NavItem = { href: string; label: string; icon: ComponentType<{ className?: string }> };
+type NavItem = { 
+  href: string; 
+  label: string; 
+  icon: ComponentType<{ className?: string }>;
+  onClick?: (e: React.MouseEvent) => void;
+  locked?: boolean;
+};
 
 const pipelineNav: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },
@@ -83,10 +90,13 @@ function NavLinks({
         const active = pathname === item.href;
         const Icon = item.icon;
         return (
-          <li key={item.href}>
+          <li key={item.label}>
             <Link
               href={item.href}
-              onClick={onNavigate}
+              onClick={(e) => {
+                if (item.onClick) item.onClick(e);
+                if (onNavigate && !e.defaultPrevented) onNavigate();
+              }}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 active
@@ -95,7 +105,8 @@ function NavLinks({
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="leading-snug">{item.label}</span>
+              <span className="leading-snug flex-1">{item.label}</span>
+              {item.locked && <Lock className="h-3.5 w-3.5 opacity-40 shrink-0" />}
             </Link>
           </li>
         );
@@ -110,9 +121,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { companyAccountEnabled } = usePlan();
 
   const generalNav: NavItem[] = [
-    ...(companyAccountEnabled
-      ? [{ href: "/dashboard/company", label: "Company workspace", icon: Building2 }]
-      : []),
+    {
+      href: companyAccountEnabled ? "/dashboard/company" : "#",
+      label: "Company workspace",
+      icon: Building2,
+      locked: !companyAccountEnabled,
+      onClick: !companyAccountEnabled
+        ? (e) => {
+            e.preventDefault();
+            toast("Company workspaces are included with custom plans only.", {
+              action: { label: "Pricing", onClick: () => router.push("/pricing") },
+            });
+          }
+        : undefined,
+    },
     ...moreNav,
   ];
 
