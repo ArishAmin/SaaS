@@ -48,7 +48,7 @@ export default function ContactPage() {
           <div>
             <h1 className="text-4xl font-bold tracking-tight mb-4 text-slate-900 dark:text-white">Contact Support</h1>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-lg max-w-2xl">
-              Questions about Acutize, custom plans, or onboarding integrations? Our AI data scientists and engineers are here to assist. Provide details below and we'll route it directly to our experts.
+              Questions about Acutize, custom plans, or onboarding integrations? Our team is here to assist. Provide details below and we'll route it directly to our experts.
             </p>
           </div>
 
@@ -76,14 +76,6 @@ export default function ContactPage() {
                   <div>
                     <p className="text-sm font-medium text-slate-900 dark:text-white">Private workspace controls</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Uploaded datasets and generated outputs are stored in account-scoped private storage with ownership checks on dataset access, exports, and reports.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Zap className="w-5 h-5 text-amber-500 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">Instant AI Pipelines</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">We optimize models instantly by deploying advanced deterministic frameworks rather than slow, generic LLMs.</p>
                   </div>
                 </div>
 
