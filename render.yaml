@@ -237,4 +237,4 @@ services:
     ipAllowList: []
     # Queue entries must never be evicted under memory pressure.
     maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
+    
