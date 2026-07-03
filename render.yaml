@@ -1,10 +1,10 @@
 # Acutize — Render Blueprint (use this file only; api/render.yaml is legacy).
 # Docs: DEPLOY.md
 #
-# Cost-focused layout (May 2026):
-#   - API + Web on Starter ($7/mo each) = $14/mo compute
-#   - Redis Free for shared rate limits + Celery job queue
-#   - Celery worker (acutize-worker) processes background jobs with concurrency limits
+# Production layout for approximately 500 daily active users (July 2026):
+#   - Standard API (2 GB RAM) + Starter Web
+#   - Persistent Starter Key Value for shared rate limits + Celery job queue
+#   - Two Standard Celery workers, each processing one memory-heavy job at a time
 #   - Supabase (auth/DB/storage) billed separately
 
 services:
@@ -14,7 +14,7 @@ services:
   - type: web
     name: acutize-api
     runtime: python
-    plan: starter
+    plan: standard
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2}
@@ -75,7 +75,7 @@ services:
         value: "120"
 
   # -------------------------
-  # 1.25. Background Job Worker
+  # 1.25. Primary Background Job Worker + singleton scheduler
   # -------------------------
   - type: worker
     name: acutize-worker
@@ -111,7 +111,7 @@ services:
       - key: BILLING_ENFORCEMENT_ENABLED
         value: "true"
       - key: WORKER_ID
-        value: render-worker
+        value: render-worker-1
       - key: WORKER_CONCURRENCY
         value: "1"
       - key: JOB_STALE_TIMEOUT_MINUTES
@@ -119,7 +119,63 @@ services:
       - key: JOB_RECOVERY_INTERVAL_MINUTES
         value: "15"
       - key: TTL_CLEANUP_ENABLED
+        # TTL cleanup is handled by acutize-ttl-cron below. Keep Celery beat
+        # responsible only for stale-job recovery so cleanup is not duplicated.
+        value: "false"
+      - key: DATASET_TTL_HOURS
+        value: "720"
+      - key: SHARED_REPORT_TTL_HOURS
+        value: "720"
+      - key: TTL_CLEANUP_INTERVAL_MINUTES
+        value: "60"
+
+  # -------------------------
+  # 1.4. Secondary Background Job Worker
+  # -------------------------
+  - type: worker
+    name: acutize-worker-2
+    runtime: python
+    plan: standard
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    # Do not add --beat here: only acutize-worker schedules stale-job recovery.
+    startCommand: celery -A app.worker.celery_worker worker --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.13"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: acutize-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_ENVIRONMENT
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: BILLING_ENFORCEMENT_ENABLED
         value: "true"
+      - key: WORKER_ID
+        value: render-worker-2
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: JOB_STALE_TIMEOUT_MINUTES
+        value: "120"
+      - key: JOB_RECOVERY_INTERVAL_MINUTES
+        value: "15"
+      - key: TTL_CLEANUP_ENABLED
+        value: "false"
       - key: DATASET_TTL_HOURS
         value: "720"
       - key: SHARED_REPORT_TTL_HOURS
@@ -173,10 +229,12 @@ services:
         sync: false
 
   # -------------------------
-  # 3. Redis (rate limiting; optional TTL worker removed)
+  # 3. Persistent Key Value (rate limiting + durable Celery job queue)
   # -------------------------
   - type: redis
     name: acutize-redis
-    plan: free
+    plan: starter
     ipAllowList: []
-    maxmemoryPolicy: allkeys-lru
+    # Queue entries must never be evicted under memory pressure.
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
