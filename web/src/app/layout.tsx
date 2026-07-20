@@ -18,7 +18,10 @@ export const metadata: Metadata = {
   description:
     "Upload CSV, Excel, JSON, or Parquet files to clean data, generate business insights, forecast metrics, preview ML models, and export reports from your browser.",
   icons: {
-    icon: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
     apple: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
   },
 };
