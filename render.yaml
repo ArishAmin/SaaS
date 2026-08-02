@@ -81,7 +81,7 @@ services:
   - type: worker
     name: acutize-worker
     runtime: python
-    plan: standard
+    plan: starter
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.worker.celery_worker worker --beat --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}
@@ -180,7 +180,7 @@ services:
   # -------------------------
   - type: redis
     name: acutize-redis
-    plan: starter
+    plan: free
     ipAllowList: []
     # Queue entries must never be evicted under memory pressure.
     maxmemoryPolicy: noeviction
