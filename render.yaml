@@ -180,8 +180,8 @@ services:
   # -------------------------
   - type: redis
     name: acutize-redis
-    plan: starter
+    plan: free
     ipAllowList: []
     # Queue entries must never be evicted under memory pressure.
-    maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
+    # maxmemoryPolicy: noeviction
+    # persistenceMode: journal-snapshot
