@@ -1,34 +1,52 @@
+from html import escape
+from typing import Literal
+
 import httpx
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.config import get_settings
-from ..core.auth import get_current_user
+from ..core.auth import get_optional_current_user
+from ..core.rate_limit import limiter
 
 router = APIRouter(prefix="/support", tags=["support"])
 
 class ContactRequest(BaseModel):
-    firstName: str
-    lastName: str
-    email: str
-    subject: str
-    message: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    firstName: str = Field(min_length=1, max_length=100)
+    lastName: str = Field(min_length=1, max_length=100)
+    email: str = Field(min_length=3, max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    subject: Literal["enterprise", "support", "bug", "other"]
+    message: str = Field(min_length=1, max_length=10_000)
 
 @router.post("/contact")
-async def contact_support(req: ContactRequest, user: dict = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def contact_support(
+    request: Request,
+    req: ContactRequest,
+    user: dict | None = Depends(get_optional_current_user),
+):
     settings = get_settings()
     
     if not settings.resend_api_key:
         raise HTTPException(status_code=500, detail="Email service is not configured on the server.")
 
+    first_name = escape(req.firstName)
+    last_name = escape(req.lastName)
+    email = escape(req.email)
+    subject = escape(req.subject)
+    message = escape(req.message).replace("\n", "<br>")
+    user_id = escape(str(user["user_id"])) if user else "Guest"
+
     html_content = f"""
     <h2>New Contact Form Submission</h2>
-    <p><strong>Name:</strong> {req.firstName} {req.lastName}</p>
-    <p><strong>Email:</strong> {req.email}</p>
-    <p><strong>Topic:</strong> {req.subject}</p>
-    <p><strong>User ID:</strong> {user.get('user_id', 'Unknown')}</p>
+    <p><strong>Name:</strong> {first_name} {last_name}</p>
+    <p><strong>Email:</strong> {email}</p>
+    <p><strong>Topic:</strong> {subject}</p>
+    <p><strong>User ID:</strong> {user_id}</p>
     <p><strong>Message:</strong></p>
-    <p>{req.message.replace(chr(10), '<br>')}</p>
+    <p>{message}</p>
     """
 
     payload = {

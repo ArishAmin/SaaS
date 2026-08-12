@@ -123,3 +123,10 @@ async def get_current_user(request: Request) -> dict[str, Any]:
 
     return {"user_id": user_id, "claims": claims}
 
+
+async def get_optional_current_user(request: Request) -> dict[str, Any] | None:
+    """Return the authenticated user when supplied, without requiring a session."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+    return await get_current_user(request)
