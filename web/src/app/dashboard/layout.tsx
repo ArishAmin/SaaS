@@ -2,6 +2,14 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { redirect } from "next/navigation";
 
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createMetadata } from "@/lib/seo";
+
+export const metadata = createMetadata({
+  title: "Private Dashboard",
+  description: "Private Acutize workspace.",
+  path: "/dashboard",
+  noIndex: true,
+});
 
 export const dynamic = "force-dynamic";
 

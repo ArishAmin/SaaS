@@ -1,10 +1,12 @@
 /* eslint-disable react/no-unescaped-entities */
 import Link from "next/link";
+import { createMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Terms of Service | Acutize",
+export const metadata = createMetadata({
+  title: "Terms of Service",
   description: "Read the Acutize Terms of Service for business use of the data preparation and machine learning platform.",
-};
+  path: "/terms",
+});
 
 export default function TermsPage() {
   return (

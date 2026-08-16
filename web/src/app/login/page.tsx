@@ -1,6 +1,14 @@
 import { LogoLockup } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { createMetadata } from "@/lib/seo";
+
+export const metadata = createMetadata({
+  title: "Log In",
+  description: "Log in to your private Acutize data workspace.",
+  path: "/login",
+  noIndex: true,
+});
 
 export default async function LoginPage({
   searchParams,

@@ -1,5 +1,13 @@
 import { Suspense } from "react";
 import { CheckoutLauncher } from "./CheckoutLauncher";
+import { createMetadata } from "@/lib/seo";
+
+export const metadata = createMetadata({
+  title: "Secure Checkout",
+  description: "Complete your Acutize subscription checkout.",
+  path: "/checkout",
+  noIndex: true,
+});
 
 function CheckoutFallback() {
   return (

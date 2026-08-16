@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
 import { PLANS, formatPlanPrice } from "@/lib/plans";
-import { TestimonialSlider } from "./TestimonialSlider";
 
 const capabilityGroups = [
   {
@@ -264,11 +263,11 @@ export function LandingPage() {
                 Data workspace 
               </p>
               <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-5xl lg:text-6xl">
-                Clean, analyze, compare models, and report on datasets without writing scripts.
+                AI data cleaning, analysis, and model comparison without writing scripts.
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">
-                Acutize helps turn raw tabular files into clean datasets, business insights, model recommendations,
-                preview comparisons, and export-ready reports from one secure browser workspace.
+                Turn CSV, Excel, JSON, and Parquet files into clean datasets, business insights, forecasts,
+                model recommendations, and export-ready reports in one guided browser workspace.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" className="h-12 rounded-lg bg-zinc-900 px-6 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200" asChild>
@@ -294,8 +293,6 @@ export function LandingPage() {
             <ProductPreview />
           </div>
         </section>
-
-        <TestimonialSlider />
 
         <section id="features" className="py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -545,7 +542,7 @@ export function LandingPage() {
                 {
                   icon: LockKeyhole,
                   title: "Private account access",
-                  text: "Dataset records and exports are tied to the authenticated account. Public marketing content should never imply that customer datasets are sold or exposed.",
+                  text: "Dataset records and generated exports are tied to the authenticated account and protected by workspace access controls.",
                 },
               ].map((item) => (
                 <div key={item.title} className="border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-950">

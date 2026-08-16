@@ -28,6 +28,14 @@ import { HelpHeroActions } from "@/components/help/HelpHeroActions";
 import { HelpContactButton } from "@/components/help/HelpContactButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
+import { createMetadata } from "@/lib/seo";
+
+export const metadata = createMetadata({
+  title: "Help Center and Product Guides",
+  description:
+    "Learn how to upload, analyze, clean, forecast, model, and export datasets in Acutize, with guidance for billing, teams, security, and troubleshooting.",
+  path: "/help",
+});
 
 const categories = [
   { href: "#getting-started", label: "Getting started" },

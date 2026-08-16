@@ -3,6 +3,14 @@ import { Suspense } from "react";
 import { LogoLockup } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { SignupForm } from "@/components/auth/SignupForm";
+import { createMetadata } from "@/lib/seo";
+
+export const metadata = createMetadata({
+  title: "Create Your Account",
+  description: "Create an Acutize account to start cleaning and analyzing business datasets.",
+  path: "/signup",
+  noIndex: true,
+});
 
 export default function SignupPage() {
   return (
@@ -23,4 +31,3 @@ export default function SignupPage() {
     </div>
   );
 }
-

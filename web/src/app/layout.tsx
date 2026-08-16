@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { serializeJsonLd, SITE_URL } from "@/lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,7 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Acutize | AI Data Cleaning, Analysis, Forecasting, and ML Reports",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "AI Data Cleaning and Analysis Software | Acutize",
+    template: "%s | Acutize",
+  },
   description:
     "Upload CSV, Excel, JSON, or Parquet files to clean data, generate business insights, forecast metrics, preview ML models, and export reports from your browser.",
   icons: {
@@ -24,6 +29,28 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
   },
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": SITE_URL + "/#organization",
+      name: "Acutize",
+      url: SITE_URL,
+      logo: SITE_URL + "/logo.png",
+      email: "support@acutize.com",
+    },
+    {
+      "@type": "WebSite",
+      "@id": SITE_URL + "/#website",
+      url: SITE_URL,
+      name: "Acutize",
+      publisher: { "@id": SITE_URL + "/#organization" },
+      inLanguage: "en",
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -55,6 +82,10 @@ export default function RootLayout({
         <script src="https://accounts.google.com/gsi/client" async defer />
       </head>
       <body className="min-h-full flex flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(websiteJsonLd) }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -1,10 +1,12 @@
 /* eslint-disable react/no-unescaped-entities */
 import Link from "next/link";
+import { createMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Privacy Policy | Acutize",
+export const metadata = createMetadata({
+  title: "Privacy Policy",
   description: "Learn how Acutize collects, uses, stores, and protects your personal data and uploaded datasets.",
-};
+  path: "/privacy",
+});
 
 export default function PrivacyPage() {
   return (
