@@ -1,11 +1,11 @@
 # Acutize — Render Blueprint (use this file only; api/render.yaml is legacy).
 # Docs: DEPLOY.md
 #
-# Temporary pre-campaign layout (July 2026):
-#   - Starter API + Starter Web while the marketing campaign is delayed
+# Production layout (August 2026):
+#   - Standard API + Starter Web
 #   - Persistent Starter Key Value for shared rate limits + Celery job queue
 #   - One Standard Celery worker processing one memory-heavy job at a time
-#   - Re-upgrade API to Standard and add acutize-worker-2 before campaign traffic
+#   - Add acutize-worker-2 only when queue latency requires it
 #   - Supabase (auth/DB/storage) billed separately
 
 services:
@@ -15,7 +15,7 @@ services:
   - type: web
     name: acutize-api
     runtime: python
-    plan: starter
+    plan: standard
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2}
@@ -81,7 +81,7 @@ services:
   - type: worker
     name: acutize-worker
     runtime: python
-    plan: starter
+    plan: standard
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.worker.celery_worker worker --beat --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}
@@ -180,8 +180,8 @@ services:
   # -------------------------
   - type: redis
     name: acutize-redis
-    plan: free
+    plan: starter
     ipAllowList: []
     # Queue entries must never be evicted under memory pressure.
-    # maxmemoryPolicy: noeviction
-    # persistenceMode: journal-snapshot
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
