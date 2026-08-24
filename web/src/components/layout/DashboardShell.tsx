@@ -39,7 +39,6 @@ import {
 import { LogoLockup, LogoMark } from "@/components/brand/Logo";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
-import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isBillingEnforcementEnabled } from "@/lib/billing";
@@ -281,7 +280,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
           <main className="flex-1 p-4 md:p-6 flex flex-col justify-between overflow-x-hidden min-h-screen">
             <div>{children}</div>
-            <Footer />
+            <DashboardFooter />
           </main>
         </div>
       </div>
@@ -370,10 +369,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <main className="p-4 flex flex-col justify-between min-h-[calc(100vh-64px)] overflow-x-hidden">
           <div>{children}</div>
-          <Footer />
+          <DashboardFooter />
         </main>
       </div>
     </div>
+  );
+}
+
+function DashboardFooter() {
+  return (
+    <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-black/10 py-6 text-xs text-foreground/60 dark:border-white/10">
+      <Link href="/help" className="hover:text-foreground">Help Center</Link>
+      <Link href="/contact" className="hover:text-foreground">Contact Support</Link>
+      <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+      <Link href="/terms" className="hover:text-foreground">Terms</Link>
+      <span>{"\u00a9"} Acutize</span>
+    </footer>
   );
 }
 
