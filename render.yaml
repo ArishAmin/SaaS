@@ -1,11 +1,11 @@
 # Acutize — Render Blueprint (use this file only; api/render.yaml is legacy).
 # Docs: DEPLOY.md
 #
-# Production layout (August 2026):
-#   - Standard API + Starter Web
-#   - Persistent Starter Key Value for shared rate limits + Celery job queue
-#   - One Standard Celery worker processing one memory-heavy job at a time
-#   - Add acutize-worker-2 only when queue latency requires it
+# Always-on minimum-cost layout (August 2026):
+#   - Starter API + Starter Web
+#   - Free ephemeral Key Value for shared rate limits + Celery job queue
+#   - One Starter Celery worker processing one job at a time
+#   - One Starter cron for hourly TTL cleanup
 #   - Supabase (auth/DB/storage) billed separately
 
 services:
@@ -15,7 +15,7 @@ services:
   - type: web
     name: acutize-api
     runtime: python
-    plan: standard
+    plan: starter
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2}
@@ -65,7 +65,7 @@ services:
       - key: API_VERSION
         value: "0.1.0"
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
       - key: ADMIN_CLEANUP_TOKEN
         sync: false
       - key: BACKGROUND_JOBS_ENABLED
@@ -81,7 +81,7 @@ services:
   - type: worker
     name: acutize-worker
     runtime: python
-    plan: standard
+    plan: starter
     rootDir: api
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.worker.celery_worker worker --beat --loglevel=info --concurrency=${WORKER_CONCURRENCY:-1}
@@ -176,12 +176,11 @@ services:
         sync: false
 
   # -------------------------
-  # 3. Persistent Key Value (rate limiting + durable Celery job queue)
+  # 3. Ephemeral Key Value (rate limiting + Celery job queue)
   # -------------------------
   - type: redis
     name: acutize-redis
-    plan: starter
+    plan: free
     ipAllowList: []
     # Queue entries must never be evicted under memory pressure.
     maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
